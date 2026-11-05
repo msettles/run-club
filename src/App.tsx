@@ -6,7 +6,11 @@ import { MapViewer } from './components/MapViewer';
 import { GpxUploader } from './components/GpxUploader';
 import { CheckInModal } from './components/CheckInModal';
 import { NewRunModal } from './components/NewRunModal';
+import { EditRunModal } from './components/EditRunModal';
 import { Leaderboard } from './components/Leaderboard';
+import { AdminDashboard } from './components/AdminDashboard';
+import { InstallPwaBanner } from './components/InstallPwaBanner';
+import { MobileBottomNav } from './components/MobileBottomNav';
 import { FirebaseSetupGuide } from './components/FirebaseSetupGuide';
 import { RunEvent, GPXRoute, SurfaceType } from './types';
 import { 
@@ -17,7 +21,9 @@ import {
   Mountain, 
   Sparkles,
   Download,
-  AlertCircle
+  AlertCircle,
+  Bell,
+  X
 } from 'lucide-react';
 import { downloadGPXFile } from './utils/gpxParser';
 
@@ -27,27 +33,36 @@ export function App() {
     routes,
     members,
     badges,
+    notifications,
     currentMember,
     setCurrentMemberId,
     toggleRSVP,
     checkInMember,
     addRun,
+    updateRun,
+    deleteRun,
+    updateMemberStats,
+    sendPushAnnouncement,
     addRoute,
     isSyncing,
     isFirebaseConfigured,
   } = useClubStore();
 
-  const [activeTab, setActiveTab] = useState<'runs' | 'routes' | 'leaderboard'>('runs');
+  const [activeTab, setActiveTab] = useState<'runs' | 'routes' | 'leaderboard' | 'admin'>('runs');
   const [surfaceFilter, setSurfaceFilter] = useState<'All' | SurfaceType>('All');
   
   // Modals state
   const [selectedRunForCheckIn, setSelectedRunForCheckIn] = useState<RunEvent | null>(null);
   const [isNewRunOpen, setIsNewRunOpen] = useState<boolean>(false);
+  const [editingRun, setEditingRun] = useState<RunEvent | null>(null);
   const [isUploadGpxOpen, setIsUploadGpxOpen] = useState<boolean>(false);
   const [isSetupGuideOpen, setIsSetupGuideOpen] = useState<boolean>(false);
+  const [showNotificationsDrawer, setShowNotificationsDrawer] = useState<boolean>(false);
 
   // Selected route for viewing
   const [selectedRoute, setSelectedRoute] = useState<GPXRoute>(routes[0]);
+
+  const isAdmin = currentMember.email === 'woodlandwoodchuckers@gmail.com' || currentMember.id === 'mem-admin';
 
   // Filtered runs
   const filteredRuns = runs.filter((r) => {
@@ -68,8 +83,17 @@ export function App() {
     });
   };
 
+  const handleQuickCheckIn = () => {
+    if (runs.length > 0) {
+      setSelectedRunForCheckIn(runs[0]);
+    }
+  };
+
   return (
-    <div className="min-h-screen flex flex-col bg-stone-100 font-sans">
+    <div className="min-h-screen flex flex-col bg-stone-100 font-sans pb-16 sm:pb-0">
+      {/* Mobile PWA Install & Push Notification Banner */}
+      <InstallPwaBanner />
+
       {/* Top Navigation */}
       <Navbar
         activeTab={activeTab}
@@ -77,9 +101,11 @@ export function App() {
         currentMember={currentMember}
         isFirebaseConfigured={isFirebaseConfigured}
         isSyncing={isSyncing}
+        unreadNotifsCount={notifications.length}
         onOpenNewRun={() => setIsNewRunOpen(true)}
         onOpenUploadGpx={() => setIsUploadGpxOpen(true)}
         onOpenSetupGuide={() => setIsSetupGuideOpen(true)}
+        onToggleNotifications={() => setShowNotificationsDrawer(!showNotificationsDrawer)}
       />
 
       {/* Main Content Area */}
@@ -117,10 +143,18 @@ export function App() {
                     <Compass className="w-4 h-4 text-emerald-300" />
                     <span>Explore GPX Trails</span>
                   </button>
+                  {isAdmin && (
+                    <button
+                      onClick={() => setActiveTab('admin')}
+                      className="flex items-center gap-2 px-4 py-2.5 bg-stone-900 hover:bg-stone-800 text-white font-bold text-xs sm:text-sm rounded-xl border border-stone-700 transition"
+                    >
+                      <span>Admin Portal</span>
+                    </button>
+                  )}
                 </div>
               </div>
 
-              {/* Decorative Mascot illustration */}
+              {/* Decorative Mascot backdrop */}
               <div className="hidden lg:block absolute -right-6 -bottom-6 w-56 h-56 opacity-25 pointer-events-none">
                 <img src="/woodchuck.svg" alt="Woodchuck mascot backdrop" className="w-full h-full" />
               </div>
@@ -280,10 +314,33 @@ export function App() {
             onSelectMember={(id) => setCurrentMemberId(id)}
           />
         )}
+
+        {/* TAB 4: ADMIN DASHBOARD */}
+        {activeTab === 'admin' && (
+          <AdminDashboard
+            runs={runs}
+            members={members}
+            routes={routes}
+            notifications={notifications}
+            onOpenNewRun={() => setIsNewRunOpen(true)}
+            onEditRun={(r) => setEditingRun(r)}
+            onDeleteRun={deleteRun}
+            onUpdateMemberStats={updateMemberStats}
+            onSendBroadcast={sendPushAnnouncement}
+          />
+        )}
       </main>
 
-      {/* Footer */}
-      <footer className="bg-white border-t border-stone-200 py-6 mt-12">
+      {/* Mobile Sticky Bottom Navigation Bar */}
+      <MobileBottomNav
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        isAdmin={isAdmin}
+        onQuickCheckIn={handleQuickCheckIn}
+      />
+
+      {/* Footer (Desktop) */}
+      <footer className="hidden sm:block bg-white border-t border-stone-200 py-6 mt-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-stone-500">
           <div className="flex items-center gap-2">
             <span className="text-base">🦫</span>
@@ -292,6 +349,14 @@ export function App() {
           </div>
 
           <div className="flex items-center gap-4">
+            {isAdmin && (
+              <button
+                onClick={() => setActiveTab('admin')}
+                className="text-emerald-800 hover:underline font-bold"
+              >
+                Admin Dashboard
+              </button>
+            )}
             <button
               onClick={() => setIsSetupGuideOpen(true)}
               className="text-emerald-700 hover:underline font-semibold"
@@ -303,6 +368,53 @@ export function App() {
           </div>
         </div>
       </footer>
+
+      {/* Notifications Drawer */}
+      {showNotificationsDrawer && (
+        <div className="fixed inset-0 z-[1000] flex justify-end bg-stone-900/40 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="bg-white w-full max-w-sm h-full shadow-2xl p-5 flex flex-col space-y-4">
+            <div className="flex items-center justify-between border-b pb-3">
+              <div className="flex items-center gap-2">
+                <Bell className="w-5 h-5 text-amber-500" />
+                <h3 className="font-bold text-base text-stone-900">Club Announcements</h3>
+              </div>
+              <button onClick={() => setShowNotificationsDrawer(false)} className="text-stone-400 hover:text-stone-700 p-1">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto space-y-3">
+              {notifications.length === 0 ? (
+                <p className="text-xs text-stone-500 text-center py-8">No announcements yet.</p>
+              ) : (
+                notifications.map((n) => (
+                  <div key={n.id} className="p-3 bg-stone-50 border border-stone-200 rounded-xl space-y-1">
+                    <div className="flex items-center justify-between text-xs">
+                      <strong className="text-stone-900 font-bold">{n.title}</strong>
+                      <span className="text-[10px] text-stone-400">
+                        {new Date(n.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+                    <p className="text-xs text-stone-600 leading-relaxed">{n.body}</p>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {isAdmin && (
+              <button
+                onClick={() => {
+                  setShowNotificationsDrawer(false);
+                  setActiveTab('admin');
+                }}
+                className="w-full py-2 bg-stone-900 text-white rounded-xl text-xs font-bold hover:bg-stone-800 transition"
+              >
+                Send New Push Announcement
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Modals */}
       {selectedRunForCheckIn && (
@@ -323,6 +435,17 @@ export function App() {
           routes={routes}
           organizerName={currentMember.name}
           onAddRun={addRun}
+        />
+      )}
+
+      {editingRun && (
+        <EditRunModal
+          run={editingRun}
+          routes={routes}
+          isOpen={Boolean(editingRun)}
+          onClose={() => setEditingRun(null)}
+          onSave={updateRun}
+          onDelete={deleteRun}
         />
       )}
 

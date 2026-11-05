@@ -1,16 +1,18 @@
 import React from 'react';
 import { Member } from '../types';
-import { Calendar, Map, Trophy, Plus, UploadCloud, Info, RefreshCw } from 'lucide-react';
+import { Calendar, Map, Trophy, Plus, UploadCloud, Info, RefreshCw, Shield, Bell } from 'lucide-react';
 
 interface NavbarProps {
-  activeTab: 'runs' | 'routes' | 'leaderboard';
-  setActiveTab: (tab: 'runs' | 'routes' | 'leaderboard') => void;
+  activeTab: 'runs' | 'routes' | 'leaderboard' | 'admin';
+  setActiveTab: (tab: 'runs' | 'routes' | 'leaderboard' | 'admin') => void;
   currentMember: Member;
   isFirebaseConfigured: boolean;
   isSyncing: boolean;
+  unreadNotifsCount?: number;
   onOpenNewRun: () => void;
   onOpenUploadGpx: () => void;
   onOpenSetupGuide: () => void;
+  onToggleNotifications?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -19,10 +21,14 @@ export const Navbar: React.FC<NavbarProps> = ({
   currentMember,
   isFirebaseConfigured,
   isSyncing,
+  unreadNotifsCount = 0,
   onOpenNewRun,
   onOpenUploadGpx,
   onOpenSetupGuide,
+  onToggleNotifications,
 }) => {
+  const isAdmin = currentMember.email === 'woodlandwoodchuckers@gmail.com' || currentMember.id === 'mem-admin';
+
   return (
     <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-stone-200 shadow-xs">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -30,7 +36,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           {/* Logo & Brand */}
           <div
             onClick={() => setActiveTab('runs')}
-            className="flex items-center gap-2.5 cursor-pointer select-none"
+            className="flex items-center gap-2.5 cursor-pointer select-none shrink-0"
           >
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-600 to-emerald-800 flex items-center justify-center shadow-md p-1">
               <img src="/woodchuck.svg" alt="Woodchuck mascot" className="w-8 h-8" />
@@ -50,8 +56,8 @@ export const Navbar: React.FC<NavbarProps> = ({
             </div>
           </div>
 
-          {/* Navigation Tabs */}
-          <nav className="flex items-center gap-1 sm:gap-2">
+          {/* Navigation Tabs (Desktop / Tablet) */}
+          <nav className="hidden sm:flex items-center gap-1 sm:gap-2">
             <button
               onClick={() => setActiveTab('runs')}
               className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold transition ${
@@ -87,10 +93,38 @@ export const Navbar: React.FC<NavbarProps> = ({
               <Trophy className="w-4 h-4 text-amber-500" />
               <span>Members</span>
             </button>
+
+            {isAdmin && (
+              <button
+                onClick={() => setActiveTab('admin')}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-bold transition ${
+                  activeTab === 'admin'
+                    ? 'bg-stone-900 text-white shadow-xs'
+                    : 'text-stone-800 bg-stone-100 hover:bg-stone-200'
+                }`}
+              >
+                <Shield className="w-4 h-4 text-emerald-400" />
+                <span>Admin</span>
+              </button>
+            )}
           </nav>
 
           {/* Action Tools */}
           <div className="flex items-center gap-2">
+            {/* Notification Bell */}
+            {onToggleNotifications && (
+              <button
+                onClick={onToggleNotifications}
+                className="relative p-2 text-stone-600 hover:text-stone-900 hover:bg-stone-100 rounded-xl transition"
+                title="Club Announcements & Alerts"
+              >
+                <Bell className="w-4 h-4" />
+                {unreadNotifsCount > 0 && (
+                  <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-amber-500 ring-2 ring-white" />
+                )}
+              </button>
+            )}
+
             {/* Firebase Status Pill */}
             <button
               onClick={onOpenSetupGuide}
@@ -115,7 +149,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             {/* Quick Actions */}
             <button
               onClick={onOpenUploadGpx}
-              className="hidden sm:flex items-center gap-1 px-3 py-1.5 text-xs font-semibold bg-white border border-stone-300 text-stone-700 hover:bg-stone-50 rounded-xl transition shadow-xs"
+              className="hidden lg:flex items-center gap-1 px-3 py-1.5 text-xs font-semibold bg-white border border-stone-300 text-stone-700 hover:bg-stone-50 rounded-xl transition shadow-xs"
               title="Upload GPX route"
             >
               <UploadCloud className="w-3.5 h-3.5 text-emerald-600" />

@@ -6,8 +6,15 @@ import {
   collection, 
   getDocs, 
   setDoc, 
+  deleteDoc,
   doc 
 } from 'firebase/firestore';
+import { 
+  ClubNotification, 
+  getStoredNotifications, 
+  storeNotification, 
+  showLocalNotification 
+} from './notifications';
 
 const STORAGE_KEYS = {
   RUNS: 'woodchuckers_runs_v1',
@@ -44,6 +51,7 @@ export function useClubStore() {
     loadFromStorage(STORAGE_KEYS.CURRENT_USER_ID, INITIAL_MEMBERS[0].id)
   );
   const [badges] = useState<Badge[]>(INITIAL_BADGES);
+  const [notifications, setNotifications] = useState<ClubNotification[]>(() => getStoredNotifications());
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
 
   // Sync state changes to localStorage
@@ -274,6 +282,68 @@ export function useClubStore() {
   };
 
   /**
+   * Update an existing run (Admin)
+   */
+  const updateRun = async (updatedRun: RunEvent) => {
+    setRuns((prev) => prev.map((r) => (r.id === updatedRun.id ? updatedRun : r)));
+
+    if (isFirebaseConfigured && db) {
+      setDoc(doc(db, 'runs', updatedRun.id), updatedRun, { merge: true }).catch(console.error);
+    }
+  };
+
+  /**
+   * Delete a run (Admin)
+   */
+  const deleteRun = async (runId: string) => {
+    setRuns((prev) => prev.filter((r) => r.id !== runId));
+
+    if (isFirebaseConfigured && db) {
+      deleteDoc(doc(db, 'runs', runId)).catch(console.error);
+    }
+  };
+
+  /**
+   * Update member stats or profile (Admin / Member)
+   */
+  const updateMemberStats = async (memberId: string, updates: Partial<Member>) => {
+    setMembers((prev) =>
+      prev.map((m) => {
+        if (m.id !== memberId) return m;
+        const updated = { ...m, ...updates };
+        if (isFirebaseConfigured && db) {
+          setDoc(doc(db, 'members', memberId), updated, { merge: true }).catch(console.error);
+        }
+        return updated;
+      })
+    );
+  };
+
+  /**
+   * Send a club-wide push announcement (Admin)
+   */
+  const sendPushAnnouncement = async (title: string, body: string, targetRunId?: string) => {
+    const notif: ClubNotification = {
+      id: `notif-${Date.now()}`,
+      title,
+      body,
+      timestamp: new Date().toISOString(),
+      targetRunId,
+      sender: currentMember.name,
+    };
+
+    storeNotification(notif);
+    setNotifications((prev) => [notif, ...prev]);
+
+    // Trigger local push notification on device
+    showLocalNotification(title, body);
+
+    if (isFirebaseConfigured && db) {
+      setDoc(doc(db, 'settings', 'latest_announcement'), notif).catch(console.error);
+    }
+  };
+
+  /**
    * Reset local state to defaults
    */
   const resetToDefaults = () => {
@@ -292,12 +362,17 @@ export function useClubStore() {
     routes,
     members,
     badges,
+    notifications,
     currentMember,
     currentMemberId,
     setCurrentMemberId,
     toggleRSVP,
     checkInMember,
     addRun,
+    updateRun,
+    deleteRun,
+    updateMemberStats,
+    sendPushAnnouncement,
     addRoute,
     resetToDefaults,
     isSyncing,
