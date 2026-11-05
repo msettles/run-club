@@ -1,0 +1,265 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // This security rules file assumes the following data structures:
+    //
+    // Collection: runs
+    // Document ID: runId (e.g., 'run-upcoming-saturday', 'run-17123456789')
+    // Fields:
+    //   - id: string (required, 1-128 chars, immutable on update) - Unique run identifier
+    //   - title: string (required, 1-150 chars) - Title of the run event
+    //   - date: string (required, 8-25 chars) - Scheduled run date (YYYY-MM-DD)
+    //   - time: string (required, 1-30 chars) - Scheduled start time (e.g. '08:00 AM')
+    //   - locationName: string (required, 1-200 chars) - Meeting location name
+    //   - address: string (required, 0-300 chars) - Address / trailhead directions
+    //   - distanceMiles: number (required, > 0 and <= 500) - Planned route distance in miles
+    //   - surface: string (required, in ['Trail', 'Pavement', 'Mixed', 'Track']) - Running surface
+    //   - elevationGainFt: number (required, >= 0 and <= 50000) - Total elevation gain in feet
+    //   - description: string (required, 0-2000 chars) - Run details, pace notes, social post-run info
+    //   - routeId: string (optional, 1-128 chars) - ID of attached GPXRoute
+    //   - paceGroups: list (required, <= 20 items) - Target pace groups with pace labels
+    //   - attendees: list (required, <= 500 items) - RSVP & check-in list of {memberId, name, checkedIn, ...}
+    //   - organizerName: string (required, 1-100 chars) - Name of organizing runner
+    //   - meetingCoordinates: map (optional, keys: lat, lon) - Geo meeting coordinates
+    //   - completed: bool (optional) - Completion flag for the run
+    //
+    // Collection: routes
+    // Document ID: routeId (e.g., 'route-river-loop', 'route-17123456789')
+    // Fields:
+    //   - id: string (required, 1-128 chars, immutable) - Unique route identifier
+    //   - name: string (required, 1-150 chars) - Name of trail route
+    //   - description: string (required, 0-2000 chars) - Route overview and terrain notes
+    //   - distanceMiles: number (required, >= 0 and <= 500) - Distance in miles
+    //   - elevationGainFt: number (required, >= 0 and <= 50000) - Elevation gain in feet
+    //   - points: list (required, 1-5000 items) - GPS coordinates array [{lat, lon, ele?, time?}]
+    //   - surface: string (required, in ['Trail', 'Pavement', 'Mixed', 'Track']) - Route surface
+    //   - difficulty: string (required, in ['Easy', 'Moderate', 'Challenging']) - Route difficulty
+    //   - createdAt: string (required, 8-40 chars, immutable) - ISO timestamp of route creation
+    //   - gpxXml: string (optional, <= 800000 chars) - Raw GPX track XML content
+    //   - thumbnailUrl: string (optional, <= 1000 chars) - Map preview thumbnail image URL
+    //
+    // Collection: members
+    // Document ID: memberId (matches runner user UID / member ID)
+    // Fields:
+    //   - id: string (required, 1-128 chars, immutable on update) - Unique member ID (matches UID)
+    //   - name: string (required, 1-100 chars) - Runner's display name
+    //   - email: string (required, 3-150 chars, valid email format) - Member email address
+    //   - avatarUrl: string (optional, <= 1000 chars) - Profile avatar image URL
+    //   - totalRuns: number (required, >= 0 and <= 100000) - Count of completed group runs
+    //   - totalMiles: number (required, >= 0 and <= 1000000) - Total club miles logged
+    //   - streak: number (required, >= 0 and <= 10000) - Consecutive active run streak count
+    //   - favoritePace: string (required, 1-50 chars) - Runner's typical/preferred pace
+    //   - unlockedBadgeIds: list (required, <= 50 items) - List of unlocked badge ID strings
+    //   - joinedDate: string (required, 4-35 chars, immutable on update) - Date joined club
+    //
+    // Collection: settings
+    // Document ID: settingId (e.g., 'club_info', 'announcements')
+    // Fields:
+    //   - arbitrary club configuration maps/strings (admin/organizer managed only)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+
+    // Check if the request is from an authenticated user
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Check if user is the club organizer / administrator.
+    // Recognized via verified primary club organizer email or custom claims.
+    function isAdmin() {
+      return isAuthenticated() &&
+        (
+          ('email' in request.auth.token &&
+           request.auth.token.email == 'woodlandwoodchuckers@gmail.com') ||
+          ('admin' in request.auth.token && request.auth.token.admin == true) ||
+          ('organizer' in request.auth.token && request.auth.token.organizer == true)
+        );
+    }
+
+    // Check if the authenticated user owns this member resource
+    function isMemberOwner(memberId) {
+      return isAuthenticated() &&
+        (request.auth.uid == memberId ||
+         (resource != null && 'id' in resource.data && request.auth.uid == resource.data.id));
+    }
+
+    // Validate email format
+    function isValidEmail(email) {
+      return email is string &&
+        email.matches('^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$');
+    }
+
+    // Validate optional meeting coordinates map
+    function isValidCoordinates(coords) {
+      return coords is map &&
+        coords.keys().hasOnly(['lat', 'lon']) &&
+        coords.keys().hasAll(['lat', 'lon']) &&
+        coords.lat is number && coords.lat >= -90 && coords.lat <= 90 &&
+        coords.lon is number && coords.lon >= -180 && coords.lon <= 180;
+    }
+
+    // ===============================================================
+    // Domain Validators (Applied to BOTH create and update)
+    // ===============================================================
+
+    // Validate RunEvent schema and bounds
+    function isValidRun(data) {
+      return data.keys().hasOnly([
+               'id', 'title', 'date', 'time', 'locationName', 'meetingCoordinates',
+               'address', 'distanceMiles', 'surface', 'elevationGainFt', 'description',
+               'routeId', 'paceGroups', 'attendees', 'organizerName', 'completed'
+             ]) &&
+             data.keys().hasAll([
+               'id', 'title', 'date', 'time', 'locationName', 'address',
+               'distanceMiles', 'surface', 'elevationGainFt', 'description',
+               'paceGroups', 'attendees', 'organizerName'
+             ]) &&
+             data.id is string && data.id.size() >= 1 && data.id.size() <= 128 &&
+             data.title is string && data.title.size() >= 1 && data.title.size() <= 150 &&
+             data.date is string && data.date.size() >= 8 && data.date.size() <= 25 &&
+             data.time is string && data.time.size() >= 1 && data.time.size() <= 30 &&
+             data.locationName is string && data.locationName.size() >= 1 && data.locationName.size() <= 200 &&
+             data.address is string && data.address.size() <= 300 &&
+             data.distanceMiles is number && data.distanceMiles > 0 && data.distanceMiles <= 500 &&
+             data.surface is string && data.surface in ['Trail', 'Pavement', 'Mixed', 'Track'] &&
+             data.elevationGainFt is number && data.elevationGainFt >= 0 && data.elevationGainFt <= 50000 &&
+             data.description is string && data.description.size() <= 2000 &&
+             data.paceGroups is list && data.paceGroups.size() <= 20 &&
+             data.attendees is list && data.attendees.size() <= 500 &&
+             data.organizerName is string && data.organizerName.size() >= 1 && data.organizerName.size() <= 100 &&
+             (!('routeId' in data) || (data.routeId is string && data.routeId.size() >= 1 && data.routeId.size() <= 128)) &&
+             (!('completed' in data) || (data.completed is bool)) &&
+             (!('meetingCoordinates' in data) || isValidCoordinates(data.meetingCoordinates));
+    }
+
+    // Validate GPXRoute schema and bounds
+    function isValidGPXRoute(data) {
+      return data.keys().hasOnly([
+               'id', 'name', 'description', 'distanceMiles', 'elevationGainFt',
+               'points', 'surface', 'difficulty', 'gpxXml', 'createdAt', 'thumbnailUrl'
+             ]) &&
+             data.keys().hasAll([
+               'id', 'name', 'description', 'distanceMiles', 'elevationGainFt',
+               'points', 'surface', 'difficulty', 'createdAt'
+             ]) &&
+             data.id is string && data.id.size() >= 1 && data.id.size() <= 128 &&
+             data.name is string && data.name.size() >= 1 && data.name.size() <= 150 &&
+             data.description is string && data.description.size() <= 2000 &&
+             data.distanceMiles is number && data.distanceMiles >= 0 && data.distanceMiles <= 500 &&
+             data.elevationGainFt is number && data.elevationGainFt >= 0 && data.elevationGainFt <= 50000 &&
+             data.points is list && data.points.size() > 0 && data.points.size() <= 5000 &&
+             data.surface is string && data.surface in ['Trail', 'Pavement', 'Mixed', 'Track'] &&
+             data.difficulty is string && data.difficulty in ['Easy', 'Moderate', 'Challenging'] &&
+             data.createdAt is string && data.createdAt.size() >= 8 && data.createdAt.size() <= 40 &&
+             (!('gpxXml' in data) || (data.gpxXml is string && data.gpxXml.size() <= 800000)) &&
+             (!('thumbnailUrl' in data) || (data.thumbnailUrl is string && data.thumbnailUrl.size() <= 1000));
+    }
+
+    // Validate Member schema and bounds
+    function isValidMember(data) {
+      return data.keys().hasOnly([
+               'id', 'name', 'email', 'avatarUrl', 'totalRuns',
+               'totalMiles', 'streak', 'favoritePace', 'unlockedBadgeIds', 'joinedDate'
+             ]) &&
+             data.keys().hasAll([
+               'id', 'name', 'email', 'totalRuns',
+               'totalMiles', 'streak', 'favoritePace', 'unlockedBadgeIds', 'joinedDate'
+             ]) &&
+             data.id is string && data.id.size() >= 1 && data.id.size() <= 128 &&
+             data.name is string && data.name.size() >= 1 && data.name.size() <= 100 &&
+             data.email is string && data.email.size() <= 150 && isValidEmail(data.email) &&
+             data.totalRuns is number && data.totalRuns >= 0 && data.totalRuns <= 100000 &&
+             data.totalMiles is number && data.totalMiles >= 0 && data.totalMiles <= 1000000 &&
+             data.streak is number && data.streak >= 0 && data.streak <= 10000 &&
+             data.favoritePace is string && data.favoritePace.size() >= 1 && data.favoritePace.size() <= 50 &&
+             data.unlockedBadgeIds is list && data.unlockedBadgeIds.size() <= 50 &&
+             data.joinedDate is string && data.joinedDate.size() >= 4 && data.joinedDate.size() <= 35 &&
+             (!('avatarUrl' in data) || (data.avatarUrl is string && data.avatarUrl.size() <= 1000));
+    }
+
+    // ===============================================================
+    // Collection Rules
+    // ===============================================================
+
+    // 1. RUNS COLLECTION
+    // Public run schedules for club members.
+    // Authenticated users or club organizers can create/update runs or toggle RSVP / check-in.
+    // Organizers/admins can also delete/cancel runs.
+    match /runs/{runId} {
+      allow read: if true;
+
+      allow create: if isAuthenticated() &&
+                       isValidRun(request.resource.data) &&
+                       request.resource.data.id == runId;
+
+      allow update: if isAuthenticated() &&
+                       isValidRun(request.resource.data) &&
+                       request.resource.data.id == resource.data.id &&
+                       request.resource.data.id == runId;
+
+      allow delete: if isAdmin();
+    }
+
+    // 2. ROUTES COLLECTION
+    // Viewing club maps and elevation profiles is public.
+    // Authenticated members can upload new GPX tracks.
+    // Club organizer (woodlandwoodchuckers@gmail.com) can update or delete routes.
+    match /routes/{routeId} {
+      allow read: if true;
+
+      allow create: if isAuthenticated() &&
+                       isValidGPXRoute(request.resource.data) &&
+                       request.resource.data.id == routeId;
+
+      allow update: if isAdmin() &&
+                       isValidGPXRoute(request.resource.data) &&
+                       request.resource.data.id == resource.data.id &&
+                       request.resource.data.id == routeId &&
+                       request.resource.data.createdAt == resource.data.createdAt;
+
+      allow delete: if isAdmin();
+    }
+
+    // 3. MEMBERS COLLECTION
+    // Public read for club leaderboard, streaks, and badge roster.
+    // Members can create their own member document or update their own profile/stats.
+    // Organizers/admins can moderate accounts or delete spam.
+    match /members/{memberId} {
+      allow read: if true;
+
+      allow create: if isAuthenticated() &&
+                       isValidMember(request.resource.data) &&
+                       request.auth.uid == memberId &&
+                       request.resource.data.id == memberId;
+
+      allow update: if (isMemberOwner(memberId) || isAdmin()) &&
+                       isValidMember(request.resource.data) &&
+                       request.resource.data.id == resource.data.id &&
+                       request.resource.data.joinedDate == resource.data.joinedDate;
+
+      allow delete: if isAdmin();
+    }
+
+    // 4. CLUB SETTINGS & CONFIGURATION
+    // Read-only to the public; only woodlandwoodchuckers@gmail.com or admin can update.
+    match /settings/{settingId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // 5. DEFAULT DENY
+    // Explicit default deny for all other collection paths and subcollections.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
