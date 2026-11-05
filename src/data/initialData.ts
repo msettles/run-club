@@ -121,7 +121,7 @@ export const INITIAL_MEMBERS: Member[] = [
     id: 'mem-admin',
     name: 'Woodland Woodchuckers (Admin)',
     email: 'woodlandwoodchuckers@gmail.com',
-    avatarUrl: '/woodchuck.svg',
+    avatarUrl: '/Woodchucker2.jpg',
     totalRuns: 42,
     totalMiles: 238.5,
     streak: 12,

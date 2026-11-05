@@ -154,9 +154,9 @@ export function App() {
                 </div>
               </div>
 
-              {/* Decorative Mascot backdrop */}
-              <div className="hidden lg:block absolute -right-6 -bottom-6 w-56 h-56 opacity-25 pointer-events-none">
-                <img src="/woodchuck.svg" alt="Woodchuck mascot backdrop" className="w-full h-full" />
+              {/* Mascot image */}
+              <div className="hidden lg:block absolute -right-2 -bottom-2 w-48 h-48 rounded-2xl overflow-hidden shadow-2xl border-2 border-emerald-500/40 opacity-90">
+                <img src="/Woodchucker2.jpg" alt="Woodland Woodchuckers Mascot" className="w-full h-full object-cover" />
               </div>
             </div>
 
