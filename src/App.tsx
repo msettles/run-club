@@ -15,6 +15,7 @@ import { InstallPwaBanner } from './components/InstallPwaBanner';
 import { MobileBottomNav } from './components/MobileBottomNav';
 import { BrandAssetsModal } from './components/BrandAssetsModal';
 import { AuthModal } from './components/AuthModal';
+import { MilestonesPage } from './components/MilestonesPage';
 import { onAuthChange, logoutUser, checkAndCompleteEmailLinkSignIn } from './services/authService';
 import { User as FirebaseUser } from 'firebase/auth';
 import { downloadGPXFile } from './utils/gpxParser';
@@ -28,6 +29,8 @@ import {
   Bell,
   X,
   Palette,
+  Gift,
+  UserPlus
 } from 'lucide-react';
 
 export function App() {
@@ -59,9 +62,12 @@ export function App() {
     saveMeetupEvent,
     searchLegacyMatches,
     switchCurrentUser,
+    milestoneAlerts,
+    markMilestoneFulfilled,
   } = useClubStore();
 
-  const [activeTab, setActiveTab] = useState<'runs' | 'routes' | 'leaderboard' | 'admin'>('runs');
+  const [activeTab, setActiveTab] = useState<'runs' | 'routes' | 'milestones' | 'leaderboard' | 'admin'>('runs');
+  const [checkInInitialMode, setCheckInInitialMode] = useState<'checkin' | 'register'>('checkin');
   
   // Modals state
   const [selectedRunForCheckIn, setSelectedRunForCheckIn] = useState<RunEvent | null>(null);
@@ -121,7 +127,15 @@ export function App() {
     });
   };
 
+  const handleOpenRegister = () => {
+    setCheckInInitialMode('register');
+    if (runs.length > 0) {
+      setSelectedRunForCheckIn(runs[0]);
+    }
+  };
+
   const handleQuickCheckIn = () => {
+    setCheckInInitialMode('checkin');
     if (runs.length > 0) {
       setSelectedRunForCheckIn(runs[0]);
     }
@@ -147,9 +161,11 @@ export function App() {
         onOpenBrandAssets={() => setIsBrandAssetsOpen(true)}
         onToggleNotifications={() => setShowNotificationsDrawer(!showNotificationsDrawer)}
         onOpenAuthModal={() => setIsAuthModalOpen(true)}
+        onOpenRegister={handleOpenRegister}
         onLogout={async () => {
           await logoutUser();
           setFirebaseUser(null);
+          switchCurrentUser('');
         }}
       />
 
@@ -185,13 +201,27 @@ export function App() {
                       <Sparkles className="w-4 h-4 text-stone-950" />
                       <span>Check In Tonight 🦫</span>
                     </button>
+
+                    {/* Prominent Join Club button for Guests */}
+                    {(currentUser.role === 'guest' || !currentUser.email) && (
+                      <button
+                        onClick={handleOpenRegister}
+                        className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs sm:text-sm rounded-xl transition shadow-md font-display uppercase tracking-wide cursor-pointer"
+                        title="Join the Club (Free, 24/7/365)"
+                      >
+                        <UserPlus className="w-4 h-4 text-emerald-200" />
+                        <span>Join Club (Free)</span>
+                      </button>
+                    )}
+
                     <button
-                      onClick={() => setIsNewRunOpen(true)}
-                      className="flex items-center gap-2 px-4 py-2.5 bg-white/10 hover:bg-white/20 text-white font-semibold text-xs sm:text-sm rounded-xl border border-white/20 transition backdrop-blur-xs"
+                      onClick={() => setActiveTab('milestones')}
+                      className="flex items-center gap-2 px-4 py-2.5 bg-amber-400/20 hover:bg-amber-400/30 text-amber-300 font-bold text-xs sm:text-sm rounded-xl border border-amber-400/30 transition backdrop-blur-xs"
                     >
-                      <Plus className="w-4 h-4" />
-                      <span>Schedule a Run</span>
+                      <Gift className="w-4 h-4 text-amber-300" />
+                      <span>Club Milestones 🏆</span>
                     </button>
+
                     <button
                       onClick={() => setActiveTab('routes')}
                       className="flex items-center gap-2 px-4 py-2.5 bg-woodland-700/60 hover:bg-woodland-700 text-white font-semibold text-xs sm:text-sm rounded-xl border border-woodland-500/40 transition"
@@ -381,7 +411,15 @@ export function App() {
           </div>
         )}
 
-        {/* TAB 3: MEMBERS & LEADERBOARD */}
+        {/* TAB 3: MILESTONES & REWARDS SHOWCASE */}
+        {activeTab === 'milestones' && (
+          <MilestonesPage
+            currentUser={currentUser}
+            onOpenCheckIn={handleQuickCheckIn}
+          />
+        )}
+
+        {/* TAB 4: MEMBERS & LEADERBOARD */}
         {activeTab === 'leaderboard' && (
           <Leaderboard
             members={members}
@@ -391,7 +429,7 @@ export function App() {
           />
         )}
 
-        {/* TAB 4: ADMIN DASHBOARD */}
+        {/* TAB 5: ADMIN DASHBOARD */}
         {activeTab === 'admin' && (
           <AdminDashboard
             runs={runs}
@@ -402,6 +440,9 @@ export function App() {
             checkins={checkins}
             users={users}
             legacyMembers={legacyMembers}
+            milestoneAlerts={milestoneAlerts}
+            onMarkMilestoneFulfilled={markMilestoneFulfilled}
+            currentUser={currentUser}
             onSaveMeetupEvent={saveMeetupEvent}
             onOpenNewRun={() => setIsNewRunOpen(true)}
             onEditRun={(r) => setEditingRun(r)}
@@ -512,6 +553,7 @@ export function App() {
           meetupEvents={meetupEvents}
           currentUser={currentUser}
           users={users}
+          initialMode={checkInInitialMode}
           onCheckInRunner={checkInRunner}
           onRegisterUser={registerUser}
           onSearchLegacy={searchLegacyMatches}

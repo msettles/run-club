@@ -1,4 +1,15 @@
-import { GPXRoute, RunEvent, Member, Badge, MeetupEvent, CheckInRecord, LegacyMember, UserProfile } from '../types';
+import { 
+  GPXRoute, 
+  RunEvent, 
+  Member, 
+  Badge, 
+  MeetupEvent, 
+  CheckInRecord, 
+  LegacyMember, 
+  UserProfile,
+  MilestoneReward,
+  MilestoneAlert
+} from '../types';
 
 // Center anchor: Woodland area coordinates (Woodland, CA approx 38.678, -121.773)
 const BASE_LAT = 38.6780;
@@ -83,6 +94,72 @@ export const INITIAL_BADGES: Badge[] = [
     emoji: '🚶',
     description: 'Completed 10+ group walks with the walking pack.',
     requirement: '10 walking check-ins',
+  },
+];
+
+export const CLUB_MILESTONES: MilestoneReward[] = [
+  {
+    runsRequired: 5,
+    name: '5 Runs Milestone',
+    reward: 'Official Woodchucker Member Shirt',
+    perks: '$1 off all draft beers at Blue Note Brewing on run nights',
+    icon: '👕',
+    description: 'Complete 5 group runs to earn your official Woodchucker club shirt and unlock $1 off draft beers at Blue Note Brewing on run nights!',
+  },
+  {
+    runsRequired: 50,
+    name: '50 Runs Milestone',
+    reward: 'Woodchucker Running Hat',
+    perks: 'Official Club Headwear & Honor Roll',
+    icon: '🧢',
+    description: 'Hit 50 group runs with the crew and rock the official Woodchucker running cap or beanie on the trails and streets.',
+  },
+  {
+    runsRequired: 100,
+    name: '100 Runs Milestone',
+    reward: 'Woodchucker Glass Beer Mug',
+    perks: 'Century Club Honor Roll',
+    icon: '🍺',
+    description: '100 group runs! Receive an engraved Woodchucker glass beer mug to celebrate triple-digit dedication at Blue Note Brewing Co.',
+  },
+  {
+    runsRequired: 200,
+    name: '200 Runs Milestone',
+    reward: 'Custom Runner Name Water Bottle',
+    perks: 'Double Century Legend Status',
+    icon: '🍶',
+    description: 'The ultimate endurance award. A custom-engraved premium insulated water bottle personalized with your runner name.',
+  },
+];
+
+export const INITIAL_MILESTONE_ALERTS: MilestoneAlert[] = [
+  {
+    id: 'alert-sarah-5',
+    userEmail: 'sarah.runner@example.com',
+    runnerName: 'Sarah Connor',
+    shirtSize: 'S',
+    milestoneRuns: 5,
+    milestoneName: '5 Runs Milestone',
+    reward: 'Official Woodchucker Member Shirt',
+    perks: '$1 off beers at Blue Note on run nights',
+    date: '2026-11-04',
+    time: '18:40:02',
+    fulfilled: false,
+  },
+  {
+    id: 'alert-matt-100',
+    userEmail: 'matt.settles@example.com',
+    runnerName: 'Matt Settles',
+    shirtSize: 'L',
+    milestoneRuns: 100,
+    milestoneName: '100 Runs Milestone',
+    reward: 'Woodchucker Glass Beer Mug',
+    perks: 'Century Club Honor Roll',
+    date: '2026-10-21',
+    time: '18:35:12',
+    fulfilled: true,
+    fulfilledAt: '2026-10-21T18:45:00Z',
+    fulfilledBy: 'woodlandwoodchuckers@gmail.com',
   },
 ];
 
@@ -183,6 +260,25 @@ export const INITIAL_LEGACY_MEMBERS: LegacyMember[] = [
     claimedAt: null,
   },
 ];
+
+// Default Unauthenticated / Guest User Profile
+export const GUEST_USER: UserProfile = {
+  email: '',
+  firstName: 'Guest',
+  lastName: 'Runner',
+  displayName: 'Guest Runner',
+  shirtSize: 'M',
+  pre2021Runs: 0,
+  loggedRuns: 0,
+  totalRuns: 0,
+  totalMiles: 0,
+  runCount: 0,
+  walkCount: 0,
+  linkedLegacyNames: [],
+  unlockedBadgeIds: [],
+  role: 'guest',
+  createdAt: '2026-11-06T18:00:00Z',
+};
 
 // Dummy Users Table (Keyed on Email)
 export const INITIAL_USERS: UserProfile[] = [

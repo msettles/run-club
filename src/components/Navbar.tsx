@@ -16,12 +16,14 @@ import {
   LogOut,
   Shirt,
   Flame,
-  ChevronDown
+  ChevronDown,
+  Gift,
+  UserPlus
 } from 'lucide-react';
 
 interface NavbarProps {
-  activeTab: 'runs' | 'routes' | 'leaderboard' | 'admin';
-  setActiveTab: (tab: 'runs' | 'routes' | 'leaderboard' | 'admin') => void;
+  activeTab: 'runs' | 'routes' | 'milestones' | 'leaderboard' | 'admin';
+  setActiveTab: (tab: 'runs' | 'routes' | 'milestones' | 'leaderboard' | 'admin') => void;
   currentUser: UserProfile;
   firebaseUser: FirebaseUser | null;
   isFirebaseConfigured: boolean;
@@ -33,6 +35,7 @@ interface NavbarProps {
   onOpenBrandAssets?: () => void;
   onToggleNotifications?: () => void;
   onOpenAuthModal: () => void;
+  onOpenRegister?: () => void;
   onLogout: () => void;
 }
 
@@ -50,10 +53,12 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenBrandAssets,
   onToggleNotifications,
   onOpenAuthModal,
+  onOpenRegister,
   onLogout,
 }) => {
   const [showProfileMenu, setShowProfileMenu] = useState<boolean>(false);
   const isAdmin = currentUser.role === 'admin' || currentUser.email === 'woodlandwoodchuckers@gmail.com';
+  const isUserLoggedIn = Boolean(firebaseUser || (currentUser && currentUser.email && currentUser.role !== 'guest'));
 
   return (
     <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-stone-200 shadow-xs">
@@ -110,6 +115,18 @@ export const Navbar: React.FC<NavbarProps> = ({
             >
               <Map className="w-4 h-4 text-woodland-600" />
               <span>GPX Routes</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('milestones')}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold transition ${
+                activeTab === 'milestones'
+                  ? 'bg-woodland-50 text-woodland-900 font-bold shadow-xs border border-woodland-200/60'
+                  : 'text-stone-600 hover:text-stone-900 hover:bg-stone-100'
+              }`}
+            >
+              <Gift className="w-4 h-4 text-amber-500" />
+              <span>Milestones</span>
             </button>
 
             <button
@@ -208,15 +225,16 @@ export const Navbar: React.FC<NavbarProps> = ({
             </button>
 
             {/* USER LOGIN / PROFILE AREA */}
-            {firebaseUser ? (
+            {isUserLoggedIn ? (
               /* LOGGED IN RUNNER PILL */
               <div className="relative">
                 <button
                   onClick={() => setShowProfileMenu(!showProfileMenu)}
-                  className="flex items-center gap-2 p-1 sm:px-2.5 sm:py-1 rounded-full bg-stone-100 hover:bg-stone-200 border border-stone-200 transition text-left"
+                  className="flex items-center gap-2 p-1 sm:px-2.5 sm:py-1 rounded-full bg-stone-100 hover:bg-stone-200 border border-stone-200 transition text-left cursor-pointer"
+                  title="Runner Profile & Menu"
                 >
                   <div className="w-7 h-7 rounded-full bg-woodland-800 text-white flex items-center justify-center text-xs font-bold shrink-0">
-                    {currentUser.firstName?.[0] || firebaseUser.email?.[0]?.toUpperCase() || 'W'}
+                    {currentUser.firstName?.[0] || firebaseUser?.email?.[0]?.toUpperCase() || 'W'}
                   </div>
                   <div className="hidden sm:block">
                     <span className="block text-xs font-bold text-stone-900 leading-tight">
@@ -272,7 +290,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                             setShowProfileMenu(false);
                             setActiveTab('admin');
                           }}
-                          className="w-full text-left px-2.5 py-1.5 text-xs font-semibold text-stone-700 hover:bg-stone-100 rounded-lg flex items-center gap-2"
+                          className="w-full text-left px-2.5 py-1.5 text-xs font-semibold text-stone-700 hover:bg-stone-100 rounded-lg flex items-center gap-2 cursor-pointer"
                         >
                           <Shield className="w-3.5 h-3.5 text-woodland-600" />
                           <span>Admin Portal</span>
@@ -283,9 +301,9 @@ export const Navbar: React.FC<NavbarProps> = ({
                           setShowProfileMenu(false);
                           onLogout();
                         }}
-                        className="w-full text-left px-2.5 py-1.5 text-xs font-bold text-red-600 hover:bg-red-50 rounded-lg flex items-center gap-2 transition"
+                        className="w-full text-left px-2.5 py-2 text-xs font-bold text-red-600 hover:bg-red-50 rounded-lg flex items-center gap-2 transition cursor-pointer"
                       >
-                        <LogOut className="w-3.5 h-3.5" />
+                        <LogOut className="w-4 h-4 text-red-600" />
                         <span>Sign Out</span>
                       </button>
                     </div>
@@ -293,14 +311,26 @@ export const Navbar: React.FC<NavbarProps> = ({
                 )}
               </div>
             ) : (
-              /* GUEST - SIGN IN BUTTON */
-              <button
-                onClick={onOpenAuthModal}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-stone-950 font-black text-xs rounded-xl transition shadow-xs font-display uppercase tracking-wider cursor-pointer"
-              >
-                <LogIn className="w-3.5 h-3.5" />
-                <span>Sign In</span>
-              </button>
+              /* GUEST - JOIN CLUB & SIGN IN BUTTONS */
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                {onOpenRegister && (
+                  <button
+                    onClick={onOpenRegister}
+                    className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-woodland-700 hover:bg-woodland-800 text-white font-bold text-xs rounded-xl transition shadow-xs cursor-pointer"
+                    title="Join the Club (Free, 24/7/365)"
+                  >
+                    <UserPlus className="w-3.5 h-3.5 text-amber-300" />
+                    <span>Join Club</span>
+                  </button>
+                )}
+                <button
+                  onClick={onOpenAuthModal}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-stone-950 font-black text-xs rounded-xl transition shadow-xs font-display uppercase tracking-wider cursor-pointer"
+                >
+                  <LogIn className="w-3.5 h-3.5" />
+                  <span>Sign In</span>
+                </button>
+              </div>
             )}
           </div>
         </div>

@@ -132,7 +132,7 @@ export interface UserProfile {
   // Legacy Link
   linkedLegacyNames: string[]; // Claimed historical names (e.g. ["MATT SETTLES"])
   unlockedBadgeIds: string[];
-  role: 'member' | 'organizer' | 'admin';
+  role: 'member' | 'organizer' | 'admin' | 'guest';
   createdAt: string;
 }
 
@@ -155,6 +155,32 @@ export type Member = UserProfile & {
   joinedDate: string;
   avatarUrl?: string;
 };
+
+export interface MilestoneReward {
+  runsRequired: number; // 5, 50, 100, 200
+  name: string;
+  reward: string;
+  perks: string;
+  icon: string;
+  imagePlaceholder?: string;
+  description: string;
+}
+
+export interface MilestoneAlert {
+  id: string;
+  userEmail: string;
+  runnerName: string;
+  shirtSize: string;
+  milestoneRuns: number; // 5, 50, 100, 200
+  milestoneName: string;
+  reward: string;
+  perks: string;
+  date: string;
+  time: string;
+  fulfilled: boolean; // Has organizer handed them their shirt/hat/mug/bottle?
+  fulfilledAt?: string;
+  fulfilledBy?: string;
+}
 
 export interface CheckInPayload {
   runId: string;

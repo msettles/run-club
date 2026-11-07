@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import confetti from 'canvas-confetti';
 import { MeetupEvent, UserProfile, RouteOption, ActivityType, DistanceTier, LegacyMember, Badge } from '../types';
+import { CLUB_MILESTONES } from '../data/initialData';
 import { 
   CheckCircle, 
   X, 
@@ -10,7 +11,10 @@ import {
   Shirt,
   ChevronRight,
   ShieldCheck,
-  Compass
+  Compass,
+  Clock,
+  Lock,
+  Unlock
 } from 'lucide-react';
 
 interface CheckInModalProps {
@@ -19,6 +23,7 @@ interface CheckInModalProps {
   meetupEvents: MeetupEvent[];
   currentUser: UserProfile;
   users: UserProfile[];
+  initialMode?: 'checkin' | 'register';
   onCheckInRunner: (params: {
     eventDate: string;
     userEmail: string;
@@ -31,6 +36,7 @@ interface CheckInModalProps {
     route?: RouteOption;
     user?: UserProfile;
     newBadges?: Badge[];
+    milestoneAlert?: any;
   }>;
   onRegisterUser: (
     profileData: {
@@ -49,12 +55,30 @@ interface CheckInModalProps {
   onOpenAuthModal?: () => void;
 }
 
+function parseEventDateTime(dateStr: string, timeStr: string = '06:00 PM'): Date {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  let hour = 18;
+  let minute = 0;
+  if (timeStr) {
+    const match = timeStr.match(/(\d+):(\d+)\s*(AM|PM)?/i);
+    if (match) {
+      hour = parseInt(match[1], 10);
+      minute = parseInt(match[2], 10);
+      const ampm = match[3]?.toUpperCase();
+      if (ampm === 'PM' && hour < 12) hour += 12;
+      if (ampm === 'AM' && hour === 12) hour = 0;
+    }
+  }
+  return new Date(year, month - 1, day, hour, minute);
+}
+
 export const CheckInModal: React.FC<CheckInModalProps> = ({
   isOpen,
   onClose,
   meetupEvents,
   currentUser,
   users,
+  initialMode = 'checkin',
   onCheckInRunner,
   onRegisterUser,
   onSearchLegacy,
@@ -65,19 +89,26 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
   const activeEvent = meetupEvents[0] || {
     id: '2026-11-11',
     date: '2026-11-11',
+    time: '06:00 PM',
     title: 'Wednesday Woodchucker Meetup',
     codeWord: 'TURKEY',
     activeDistances: ['1', '3', '5'],
     routes: {},
   };
 
+  const isGuest = currentUser.role === 'guest' || !currentUser.email;
+  const isOrganizerOrAdmin = currentUser.role === 'admin' || currentUser.role === 'organizer' || currentUser.email === 'woodlandwoodchuckers@gmail.com';
+
   // State
-  const [viewMode, setViewMode] = useState<'checkin' | 'register' | 'switch'>('checkin');
+  const [viewMode, setViewMode] = useState<'checkin' | 'register' | 'switch'>(
+    initialMode === 'register' || isGuest ? 'register' : 'checkin'
+  );
   const [codeWordInput, setCodeWordInput] = useState<string>('');
   const [selectedActivity, setSelectedActivity] = useState<ActivityType>('running');
   const [selectedDistance, setSelectedDistance] = useState<DistanceTier>(3);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [organizerBypass, setOrganizerBypass] = useState<boolean>(false);
 
   // Success state
   const [successResult, setSuccessResult] = useState<{
@@ -88,13 +119,14 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
   } | null>(null);
 
   // New runner onboarding state
-  const [regEmail, setRegEmail] = useState<string>('');
-  const [regFirstName, setRegFirstName] = useState<string>('');
-  const [regLastName, setRegLastName] = useState<string>('');
-  const [regShirtSize, setRegShirtSize] = useState<string>('L');
+  const [regEmail, setRegEmail] = useState<string>(currentUser.email || '');
+  const [regFirstName, setRegFirstName] = useState<string>(currentUser.firstName !== 'Guest' ? currentUser.firstName : '');
+  const [regLastName, setRegLastName] = useState<string>(currentUser.lastName !== 'Runner' ? currentUser.lastName : '');
+  const [regShirtSize, setRegShirtSize] = useState<string>(currentUser.shirtSize || 'L');
   const [regAge, setRegAge] = useState<string>('');
   const [regZip, setRegZip] = useState<string>('95695');
   const [selectedLegacyClaims, setSelectedLegacyClaims] = useState<string[]>([]);
+  const autoCheckInAfterRegister = true;
 
   if (!isOpen) return null;
 
@@ -109,6 +141,13 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
     );
   };
 
+  const eventStartTime = parseEventDateTime(activeEvent.date, activeEvent.time || '06:00 PM');
+  const windowOpenTime = new Date(eventStartTime.getTime() - 2 * 60 * 60 * 1000); // 2 hours before
+  const windowCloseTime = new Date(eventStartTime.getFullYear(), eventStartTime.getMonth(), eventStartTime.getDate(), 23, 59, 59);
+  const now = new Date();
+  const isTimeWindowOpen = now >= windowOpenTime && now <= windowCloseTime;
+  const isCheckInUnlocked = isTimeWindowOpen || (isOrganizerOrAdmin && organizerBypass);
+
   const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
@@ -117,8 +156,9 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
       return;
     }
 
+    setIsSubmitting(true);
     try {
-      await onRegisterUser(
+      const newUser = await onRegisterUser(
         {
           email: regEmail,
           firstName: regFirstName,
@@ -129,9 +169,38 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
         },
         selectedLegacyClaims
       );
-      setViewMode('checkin');
+
+      // If user provided code word during first-time signup at check-in time, complete check-in now!
+      if (autoCheckInAfterRegister && codeWordInput.trim() && isCheckInUnlocked) {
+        const res = await onCheckInRunner({
+          eventDate: activeEvent.date,
+          userEmail: newUser.email,
+          codeWordEntered: codeWordInput,
+          activity: selectedActivity,
+          distanceChoice: selectedDistance,
+        });
+
+        if (!res.success) {
+          setErrorMsg(`Registered profile, but check-in note: ${res.message}`);
+          setViewMode('checkin');
+          setIsSubmitting(false);
+          return;
+        }
+
+        confetti({
+          particleCount: 90,
+          spread: 80,
+          origin: { y: 0.6 },
+          colors: ['#f59e0b', '#2a859e', '#13495d', '#10b981'],
+        });
+        setSuccessResult(res);
+      } else {
+        setViewMode('checkin');
+      }
     } catch (err: any) {
       setErrorMsg(err.message || 'Error registering profile.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -139,6 +208,12 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
     setErrorMsg(null);
     if (!codeWordInput.trim()) {
       setErrorMsg("Please enter today's code word!");
+      return;
+    }
+
+    if (isGuest) {
+      setErrorMsg("Please join the club or sign in before checking in.");
+      setViewMode('register');
       return;
     }
 
@@ -174,10 +249,19 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
     }
   };
 
-  // Milestone helper
-  const nextMilestone = (currentUser.totalRuns < 50) ? 50 : (currentUser.totalRuns < 100) ? 100 : 250;
-  const runsRemaining = Math.max(0, nextMilestone - currentUser.totalRuns);
-  const progressPct = Math.min(100, Math.round((currentUser.totalRuns / nextMilestone) * 100));
+  // Milestone helpers
+  const activeUserRuns = successResult?.user?.totalRuns ?? currentUser.totalRuns;
+  const nextMilestone = CLUB_MILESTONES.find((m) => m.runsRequired > activeUserRuns) || null;
+  const previousMilestoneRuns = nextMilestone 
+    ? (CLUB_MILESTONES[CLUB_MILESTONES.indexOf(nextMilestone) - 1]?.runsRequired || 0)
+    : 200;
+  const span = nextMilestone ? nextMilestone.runsRequired - previousMilestoneRuns : 1;
+  const currentInSpan = nextMilestone ? Math.max(0, activeUserRuns - previousMilestoneRuns) : span;
+  const progressPct = Math.min(100, Math.round((currentInSpan / span) * 100));
+  const runsRemaining = nextMilestone ? nextMilestone.runsRequired - activeUserRuns : 0;
+  const justUnlockedMilestone = [5, 50, 100, 200].includes(activeUserRuns)
+    ? CLUB_MILESTONES.find((m) => m.runsRequired === activeUserRuns)
+    : null;
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-stone-950/80 backdrop-blur-sm flex items-center justify-center p-4">
@@ -238,13 +322,29 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
 
               {/* Milestone & Mileage Progress Box */}
               <div className="bg-stone-50 border border-stone-200 rounded-2xl p-4 text-left space-y-3">
+                {/* Instant Milestone Alert Callout if runner just unlocked 5, 50, 100, 200 */}
+                {justUnlockedMilestone && (
+                  <div className="bg-gradient-to-r from-amber-500 to-amber-400 text-stone-950 rounded-xl p-3.5 shadow-md border border-amber-600 space-y-1.5 animate-in zoom-in-95">
+                    <div className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-stone-950">
+                      <Sparkles className="w-4 h-4 text-stone-950 shrink-0" />
+                      <span>🎉 Major Milestone Unlocked!</span>
+                    </div>
+                    <div className="font-extrabold text-sm sm:text-base font-display uppercase tracking-tight">
+                      {justUnlockedMilestone.name}: {justUnlockedMilestone.reward}
+                    </div>
+                    <p className="text-xs text-stone-900 font-medium leading-snug">
+                      Tonight's run organizer has been alerted with your shirt size (<strong className="font-bold">{successResult.user?.shirtSize || currentUser.shirtSize}</strong>). Pick up your gear at the organizer table, and show your phone for {justUnlockedMilestone.perks}!
+                    </p>
+                  </div>
+                )}
+
                 <div className="flex items-center justify-between text-xs font-semibold">
                   <span className="text-stone-600 flex items-center gap-1.5">
                     <Shirt className="w-4 h-4 text-amber-500" />
-                    Milestone Shirt Progress
+                    Milestone Progress
                   </span>
                   <span className="text-amber-700 font-bold">
-                    {currentUser.totalRuns} / {nextMilestone} Runs
+                    {activeUserRuns} / {nextMilestone ? nextMilestone.runsRequired : 200} Runs
                   </span>
                 </div>
                 <div className="w-full bg-stone-200 rounded-full h-3 overflow-hidden">
@@ -254,15 +354,15 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
                   />
                 </div>
                 <p className="text-[11px] text-stone-500">
-                  {runsRemaining > 0
-                    ? `Only ${runsRemaining} more runs until you unlock your next Woodchucker shirt!`
-                    : `Congratulations! You unlocked the ${nextMilestone} milestone!`}
+                  {nextMilestone && runsRemaining > 0
+                    ? `Only ${runsRemaining} more run${runsRemaining > 1 ? 's' : ''} until you unlock your ${nextMilestone.reward}!`
+                    : `Congratulations! You have reached Double Century Legend status (200+ runs)!`}
                 </p>
 
                 <div className="pt-2 border-t border-stone-200 flex items-center justify-between text-xs">
                   <span className="text-stone-600">Lifetime Club Mileage:</span>
                   <span className="font-extrabold text-stone-900">
-                    {currentUser.totalMiles} Miles
+                    {successResult.user?.totalMiles || currentUser.totalMiles} Miles
                   </span>
                 </div>
               </div>
@@ -311,8 +411,75 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
               </button>
             </div>
           ) : viewMode === 'checkin' ? (
-            /* VIEW 2: NORMAL CHECK-IN */
+            /* VIEW 2: CHECK-IN OR TIME-GATE LOCKED */
+            !isCheckInUnlocked ? (
+              /* TIME-GATE LOCKED STATE (Only opens 2 hours before run) */
+              <div className="text-center py-4 space-y-4 animate-in fade-in">
+                <div className="w-16 h-16 bg-amber-100 text-amber-700 rounded-2xl flex items-center justify-center mx-auto shadow-inner border border-amber-200">
+                  <Clock className="w-8 h-8" />
+                </div>
+
+                <div>
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-stone-100 text-stone-700 text-xs font-bold uppercase tracking-wider mb-2 border border-stone-200">
+                    <Lock className="w-3.5 h-3.5 text-stone-500" />
+                    <span>Check-In Window Locked</span>
+                  </span>
+                  <h3 className="text-xl font-black text-stone-900 font-display">
+                    Check-In Opens 2 Hours Before Run
+                  </h3>
+                  <p className="text-xs text-stone-600 mt-2 max-w-sm mx-auto leading-relaxed">
+                    Event check-in unlocks Wednesday at <strong>4:00 PM</strong> (2 hours prior to the 6:00 PM run) on the patio at Blue Note Brewing Co.
+                  </p>
+                </div>
+
+                {/* Membership Sign-Up Promotion (Available 24/7/365) */}
+                <div className="bg-amber-50 rounded-2xl p-4 border border-amber-200 text-left space-y-2">
+                  <div className="flex items-center gap-2 text-xs font-bold text-amber-950">
+                    <Sparkles className="w-4 h-4 text-amber-600 shrink-0" />
+                    <span>Not a Member Yet? Join Anytime!</span>
+                  </div>
+                  <p className="text-xs text-amber-900 leading-relaxed font-sans">
+                    Club membership is 100% free with zero fees! You can register your profile right now so check-in is 1 tap tonight at the brewery!
+                  </p>
+                  <button
+                    onClick={() => setViewMode('register')}
+                    className="w-full mt-2 py-2.5 bg-amber-500 hover:bg-amber-600 text-stone-950 font-bold text-xs rounded-xl transition shadow-sm font-display uppercase tracking-wider flex items-center justify-center gap-1.5"
+                  >
+                    <span>Register Member Profile Ahead of Time</span>
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {/* Organizer Early Bypass Option */}
+                {isOrganizerOrAdmin && (
+                  <div className="pt-2 border-t border-stone-100">
+                    <button
+                      onClick={() => setOrganizerBypass(true)}
+                      className="text-xs text-stone-600 hover:text-stone-900 font-bold underline flex items-center justify-center gap-1 mx-auto"
+                    >
+                      <Unlock className="w-3.5 h-3.5 text-amber-600" />
+                      <span>Organizer / Admin Early Test Bypass</span>
+                    </button>
+                  </div>
+                )}
+
+                <button
+                  onClick={onClose}
+                  className="w-full py-2.5 bg-stone-100 hover:bg-stone-200 text-stone-700 font-bold text-xs rounded-xl transition"
+                >
+                  Close Window
+                </button>
+              </div>
+            ) : (
+            /* NORMAL UNLOCKED CHECK-IN FORM */
             <div className="space-y-5">
+              {organizerBypass && (
+                <div className="p-2 bg-amber-100 border border-amber-300 rounded-xl text-center text-xs font-bold text-amber-950 flex items-center justify-center gap-1.5">
+                  <Unlock className="w-3.5 h-3.5 text-amber-700" />
+                  <span>Organizer Preview Mode: Early Check-In Active</span>
+                </div>
+              )}
+
               {/* Runner ID Banner */}
               <div className="bg-stone-50 border border-stone-200 rounded-2xl p-3.5 flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -459,6 +626,7 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
                 <span>{isSubmitting ? 'Checking In...' : 'Check In & Get Route 🦫'}</span>
               </button>
             </div>
+            )
           ) : viewMode === 'register' ? (
             /* VIEW 3: FIRST-TIME RUNNER ONBOARDING & LEGACY CLAIMING */
             <form onSubmit={handleRegisterSubmit} className="space-y-4">
@@ -600,11 +768,65 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
                 </div>
               )}
 
+              {/* Check into tonight's run right now (if check-in is unlocked) */}
+              {isCheckInUnlocked && (
+                <div className="bg-amber-50 rounded-2xl p-3.5 border border-amber-200 space-y-3">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-amber-950">
+                    <Sparkles className="w-4 h-4 text-amber-600" />
+                    <span>Check into tonight's run now? (Optional)</span>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-stone-700 uppercase tracking-wider mb-1">
+                      Today's Code Word
+                    </label>
+                    <input
+                      type="text"
+                      value={codeWordInput}
+                      onChange={(e) => setCodeWordInput(e.target.value)}
+                      placeholder="e.g. TURKEY (announced by organizer)"
+                      className="w-full uppercase font-mono tracking-wider text-sm font-bold px-3 py-2 rounded-xl border border-stone-300 outline-none bg-white"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div>
+                      <label className="block text-[10px] font-bold text-stone-600 mb-1">Activity Tonight</label>
+                      <select
+                        value={selectedActivity}
+                        onChange={(e) => setSelectedActivity(e.target.value as ActivityType)}
+                        className="w-full px-2 py-1.5 rounded-lg border border-stone-300 bg-white font-medium"
+                      >
+                        <option value="running">🏃 Running</option>
+                        <option value="walking">🚶 Walking</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-stone-600 mb-1">Distance Choice</label>
+                      <select
+                        value={selectedDistance}
+                        onChange={(e) => setSelectedDistance(Number(e.target.value) as DistanceTier)}
+                        className="w-full px-2 py-1.5 rounded-lg border border-stone-300 bg-white font-medium"
+                      >
+                        <option value={1}>1 Mile</option>
+                        <option value={3}>3 Miles</option>
+                        <option value={5}>5 Miles</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <button
                 type="submit"
-                className="w-full py-3 bg-woodland-900 hover:bg-woodland-950 text-white font-bold text-sm rounded-xl transition shadow-md flex items-center justify-center gap-2"
+                disabled={isSubmitting}
+                className="w-full py-3 bg-woodland-900 hover:bg-woodland-950 text-white font-bold text-sm rounded-xl transition shadow-md flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
               >
-                <span>Save Profile &amp; Go to Check-In</span>
+                <span>
+                  {isSubmitting
+                    ? 'Saving Profile...'
+                    : isCheckInUnlocked && codeWordInput.trim()
+                    ? 'Save Profile & Check In Tonight 🦫'
+                    : 'Save Profile & Join Club 🦫'}
+                </span>
                 <ChevronRight className="w-4 h-4" />
               </button>
             </form>

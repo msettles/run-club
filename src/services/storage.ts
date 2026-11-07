@@ -10,7 +10,8 @@ import {
   LegacyMember,
   ActivityType,
   DistanceTier,
-  RouteOption
+  RouteOption,
+  MilestoneAlert
 } from '../types';
 import { 
   INITIAL_RUNS, 
@@ -20,7 +21,10 @@ import {
   INITIAL_USERS,
   INITIAL_MEETUP_EVENTS,
   INITIAL_CHECKINS,
-  INITIAL_LEGACY_MEMBERS
+  INITIAL_LEGACY_MEMBERS,
+  CLUB_MILESTONES,
+  INITIAL_MILESTONE_ALERTS,
+  GUEST_USER
 } from '../data/initialData';
 import { isFirebaseConfigured, db } from './firebase';
 import { 
@@ -48,6 +52,7 @@ const STORAGE_KEYS = {
   CHECKINS: 'woodchuckers_checkins_v2',
   LEGACY_MEMBERS: 'woodchuckers_legacy_members_v2',
   CURRENT_USER_EMAIL: 'woodchuckers_current_user_email_v2',
+  MILESTONE_ALERTS: 'woodchuckers_milestone_alerts_v2',
 };
 
 // Safe localStorage getters
@@ -90,6 +95,9 @@ export function useClubStore() {
   const [currentUserEmail, setCurrentUserEmail] = useState<string>(() =>
     loadFromStorage(STORAGE_KEYS.CURRENT_USER_EMAIL, INITIAL_USERS[0].email)
   );
+  const [milestoneAlerts, setMilestoneAlerts] = useState<MilestoneAlert[]>(() =>
+    loadFromStorage(STORAGE_KEYS.MILESTONE_ALERTS, INITIAL_MILESTONE_ALERTS)
+  );
 
   // Sync state changes to localStorage
   useEffect(() => {
@@ -129,9 +137,17 @@ export function useClubStore() {
     saveToStorage(STORAGE_KEYS.CURRENT_USER_EMAIL, currentUserEmail);
   }, [currentUserEmail]);
 
-  // Derived current user
-  const currentUser: UserProfile = users.find((u) => u.email.toLowerCase() === currentUserEmail.toLowerCase()) || users[0];
-  const currentMember: Member = members.find((m) => m.email.toLowerCase() === currentUserEmail.toLowerCase()) || members[0];
+  useEffect(() => {
+    saveToStorage(STORAGE_KEYS.MILESTONE_ALERTS, milestoneAlerts);
+  }, [milestoneAlerts]);
+
+  // Derived current user (Falls back to GUEST_USER if not logged in)
+  const currentUser: UserProfile = currentUserEmail
+    ? (users.find((u) => u.email.toLowerCase() === currentUserEmail.toLowerCase()) || users[0])
+    : GUEST_USER;
+  const currentMember: Member = currentUserEmail
+    ? (members.find((m) => m.email.toLowerCase() === currentUserEmail.toLowerCase()) || members[0])
+    : { ...GUEST_USER, id: 'guest', name: 'Guest Runner', streak: 0, favoritePace: 'Any', joinedDate: '' };
 
   // If Firebase is configured, fetch collections on initial load
   useEffect(() => {
@@ -285,6 +301,7 @@ export function useClubStore() {
     checkIn?: CheckInRecord;
     user?: UserProfile;
     newBadges?: Badge[];
+    milestoneAlert?: MilestoneAlert;
   }> => {
     const { eventDate, userEmail, codeWordEntered, activity, distanceChoice } = params;
     const cleanEmail = userEmail.trim().toLowerCase();
@@ -413,6 +430,28 @@ export function useClubStore() {
       })
     );
 
+    // Check if runner unlocked a major club milestone (5, 50, 100, 200 runs)
+    let unlockedMilestone: MilestoneAlert | undefined;
+    if ([5, 50, 100, 200].includes(updatedUser.totalRuns)) {
+      const mDef = CLUB_MILESTONES.find((m) => m.runsRequired === updatedUser.totalRuns);
+      if (mDef) {
+        unlockedMilestone = {
+          id: `milestone-${Date.now()}_${cleanEmail}`,
+          userEmail: cleanEmail,
+          runnerName: updatedUser.displayName,
+          shirtSize: updatedUser.shirtSize,
+          milestoneRuns: updatedUser.totalRuns,
+          milestoneName: mDef.name,
+          reward: mDef.reward,
+          perks: mDef.perks,
+          date: eventDate,
+          time: timeStr,
+          fulfilled: false,
+        };
+        setMilestoneAlerts((prev) => [unlockedMilestone!, ...prev]);
+      }
+    }
+
     return {
       success: true,
       message: `Checked in successfully! That's Run #${updatedUser.totalRuns} for you!`,
@@ -420,7 +459,21 @@ export function useClubStore() {
       checkIn: newCheckIn,
       user: updatedUser,
       newBadges: earnedBadges,
+      milestoneAlert: unlockedMilestone,
     };
+  };
+
+  /**
+   * Mark a milestone reward as fulfilled / handed out by an organizer
+   */
+  const markMilestoneFulfilled = (alertId: string, fulfilledBy: string) => {
+    setMilestoneAlerts((prev) =>
+      prev.map((a) =>
+        a.id === alertId
+          ? { ...a, fulfilled: true, fulfilledAt: new Date().toISOString(), fulfilledBy }
+          : a
+      )
+    );
   };
 
   /**
@@ -615,6 +668,8 @@ export function useClubStore() {
     saveMeetupEvent,
     searchLegacyMatches,
     switchCurrentUser,
+    milestoneAlerts,
+    markMilestoneFulfilled,
 
     // V1 / Shared
     runs,
