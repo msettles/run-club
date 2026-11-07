@@ -77,17 +77,20 @@ export const RunCard: React.FC<RunCardProps> = ({
         {/* Title and details */}
         <div className="flex-1 min-w-0">
           <div className="flex flex-wrap items-center gap-1.5 mb-1">
-            <span
-              className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
-                run.surface === 'Trail'
-                  ? 'bg-woodland-100 text-woodland-800'
-                  : run.surface === 'Pavement'
-                  ? 'bg-blue-100 text-blue-800'
-                  : 'bg-amber-100 text-amber-800'
-              }`}
-            >
-              {run.surface}
-            </span>
+            {/* Highlight surface only if different from standard street pavement */}
+            {run.surface && run.surface !== 'Pavement' && (
+              <span
+                className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
+                  run.surface === 'Trail'
+                    ? 'bg-emerald-100 text-emerald-800'
+                    : run.surface === 'Track'
+                    ? 'bg-purple-100 text-purple-800'
+                    : 'bg-amber-100 text-amber-800'
+                }`}
+              >
+                {run.surface} Special
+              </span>
+            )}
             <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-stone-100 text-stone-700">
               {run.distanceMiles} mi
             </span>

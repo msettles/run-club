@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useClubStore } from './services/storage';
-import { RunEvent, GPXRoute, SurfaceType } from './types';
+import { RunEvent, GPXRoute } from './types';
 import { Navbar } from './components/Navbar';
 import { RunCard } from './components/RunCard';
 import { MapViewer } from './components/MapViewer';
@@ -21,7 +21,6 @@ import { downloadGPXFile } from './utils/gpxParser';
 import {
   Plus,
   Compass,
-  Filter,
   AlertCircle,
   Mountain,
   Download,
@@ -63,7 +62,6 @@ export function App() {
   } = useClubStore();
 
   const [activeTab, setActiveTab] = useState<'runs' | 'routes' | 'leaderboard' | 'admin'>('runs');
-  const [surfaceFilter, setSurfaceFilter] = useState<'All' | SurfaceType>('All');
   
   // Modals state
   const [selectedRunForCheckIn, setSelectedRunForCheckIn] = useState<RunEvent | null>(null);
@@ -109,12 +107,6 @@ export function App() {
       }
     }
   }, [runs]);
-
-  // Filtered runs
-  const filteredRuns = runs.filter((r) => {
-    if (surfaceFilter === 'All') return true;
-    return r.surface === surfaceFilter;
-  });
 
   const handleViewRouteFromRun = (route: GPXRoute) => {
     setSelectedRoute(route);
@@ -265,51 +257,23 @@ export function App() {
               </div>
             </div>
 
-            {/* Run Filters & Header */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-2">
-              <div>
-                <h3 className="text-xl font-bold text-stone-900 font-display">Upcoming Run Schedule</h3>
-                <p className="text-xs text-stone-500">
-                  Wednesdays at Blue Note Brewing (6:00 PM) • 1-Mile, 3-Mile &amp; 5-Mile Options
-                </p>
-              </div>
-
-              {/* Surface Filter Chips */}
-              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
-                <span className="text-xs font-semibold text-stone-500 flex items-center gap-1 mr-1">
-                  <Filter className="w-3.5 h-3.5" /> Filter:
-                </span>
-                {(['All', 'Trail', 'Pavement', 'Mixed', 'Track'] as const).map((s) => (
-                  <button
-                    key={s}
-                    onClick={() => setSurfaceFilter(s)}
-                    className={`px-3 py-1.5 rounded-full text-xs font-semibold transition ${
-                      surfaceFilter === s
-                        ? 'bg-woodland-800 text-white shadow-xs'
-                        : 'bg-white text-stone-600 border border-stone-200 hover:bg-stone-50'
-                    }`}
-                  >
-                    {s}
-                  </button>
-                ))}
-              </div>
+            {/* Run Schedule Header */}
+            <div className="pt-2">
+              <h3 className="text-xl font-bold text-stone-900 font-display">Upcoming Run Schedule</h3>
+              <p className="text-xs text-stone-500">
+                Wednesdays at Blue Note Brewing Co. (6:00 PM) • All runs start &amp; finish on the brewery patio!
+              </p>
             </div>
 
             {/* Run Cards List */}
-            {filteredRuns.length === 0 ? (
+            {runs.length === 0 ? (
               <div className="text-center py-12 bg-white rounded-2xl border border-stone-200 p-6 space-y-3">
                 <AlertCircle className="w-8 h-8 text-stone-400 mx-auto" />
-                <p className="text-stone-600 font-medium text-sm">No group runs scheduled for this filter.</p>
-                <button
-                  onClick={() => setSurfaceFilter('All')}
-                  className="text-xs font-bold text-woodland-700 hover:underline"
-                >
-                  Clear filter
-                </button>
+                <p className="text-stone-600 font-medium text-sm">No group runs currently scheduled.</p>
               </div>
             ) : (
               <div className="space-y-4">
-                {filteredRuns.map((run) => {
+                {runs.map((run) => {
                   const attachedRoute = routes.find((r) => r.id === run.routeId);
                   return (
                     <RunCard
