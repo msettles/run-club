@@ -56,7 +56,10 @@ export interface RunEvent {
   attendees: Attendee[];
   organizerName: string;
   completed?: boolean;
+  specialEvent?: SpecialEventType;
 }
+
+export type SpecialEventType = 'none' | 'turkey_trot' | 'halloween' | 'anniversary';
 
 export interface Badge {
   id: string;
@@ -64,6 +67,8 @@ export interface Badge {
   emoji: string;
   description: string;
   requirement: string;
+  category?: 'milestone' | 'walking' | 'streak' | 'special_event' | 'attendance';
+  isIncremental?: boolean; // Can be leveled up or earned multiple times (e.g. x2, x3)
 }
 
 // -------------------------------------------------------------
@@ -84,6 +89,7 @@ export interface MeetupEvent {
   time?: string;       // "06:00 PM"
   title: string;       // e.g. "Thanksgiving Warmup Run"
   codeWord: string;    // Case-insensitive, e.g. "TURKEY"
+  specialEvent?: SpecialEventType; // "IS Special Event" dropdown (Turkey Trot, Halloween, Anniversary)
   activeDistances: ('1' | '3' | '5')[]; // Which distances are active tonight
   routes: {
     '1'?: RouteOption;
@@ -132,6 +138,7 @@ export interface UserProfile {
   // Legacy Link
   linkedLegacyNames: string[]; // Claimed historical names (e.g. ["MATT SETTLES"])
   unlockedBadgeIds: string[];
+  badgeCounts?: Record<string, number>; // How many times each badge was achieved (e.g. { 'special-turkey': 2, 'power-walker': 3 })
   role: 'member' | 'organizer' | 'admin' | 'guest';
   createdAt: string;
 }

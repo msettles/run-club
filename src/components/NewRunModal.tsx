@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { RunEvent, GPXRoute, SurfaceType, PaceGroup } from '../types';
-import { X, Calendar, Clock, MapPin, Plus, Trash2 } from 'lucide-react';
+import { RunEvent, GPXRoute, SurfaceType, PaceGroup, SpecialEventType } from '../types';
+import { X, Calendar, Clock, MapPin, Plus, Trash2, Sparkles } from 'lucide-react';
 
 interface NewRunModalProps {
   isOpen: boolean;
@@ -18,6 +18,7 @@ export const NewRunModal: React.FC<NewRunModalProps> = ({
   onAddRun,
 }) => {
   const [title, setTitle] = useState('');
+  const [specialEvent, setSpecialEvent] = useState<SpecialEventType>('none');
   const [date, setDate] = useState(() => {
     const d = new Date();
     d.setDate(d.getDate() + 7);
@@ -76,6 +77,7 @@ export const NewRunModal: React.FC<NewRunModalProps> = ({
       description,
       organizerName,
       paceGroups,
+      specialEvent: specialEvent !== 'none' ? specialEvent : undefined,
     });
 
     onClose();
@@ -97,16 +99,34 @@ export const NewRunModal: React.FC<NewRunModalProps> = ({
 
         {/* Scrollable Form Body */}
         <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto flex-1">
-          <div>
-            <label className="block text-xs font-semibold text-stone-700 mb-1">Run Event Title</label>
-            <input
-              type="text"
-              required
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g. Saturday Trail Exploration & Burrows"
-              className="w-full text-sm px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-woodland-500 focus:outline-none"
-            />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-stone-700 mb-1">Run Event Title</label>
+              <input
+                type="text"
+                required
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="e.g. Wednesday Turkey Warmup"
+                className="w-full text-sm px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-woodland-500 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-stone-700 mb-1 flex items-center gap-1">
+                <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                <span>Is Special Event?</span>
+              </label>
+              <select
+                value={specialEvent}
+                onChange={(e) => setSpecialEvent(e.target.value as SpecialEventType)}
+                className="w-full text-sm px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-amber-500 bg-amber-50/60 font-semibold"
+              >
+                <option value="none">None (Regular Run)</option>
+                <option value="turkey_trot">🦃 Turkey Trot</option>
+                <option value="halloween">🎃 Halloween Run</option>
+                <option value="anniversary">🎂 Anniversary Run</option>
+              </select>
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">

@@ -320,6 +320,42 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
                 </p>
               </div>
 
+              {/* Badge Unlock Celebration Card */}
+              {successResult.newBadges && successResult.newBadges.length > 0 && (
+                <div className="bg-gradient-to-r from-amber-500/15 via-emerald-500/10 to-amber-500/15 border-2 border-amber-400/80 rounded-2xl p-4 text-left space-y-2.5 shadow-sm animate-in zoom-in-95">
+                  <div className="flex items-center justify-between">
+                    <span className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-amber-900">
+                      <Sparkles className="w-4 h-4 text-amber-600" />
+                      <span>{successResult.newBadges.length === 1 ? 'New Badge Unlocked!' : 'New Badges Unlocked!'} 🏅</span>
+                    </span>
+                    <span className="text-[10px] font-bold bg-amber-400 text-stone-950 px-2 py-0.5 rounded-full">
+                      +{successResult.newBadges.length} Badge{successResult.newBadges.length > 1 ? 's' : ''}
+                    </span>
+                  </div>
+                  <div className="space-y-2">
+                    {successResult.newBadges.map((badge) => {
+                      const count = successResult.user?.badgeCounts?.[badge.id] || 1;
+                      return (
+                        <div key={badge.id} className="flex items-center gap-3 bg-white/95 p-2.5 rounded-xl border border-amber-200/90 shadow-xs">
+                          <span className="text-2xl shrink-0">{badge.emoji}</span>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="font-extrabold text-sm text-stone-900 truncate">{badge.name}</span>
+                              {badge.isIncremental && count > 1 && (
+                                <span className="px-1.5 py-0.2 bg-amber-400 text-stone-950 font-black text-[10px] rounded-full shrink-0">
+                                  x{count}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-stone-600 line-clamp-1">{badge.description}</p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               {/* Milestone & Mileage Progress Box */}
               <div className="bg-stone-50 border border-stone-200 rounded-2xl p-4 text-left space-y-3">
                 {/* Instant Milestone Alert Callout if runner just unlocked 5, 50, 100, 200 */}

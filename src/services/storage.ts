@@ -226,6 +226,29 @@ export function useClubStore() {
     // Estimate initial legacy miles (~3.1 miles per legacy run)
     const initialMiles = Math.round(totalLegacyRuns * 3.1 * 10) / 10;
 
+    const initialBadgeIds: string[] = [];
+    const initialBadgeCounts: Record<string, number> = {};
+    if (totalLegacyRuns >= 1) {
+      initialBadgeIds.push('first-chuck');
+      initialBadgeCounts['first-chuck'] = 1;
+    }
+    if (totalLegacyRuns >= 5) {
+      initialBadgeIds.push('milestone-5');
+      initialBadgeCounts['milestone-5'] = Math.floor(totalLegacyRuns / 5);
+    }
+    if (totalLegacyRuns >= 50) {
+      initialBadgeIds.push('milestone-50');
+      initialBadgeCounts['milestone-50'] = Math.floor(totalLegacyRuns / 50);
+    }
+    if (totalLegacyRuns >= 100) {
+      initialBadgeIds.push('milestone-100');
+      initialBadgeCounts['milestone-100'] = Math.floor(totalLegacyRuns / 100);
+    }
+    if (totalLegacyRuns >= 200) {
+      initialBadgeIds.push('milestone-200');
+      initialBadgeCounts['milestone-200'] = Math.floor(totalLegacyRuns / 200);
+    }
+
     const newUser: UserProfile = {
       email: cleanEmail,
       firstName: profileData.firstName.trim(),
@@ -244,7 +267,8 @@ export function useClubStore() {
       walkCount: 0,
       firstRunDate: totalLegacyRuns > 0 ? '2021-02-10' : new Date().toISOString().split('T')[0],
       linkedLegacyNames: claimedRecords.map((r) => r.name),
-      unlockedBadgeIds: totalLegacyRuns > 0 ? ['first-chuck'] : [],
+      unlockedBadgeIds: initialBadgeIds,
+      badgeCounts: initialBadgeCounts,
       role: cleanEmail === 'woodlandwoodchuckers@gmail.com' ? 'admin' : 'member',
       createdAt: new Date().toISOString(),
     };
@@ -375,32 +399,89 @@ export function useClubStore() {
         const newWalkCount = activity === 'walking' ? u.walkCount + 1 : u.walkCount;
 
         const unlocked = [...(u.unlockedBadgeIds || [])];
+        const counts: Record<string, number> = { ...(u.badgeCounts || {}) };
 
-        // Badge checks
-        if (!unlocked.includes('first-chuck') && newTotalRuns >= 1) {
-          unlocked.push('first-chuck');
-          const b = badges.find((x) => x.id === 'first-chuck');
-          if (b) earnedBadges.push(b);
+        // Helper to award / increment an achievement badge
+        const awardBadge = (badgeId: string, customMultiplier?: number) => {
+          const isFirstTime = !unlocked.includes(badgeId);
+          if (isFirstTime) {
+            unlocked.push(badgeId);
+            const b = badges.find((x) => x.id === badgeId);
+            if (b) earnedBadges.push(b);
+          }
+          if (customMultiplier !== undefined) {
+            const prevCount = counts[badgeId] || 0;
+            if (customMultiplier > prevCount && !isFirstTime) {
+              const b = badges.find((x) => x.id === badgeId);
+              if (b) earnedBadges.push(b);
+            }
+            counts[badgeId] = customMultiplier;
+          } else {
+            counts[badgeId] = (counts[badgeId] || 0) + 1;
+            if (!isFirstTime) {
+              const b = badges.find((x) => x.id === badgeId);
+              if (b) earnedBadges.push(b);
+            }
+          }
+        };
+
+        // 1. First Chuck (1 run attendance)
+        if (newTotalRuns >= 1) {
+          awardBadge('first-chuck', 1);
         }
-        if (!unlocked.includes('turkey-veteran') && event.codeWord.toUpperCase() === 'TURKEY') {
-          unlocked.push('turkey-veteran');
-          const b = badges.find((x) => x.id === 'turkey-veteran');
-          if (b) earnedBadges.push(b);
+
+        // 2. WoodChucker Milestones (5, 50, 100, 200 runs)
+        if (newTotalRuns >= 5) {
+          awardBadge('milestone-5', Math.floor(newTotalRuns / 5));
         }
-        if (!unlocked.includes('mile-50') && newTotalRuns >= 50) {
-          unlocked.push('mile-50');
-          const b = badges.find((x) => x.id === 'mile-50');
-          if (b) earnedBadges.push(b);
+        if (newTotalRuns >= 50) {
+          awardBadge('milestone-50', Math.floor(newTotalRuns / 50));
         }
-        if (!unlocked.includes('mile-100') && newTotalRuns >= 100) {
-          unlocked.push('mile-100');
-          const b = badges.find((x) => x.id === 'mile-100');
-          if (b) earnedBadges.push(b);
+        if (newTotalRuns >= 100) {
+          awardBadge('milestone-100', Math.floor(newTotalRuns / 100));
         }
-        if (!unlocked.includes('century-walker') && newWalkCount >= 10) {
-          unlocked.push('century-walker');
-          const b = badges.find((x) => x.id === 'century-walker');
-          if (b) earnedBadges.push(b);
+        if (newTotalRuns >= 200) {
+          awardBadge('milestone-200', Math.floor(newTotalRuns / 200));
+        }
+
+        // 3. Power Walker (Incremental: every 10 walking check-ins)
+        if (newWalkCount >= 10) {
+          awardBadge('power-walker', Math.floor(newWalkCount / 10));
+        }
+
+        // 4. Streaks: Burrow Regular (4 weeks / 1 month) & Burrow Extreme (10 weeks)
+        if (newTotalRuns >= 4) {
+          awardBadge('streak-4', Math.max(1, Math.floor(newTotalRuns / 4)));
+        }
+        if (newTotalRuns >= 10) {
+          awardBadge('streak-10', Math.max(1, Math.floor(newTotalRuns / 10)));
+        }
+
+        // 5. Special Events: Turkey Trot, Halloween Run, Anniversary Run
+        // Detected via event.specialEvent dropdown OR code word / title matching
+        if (
+          event.specialEvent === 'turkey_trot' || 
+          event.codeWord.toUpperCase().includes('TURKEY') || 
+          event.title.toLowerCase().includes('turkey')
+        ) {
+          awardBadge('special-turkey');
+        }
+
+        if (
+          event.specialEvent === 'halloween' || 
+          event.codeWord.toUpperCase().includes('HALLOWEEN') || 
+          event.codeWord.toUpperCase().includes('SPOOKY') || 
+          event.title.toLowerCase().includes('halloween')
+        ) {
+          awardBadge('special-halloween');
+        }
+
+        if (
+          event.specialEvent === 'anniversary' || 
+          event.codeWord.toUpperCase().includes('ANNIVERSARY') || 
+          event.title.toLowerCase().includes('anniversary')
+        ) {
+          awardBadge('special-anniversary');
         }
 
         updatedUser = {
@@ -411,6 +492,7 @@ export function useClubStore() {
           runCount: newRunCount,
           walkCount: newWalkCount,
           unlockedBadgeIds: unlocked,
+          badgeCounts: counts,
         };
 
         return updatedUser;
@@ -426,6 +508,7 @@ export function useClubStore() {
           totalRuns: updatedUser.totalRuns,
           totalMiles: updatedUser.totalMiles,
           unlockedBadgeIds: updatedUser.unlockedBadgeIds,
+          badgeCounts: updatedUser.badgeCounts,
         };
       })
     );

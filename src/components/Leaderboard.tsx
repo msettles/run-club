@@ -84,27 +84,40 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
 
         {/* Member unlocked badges */}
         <div className="mt-5 pt-4 border-t border-woodland-800/80">
-          <span className="text-xs font-semibold text-woodland-200 uppercase tracking-wider flex items-center gap-1.5 mb-2.5">
-            <Award className="w-4 h-4 text-amber-400" />
-            <span>Badges Earned ({currentMember.unlockedBadgeIds.length} / {badges.length})</span>
+          <span className="text-xs font-semibold text-woodland-200 uppercase tracking-wider flex items-center justify-between mb-2.5">
+            <span className="flex items-center gap-1.5">
+              <Award className="w-4 h-4 text-amber-400" />
+              <span>Badges Earned ({currentMember.unlockedBadgeIds.length} / {badges.length})</span>
+            </span>
+            <span className="text-[11px] text-woodland-300">
+              Woodchucker Club Badges
+            </span>
           </span>
-          <div className="flex flex-wrap gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
             {badges.map((badge) => {
               const unlocked = currentMember.unlockedBadgeIds.includes(badge.id);
+              const count = currentMember.badgeCounts?.[badge.id] || (unlocked ? 1 : 0);
               return (
                 <div
                   key={badge.id}
-                  className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-medium border transition ${
+                  className={`flex items-start gap-2.5 p-2 rounded-xl text-xs font-medium border transition ${
                     unlocked
-                      ? 'bg-woodland-900/80 border-woodland-500/50 text-white shadow-xs'
-                      : 'bg-woodland-950/40 border-woodland-900 text-woodland-400/50 opacity-40'
+                      ? 'bg-woodland-900/90 border-woodland-500/60 text-white shadow-xs'
+                      : 'bg-woodland-950/40 border-woodland-900/70 text-woodland-400/40 opacity-40'
                   }`}
-                  title={badge.description}
+                  title={`${badge.name}: ${badge.description}`}
                 >
-                  <span className="text-lg">{badge.emoji}</span>
-                  <div>
-                    <div className="font-bold leading-tight">{badge.name}</div>
-                    <div className="text-[10px] text-woodland-300/80 leading-tight">
+                  <span className="text-xl shrink-0 mt-0.5">{badge.emoji}</span>
+                  <div className="min-w-0 flex-1">
+                    <div className="font-bold leading-tight flex items-center gap-1.5">
+                      <span className="truncate">{badge.name}</span>
+                      {unlocked && badge.isIncremental && count > 1 && (
+                        <span className="px-1.5 py-0.2 bg-amber-400 text-stone-950 font-black text-[10px] rounded-full shrink-0 shadow-xs">
+                          x{count}
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-[10px] text-woodland-300/80 leading-tight mt-0.5 truncate">
                       {badge.requirement}
                     </div>
                   </div>
@@ -210,9 +223,35 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
                         </span>
                       )}
                     </div>
-                    <span className="text-xs text-stone-500">
-                      Pace: {member.favoritePace}
-                    </span>
+                    <div className="flex items-center gap-2 text-xs text-stone-500">
+                      <span>Pace: {member.favoritePace}</span>
+                    </div>
+
+                    {/* Quick Badge Chips */}
+                    <div className="flex items-center gap-1 mt-1 flex-wrap">
+                      {member.unlockedBadgeIds.slice(0, 4).map((badgeId) => {
+                        const b = badges.find((x) => x.id === badgeId);
+                        if (!b) return null;
+                        const count = member.badgeCounts?.[badgeId] || 1;
+                        return (
+                          <span
+                            key={badgeId}
+                            className="inline-flex items-center gap-0.5 text-xs bg-stone-100 hover:bg-stone-200 px-1.5 py-0.5 rounded-md border border-stone-200 text-stone-800 transition"
+                            title={`${b.name}${count > 1 ? ` (x${count})` : ''}`}
+                          >
+                            <span>{b.emoji}</span>
+                            {b.isIncremental && count > 1 && (
+                              <span className="text-[9px] font-black text-amber-700">x{count}</span>
+                            )}
+                          </span>
+                        );
+                      })}
+                      {member.unlockedBadgeIds.length > 4 && (
+                        <span className="text-[10px] text-stone-400 font-bold px-1 py-0.5 bg-stone-50 rounded">
+                          +{member.unlockedBadgeIds.length - 4}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
 

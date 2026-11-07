@@ -7,7 +7,8 @@ import {
   CheckInRecord, 
   UserProfile, 
   LegacyMember,
-  MilestoneAlert
+  MilestoneAlert,
+  SpecialEventType
 } from '../types';
 import { ClubNotification } from '../services/notifications';
 import { 
@@ -74,6 +75,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [eventDate, setEventDate] = useState<string>(defaultNextDate);
   const [eventTitle, setEventTitle] = useState<string>('Wednesday Woodchucker Meetup');
   const [eventCodeWord, setEventCodeWord] = useState<string>('WOODCHUCK');
+  const [specialEvent, setSpecialEvent] = useState<SpecialEventType>('none');
   const [eventNotes, setEventNotes] = useState<string>('Weekly social run & post-run social on the patio.');
   
   // 1-Mile route state
@@ -138,6 +140,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       time: '06:00 PM',
       title: eventTitle,
       codeWord: eventCodeWord.trim().toUpperCase(),
+      specialEvent,
       activeDistances: activeDists,
       routes: {
         ...(has1Mi && {
@@ -383,7 +386,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </div>
 
             <form onSubmit={handleSaveMeetup} className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-stone-700 mb-1">Meetup Date *</label>
                   <input
@@ -404,6 +407,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     placeholder="e.g. TURKEY"
                     className="w-full px-3 py-2 text-sm border rounded-xl font-mono uppercase font-black text-amber-700 bg-amber-50/50 focus:bg-white outline-none tracking-wider"
                   />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-stone-700 mb-1">Is Special Event?</label>
+                  <select
+                    value={specialEvent}
+                    onChange={(e) => setSpecialEvent(e.target.value as SpecialEventType)}
+                    className="w-full px-3 py-2 text-sm border rounded-xl font-bold bg-amber-50/70 border-amber-300 text-stone-900 outline-none"
+                  >
+                    <option value="none">None (Regular Run)</option>
+                    <option value="turkey_trot">🦃 Turkey Trot</option>
+                    <option value="halloween">🎃 Halloween Run</option>
+                    <option value="anniversary">🎂 Anniversary Run</option>
+                  </select>
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-stone-700 mb-1">Event Title</label>
@@ -605,7 +621,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   className="p-3.5 bg-stone-50 rounded-xl border border-stone-200 text-xs space-y-2"
                 >
                   <div className="flex items-center justify-between">
-                    <strong className="text-stone-900 font-bold">{evt.title}</strong>
+                    <div className="flex items-center gap-2">
+                      <strong className="text-stone-900 font-bold">{evt.title}</strong>
+                      {evt.specialEvent && evt.specialEvent !== 'none' && (
+                        <span className="px-2 py-0.5 bg-amber-100 text-amber-900 border border-amber-300 font-bold text-[10px] rounded-full uppercase">
+                          {evt.specialEvent === 'turkey_trot' ? '🦃 Turkey Trot' : evt.specialEvent === 'halloween' ? '🎃 Halloween' : '🎂 Anniversary'}
+                        </span>
+                      )}
+                    </div>
                     <span className="font-mono text-[10px] text-stone-500">{evt.date}</span>
                   </div>
 
