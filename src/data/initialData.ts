@@ -150,6 +150,22 @@ export const INITIAL_BADGES: Badge[] = [
     },
   },
   {
+    id: 'pet-runner',
+    name: 'Woodchuck Hound',
+    emoji: '🐕',
+    description: 'Ran or walked the club route with your four-legged running buddy!',
+    requirement: 'Running or walking with a pet (multiplier up to 10+)',
+    category: 'pet',
+    isIncremental: true,
+    maxMultiplier: 10,
+    isDefault: true,
+    triggerConfig: {
+      type: 'pet',
+      isIncremental: true,
+      step: 1,
+    },
+  },
+  {
     id: 'streak-4',
     name: 'Burrow Regular',
     emoji: '🔥',

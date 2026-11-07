@@ -79,7 +79,8 @@ export type BadgeCategory =
   | 'special_event' 
   | 'attendance'
   | 'activity'
-  | 'distance';
+  | 'distance'
+  | 'pet';
 
 export type BadgeTriggerType =
   | 'milestone'      // Total runs milestone (5, 25, 50, 100, etc.)
@@ -87,6 +88,7 @@ export type BadgeTriggerType =
   | 'distance'       // 1, 3, or 5 mile routes completed
   | 'special_event'  // Event marked as special event
   | 'streak'         // Consecutive attendance streak
+  | 'pet'            // Running or walking with a pet
   | 'attendance';    // General attendance (e.g. first run)
 
 export interface BadgeTriggerConfig {
@@ -118,6 +120,7 @@ export interface Badge {
   requirement: string;
   category?: BadgeCategory;
   isIncremental?: boolean; // Can be leveled up or earned multiple times (e.g. x2, x3)
+  maxMultiplier?: number; // e.g. 10 (renders as 10+)
   triggerConfig?: BadgeTriggerConfig;
   isDefault?: boolean;
   createdAt?: string;
@@ -161,6 +164,7 @@ export interface CheckInRecord {
   distanceChoice: DistanceTier; // 1 | 3 | 5
   actualMiles: number;       // Actual route distance (e.g. 3.22)
   routeName?: string;        // Name of route (e.g. "Heritage Park Loop")
+  withPet?: boolean;         // Checked if runner/walker brought a pet
   source: 'pwa' | 'admin' | 'legacy_import';
   createdAt: string;         // ISO timestamp
 }
@@ -186,6 +190,7 @@ export interface UserProfile {
   totalMiles: number;        // Cumulative miles walked + run
   runCount: number;          // Total times ran
   walkCount: number;         // Total times walked
+  petRunCount?: number;      // Total runs/walks with a pet
   distanceCounts?: { '1'?: number; '3'?: number; '5'?: number }; // Route choices count
   firstRunDate?: string;     // Earliest recorded check-in date
   // Legacy Link

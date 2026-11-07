@@ -286,6 +286,7 @@ export function useClubStore() {
       totalMiles: initialMiles,
       runCount: totalLegacyRuns,
       walkCount: 0,
+      petRunCount: 0,
       firstRunDate: totalLegacyRuns > 0 ? '2021-02-10' : new Date().toISOString().split('T')[0],
       linkedLegacyNames: claimedRecords.map((r) => r.name),
       unlockedBadgeIds: initialBadgeIds,
@@ -339,6 +340,7 @@ export function useClubStore() {
     codeWordEntered: string;
     activity: ActivityType;
     distanceChoice: DistanceTier;
+    withPet?: boolean;
   }): Promise<{
     success: boolean;
     message: string;
@@ -348,7 +350,7 @@ export function useClubStore() {
     newBadges?: Badge[];
     milestoneAlert?: MilestoneAlert;
   }> => {
-    const { eventDate, userEmail, codeWordEntered, activity, distanceChoice } = params;
+    const { eventDate, userEmail, codeWordEntered, activity, distanceChoice, withPet } = params;
     const cleanEmail = userEmail.trim().toLowerCase();
 
     // 1. Locate event
@@ -399,6 +401,7 @@ export function useClubStore() {
       distanceChoice,
       actualMiles: routeOption.actualMiles,
       routeName: routeOption.name,
+      withPet: Boolean(withPet),
       source: 'pwa',
       createdAt: now.toISOString(),
     };
@@ -418,6 +421,7 @@ export function useClubStore() {
         const newTotalMiles = Math.round((u.totalMiles + routeOption.actualMiles) * 100) / 100;
         const newRunCount = activity === 'running' ? u.runCount + 1 : u.runCount;
         const newWalkCount = activity === 'walking' ? u.walkCount + 1 : u.walkCount;
+        const newPetRunCount = withPet ? (u.petRunCount || 0) + 1 : (u.petRunCount || 0);
 
         const newDistanceCounts = {
           '1': (u.distanceCounts?.['1'] || 0) + (distanceChoice === 1 ? 1 : 0),
@@ -465,6 +469,7 @@ export function useClubStore() {
             if (badge.id === 'power-walker' && newWalkCount >= 10) awardBadge(badge.id, Math.floor(newWalkCount / 10));
             if (badge.id === 'streak-4' && newTotalRuns >= 4) awardBadge(badge.id, Math.max(1, Math.floor(newTotalRuns / 4)));
             if (badge.id === 'streak-10' && newTotalRuns >= 10) awardBadge(badge.id, Math.max(1, Math.floor(newTotalRuns / 10)));
+            if (badge.id === 'pet-runner' && newPetRunCount >= 1) awardBadge(badge.id, newPetRunCount);
             continue;
           }
 
@@ -516,6 +521,12 @@ export function useClubStore() {
               }
               break;
             }
+            case 'pet': {
+              if (newPetRunCount >= 1) {
+                awardBadge(badge.id, newPetRunCount);
+              }
+              break;
+            }
             case 'attendance': {
               if (newTotalRuns >= 1) {
                 awardBadge(badge.id, 1);
@@ -532,6 +543,7 @@ export function useClubStore() {
           totalMiles: newTotalMiles,
           runCount: newRunCount,
           walkCount: newWalkCount,
+          petRunCount: newPetRunCount,
           distanceCounts: newDistanceCounts,
           unlockedBadgeIds: unlocked,
           badgeCounts: counts,
@@ -549,6 +561,7 @@ export function useClubStore() {
           ...m,
           totalRuns: updatedUser.totalRuns,
           totalMiles: updatedUser.totalMiles,
+          petRunCount: updatedUser.petRunCount,
           unlockedBadgeIds: updatedUser.unlockedBadgeIds,
           badgeCounts: updatedUser.badgeCounts,
         };
@@ -647,6 +660,7 @@ export function useClubStore() {
     requirement: string;
     category: BadgeCategory;
     isIncremental?: boolean;
+    maxMultiplier?: number;
     triggerConfig: BadgeTriggerConfig;
     createSpecialEventOption?: boolean;
   }): Promise<Badge> => {
@@ -668,6 +682,7 @@ export function useClubStore() {
       requirement: badgeData.requirement.trim(),
       category: badgeData.category,
       isIncremental: badgeData.isIncremental ?? false,
+      maxMultiplier: badgeData.maxMultiplier,
       triggerConfig: badgeData.triggerConfig,
       isDefault: false,
       createdAt: new Date().toISOString(),

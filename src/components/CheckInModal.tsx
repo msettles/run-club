@@ -30,6 +30,7 @@ interface CheckInModalProps {
     codeWordEntered: string;
     activity: ActivityType;
     distanceChoice: DistanceTier;
+    withPet?: boolean;
   }) => Promise<{
     success: boolean;
     message: string;
@@ -106,6 +107,7 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
   const [codeWordInput, setCodeWordInput] = useState<string>('');
   const [selectedActivity, setSelectedActivity] = useState<ActivityType>('running');
   const [selectedDistance, setSelectedDistance] = useState<DistanceTier>(3);
+  const [runningWithPet, setRunningWithPet] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [organizerBypass, setOrganizerBypass] = useState<boolean>(false);
@@ -178,6 +180,7 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
           codeWordEntered: codeWordInput,
           activity: selectedActivity,
           distanceChoice: selectedDistance,
+          withPet: runningWithPet,
         });
 
         if (!res.success) {
@@ -225,6 +228,7 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
         codeWordEntered: codeWordInput,
         activity: selectedActivity,
         distanceChoice: selectedDistance,
+        withPet: runningWithPet,
       });
 
       if (!res.success) {
@@ -343,7 +347,7 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
                               <span className="font-extrabold text-sm text-stone-900 truncate">{badge.name}</span>
                               {badge.isIncremental && count > 1 && (
                                 <span className="px-1.5 py-0.2 bg-amber-400 text-stone-950 font-black text-[10px] rounded-full shrink-0">
-                                  x{count}
+                                  x{badge.maxMultiplier && count >= badge.maxMultiplier ? `${badge.maxMultiplier}+` : count}
                                 </span>
                               )}
                             </div>
@@ -651,6 +655,41 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
                 </p>
               </div>
 
+              {/* Step 4: Running with a Pet Checkoff */}
+              <div 
+                onClick={() => setRunningWithPet(!runningWithPet)}
+                className={`p-3.5 rounded-2xl border transition cursor-pointer flex items-center justify-between ${
+                  runningWithPet
+                    ? 'bg-amber-100/80 border-amber-400 shadow-xs'
+                    : 'bg-stone-50 border-stone-200 hover:bg-stone-100/80'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-amber-400 text-stone-950 flex items-center justify-center text-xl shrink-0 shadow-xs">
+                    🐕
+                  </div>
+                  <div>
+                    <label htmlFor="runningWithPetCheckbox" className="text-xs font-bold text-stone-900 cursor-pointer flex items-center gap-1.5">
+                      <span>Running or Walking with a Pet?</span>
+                      <span className="text-[10px] px-1.5 py-0.2 bg-amber-200 text-amber-900 rounded-full font-black">
+                        🐾 Badge Track
+                      </span>
+                    </label>
+                    <span className="text-[11px] text-stone-600 block leading-tight mt-0.5">
+                      Check off to earn &amp; level up your <strong>Woodchuck Hound</strong> badge (levels up to 10+)!
+                    </span>
+                  </div>
+                </div>
+                <input
+                  type="checkbox"
+                  id="runningWithPetCheckbox"
+                  checked={runningWithPet}
+                  onChange={(e) => setRunningWithPet(e.target.checked)}
+                  onClick={(e) => e.stopPropagation()}
+                  className="w-5 h-5 text-amber-600 rounded border-stone-300 focus:ring-amber-500 cursor-pointer shrink-0 ml-2"
+                />
+              </div>
+
               {/* Submit Button */}
               <button
                 type="button"
@@ -847,6 +886,19 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
                         <option value={5}>5 Miles</option>
                       </select>
                     </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 pt-2 border-t border-amber-200">
+                    <input
+                      type="checkbox"
+                      id="regPetCheckbox"
+                      checked={runningWithPet}
+                      onChange={(e) => setRunningWithPet(e.target.checked)}
+                      className="w-4 h-4 text-amber-600 rounded"
+                    />
+                    <label htmlFor="regPetCheckbox" className="text-xs font-semibold text-stone-700 cursor-pointer">
+                      Running or walking with a Pet tonight? 🐕
+                    </label>
                   </div>
                 </div>
               )}

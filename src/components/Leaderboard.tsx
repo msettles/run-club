@@ -113,7 +113,7 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
                       <span className="truncate">{badge.name}</span>
                       {unlocked && badge.isIncremental && count > 1 && (
                         <span className="px-1.5 py-0.2 bg-amber-400 text-stone-950 font-black text-[10px] rounded-full shrink-0 shadow-xs">
-                          x{count}
+                          x{badge.maxMultiplier && count >= badge.maxMultiplier ? `${badge.maxMultiplier}+` : count}
                         </span>
                       )}
                     </div>
@@ -241,7 +241,9 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
                           >
                             <span>{b.emoji}</span>
                             {b.isIncremental && count > 1 && (
-                              <span className="text-[9px] font-black text-amber-700">x{count}</span>
+                              <span className="text-[9px] font-black text-amber-700">
+                                x{b.maxMultiplier && count >= b.maxMultiplier ? `${b.maxMultiplier}+` : count}
+                              </span>
                             )}
                           </span>
                         );

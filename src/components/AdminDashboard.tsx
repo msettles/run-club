@@ -62,6 +62,7 @@ interface AdminDashboardProps {
     requirement: string;
     category: BadgeCategory;
     isIncremental?: boolean;
+    maxMultiplier?: number;
     triggerConfig: BadgeTriggerConfig;
     createSpecialEventOption?: boolean;
   }) => Promise<Badge>;
@@ -149,6 +150,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [triggerDistanceTier, setTriggerDistanceTier] = useState<DistanceTier>(3);
   const [triggerDistanceThreshold, setTriggerDistanceThreshold] = useState<number>(10);
   const [triggerStreakWeeks, setTriggerStreakWeeks] = useState<number>(4);
+  const [triggerMaxMultiplier, setTriggerMaxMultiplier] = useState<number>(10);
   const [badgeSavedToast, setBadgeSavedToast] = useState<string | null>(null);
   const [badgeFilterCategory, setBadgeFilterCategory] = useState<string>('all');
   const [isSubmittingBadge, setIsSubmittingBadge] = useState<boolean>(false);
@@ -230,13 +232,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   // Export CSV functions
   const exportCheckinsCSV = () => {
-    const headers = ['Date', 'Time', 'User Email', 'Runner Name', 'Activity', 'Distance Choice', 'Actual GPS Miles', 'Route Name', 'Source'];
+    const headers = ['Date', 'Time', 'User Email', 'Runner Name', 'Activity', 'With Pet', 'Distance Choice', 'Actual GPS Miles', 'Route Name', 'Source'];
     const rows = checkins.map((c) => [
       c.date,
       c.time,
       c.userEmail,
       `"${c.runnerName || ''}"`,
       c.activity,
+      c.withPet ? 'Yes' : 'No',
       `${c.distanceChoice} mi`,
       c.actualMiles,
       `"${c.routeName || ''}"`,
@@ -817,6 +820,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     } else if (newBadgeCategory === 'streak') {
                       triggerConfig.streakWeeks = Number(triggerStreakWeeks);
                       triggerConfig.step = Number(triggerStreakWeeks);
+                    } else if (newBadgeCategory === 'pet') {
+                      categoryToSave = 'pet';
+                      triggerConfig.type = 'pet';
+                      triggerConfig.step = 1;
                     }
 
                     if (onCreateBadge) {
@@ -827,6 +834,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         requirement: newBadgeReq.trim() || newBadgeName.trim(),
                         category: categoryToSave,
                         isIncremental: newBadgeIncremental,
+                        maxMultiplier: triggerMaxMultiplier,
                         triggerConfig,
                         createSpecialEventOption: newBadgeCategory === 'special_event',
                       });
@@ -887,7 +895,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     <div className="space-y-1.5">
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <span className="text-[10px] font-bold text-stone-500 w-16 shrink-0">Mascot/Run:</span>
-                        {['🦫', '🏃', '🚶', '👟', '🎽', '⏱️', '🏅', '🏆', '🥇', '🥈', '🥉'].map((emoji) => (
+                        {['🦫', '🐕', '🐶', '🐾', '🏃', '🚶', '👟', '🎽', '⏱️', '🏅', '🏆', '🥇', '🥈', '🥉'].map((emoji) => (
                           <button
                             key={emoji}
                             type="button"
@@ -1014,6 +1022,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       { id: 'milestone', label: '🏆 Runs Milestone', desc: 'Total runs reached (5, 25, 50...)' },
                       { id: 'activity', label: '🚶 Walk / 🏃 Run Pack', desc: 'Walk or run input count' },
                       { id: 'distance', label: '📍 Route Distance', desc: '1, 3, or 5-mile choices completed' },
+                      { id: 'pet', label: '🐕 Pet Run', desc: 'Running or walking with a pet (up to 10+)' },
                       { id: 'streak', label: '🔥 Streak', desc: 'Consecutive weekly runs' },
                       { id: 'attendance', label: '🦫 Attendance', desc: 'General attendance milestone' },
                     ].map((cat) => (
@@ -1036,6 +1045,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             } else if (catId === 'distance') {
                               setNewBadgeDesc(`Completed ${triggerDistanceThreshold} ${triggerDistanceTier}-mile routes!`);
                               setNewBadgeReq(`${triggerDistanceThreshold} times completing ${triggerDistanceTier}-mile route`);
+                            } else if (catId === 'pet') {
+                              setNewBadgeDesc(`Ran or walked the club route with your four-legged running buddy!`);
+                              setNewBadgeReq(`Running or walking with a pet (multiplier up to ${triggerMaxMultiplier}+)`);
                             }
                           }
                         }}
@@ -1197,6 +1209,24 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         onChange={(e) => setTriggerStreakWeeks(Number(e.target.value))}
                         className="w-full px-3 py-1.5 text-xs border rounded-lg bg-white font-bold"
                       />
+                    </div>
+                  )}
+
+                  {newBadgeCategory === 'pet' && (
+                    <div className="space-y-2">
+                      <label className="block text-xs font-bold text-stone-700">
+                        Max Multiplier Cap (levels up each run with a pet)
+                      </label>
+                      <input
+                        type="number"
+                        min={1}
+                        value={triggerMaxMultiplier}
+                        onChange={(e) => setTriggerMaxMultiplier(Number(e.target.value))}
+                        className="w-full px-3 py-1.5 text-xs border rounded-lg bg-white font-bold"
+                      />
+                      <p className="text-[10px] text-stone-500">
+                        Runners level up this badge each time they check in with a pet, capped visually at {triggerMaxMultiplier}+ (e.g. x{triggerMaxMultiplier}+).
+                      </p>
                     </div>
                   )}
 
@@ -1375,7 +1405,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
               {/* Filter chips */}
               <div className="flex bg-stone-100 p-1 rounded-xl text-xs font-semibold gap-1 flex-wrap">
-                {['all', 'milestone', 'special_event', 'activity', 'distance', 'streak'].map((f) => (
+                {['all', 'milestone', 'special_event', 'activity', 'distance', 'pet', 'streak'].map((f) => (
                   <button
                     key={f}
                     onClick={() => setBadgeFilterCategory(f)}
@@ -1385,7 +1415,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         : 'text-stone-600 hover:text-stone-900'
                     }`}
                   >
-                    {f === 'special_event' ? 'Special Events' : f}
+                    {f === 'special_event' ? 'Special Events' : f === 'pet' ? '🐕 Pet Runs' : f}
                   </button>
                 ))}
               </div>
@@ -1438,7 +1468,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       </span>
                       {b.isIncremental && (
                         <span className="font-bold text-amber-800 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
-                          Multiplier Enabled
+                          Multiplier {b.maxMultiplier ? `(Max ${b.maxMultiplier}+)` : 'Enabled'}
                         </span>
                       )}
                     </div>
@@ -1512,11 +1542,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       <td className="py-2.5 px-3 font-bold text-stone-900">{c.runnerName || 'Woodchuck Runner'}</td>
                       <td className="py-2.5 px-3 text-stone-500 font-mono text-[11px]">{c.userEmail}</td>
                       <td className="py-2.5 px-3">
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                          c.activity === 'running' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'
-                        }`}>
-                          {c.activity === 'running' ? '🏃 Running' : '🚶 Walking'}
-                        </span>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                            c.activity === 'running' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'
+                          }`}>
+                            {c.activity === 'running' ? '🏃 Running' : '🚶 Walking'}
+                          </span>
+                          {c.withPet && (
+                            <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300" title="Ran with a pet">
+                              🐕 Pet
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="py-2.5 px-3 font-bold text-stone-800">{c.distanceChoice} Mi</td>
                       <td className="py-2.5 px-3 font-mono font-bold text-woodland-800">{c.actualMiles} mi</td>
