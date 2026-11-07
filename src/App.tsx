@@ -20,7 +20,6 @@ import {
   Compass,
   Filter,
   AlertCircle,
-  UploadCloud,
   Mountain,
   Download,
   Sparkles,
@@ -39,7 +38,6 @@ export function App() {
     currentMember,
     setCurrentMemberId,
     toggleRSVP,
-    checkInMember,
     addRun,
     updateRun,
     deleteRun,
@@ -48,6 +46,17 @@ export function App() {
     addRoute,
     isSyncing,
     isFirebaseConfigured,
+    // V2 Relational props
+    users,
+    meetupEvents,
+    checkins,
+    legacyMembers,
+    currentUser,
+    registerUser,
+    checkInRunner,
+    saveMeetupEvent,
+    searchLegacyMatches,
+    switchCurrentUser,
   } = useClubStore();
 
   const [activeTab, setActiveTab] = useState<'runs' | 'routes' | 'leaderboard' | 'admin'>('runs');
@@ -65,7 +74,7 @@ export function App() {
   // Selected route for viewing
   const [selectedRoute, setSelectedRoute] = useState<GPXRoute>(routes[0]);
 
-  const isAdmin = currentMember.email === 'woodlandwoodchuckers@gmail.com' || currentMember.id === 'mem-admin';
+  const isAdmin = currentUser.role === 'admin' || currentUser.email === 'woodlandwoodchuckers@gmail.com';
 
   // Filtered runs
   const filteredRuns = runs.filter((r) => {
@@ -119,7 +128,6 @@ export function App() {
           <div className="space-y-6">
             {/* Hero Banner */}
             <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-woodland-950 via-woodland-900 to-[#13495d] text-white p-6 sm:p-8 shadow-lg border border-woodland-700/60">
-              {/* Subtle background glow */}
               <div className="absolute top-0 right-0 -mr-20 -mt-20 w-80 h-80 rounded-full bg-woodland-500/20 blur-3xl pointer-events-none" />
               <div className="absolute bottom-0 left-1/3 -mb-20 w-60 h-60 rounded-full bg-amber-500/10 blur-2xl pointer-events-none" />
 
@@ -133,14 +141,21 @@ export function App() {
                     Woodland Woodchuckers
                   </h1>
                   <p className="mt-2 text-sm sm:text-base text-woodland-100/90 leading-relaxed font-sans">
-                    Join our weekly group runs, explore scenic GPX trail routes, check in to build
-                    your woodchuck streaks, and earn club badges — 100% free with zero fees!
+                    Join our weekly Wednesday group runs, check in to build your milestone shirt streak,
+                    track your lifetime miles, and earn club badges — 100% free with zero fees!
                   </p>
 
                   <div className="mt-5 flex flex-wrap items-center gap-3">
                     <button
+                      onClick={handleQuickCheckIn}
+                      className="flex items-center gap-2 px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-stone-950 font-black text-xs sm:text-sm rounded-xl transition shadow-md font-display uppercase tracking-wide cursor-pointer"
+                    >
+                      <Sparkles className="w-4 h-4 text-stone-950" />
+                      <span>Check In Tonight 🦫</span>
+                    </button>
+                    <button
                       onClick={() => setIsNewRunOpen(true)}
-                      className="flex items-center gap-2 px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-stone-950 font-bold text-xs sm:text-sm rounded-xl transition shadow-sm"
+                      className="flex items-center gap-2 px-4 py-2.5 bg-white/10 hover:bg-white/20 text-white font-semibold text-xs sm:text-sm rounded-xl border border-white/20 transition backdrop-blur-xs"
                     >
                       <Plus className="w-4 h-4" />
                       <span>Schedule a Run</span>
@@ -158,7 +173,7 @@ export function App() {
                       title="View & Download Official 2026 & Heritage Logos"
                     >
                       <Palette className="w-4 h-4 text-amber-300" />
-                      <span>Club Logos &amp; Colors</span>
+                      <span>Club Logos</span>
                     </button>
                     {isAdmin && (
                       <button
@@ -171,9 +186,8 @@ export function App() {
                   </div>
                 </div>
 
-                {/* Dual Logo Showcase (New 2026 Mascot + Original Bottle Cap) */}
+                {/* Dual Logo Showcase */}
                 <div className="flex items-center gap-4 shrink-0">
-                  {/* Card 1: 2026 Running Mascot */}
                   <div
                     onClick={() => setIsBrandAssetsOpen(true)}
                     className="cursor-pointer group flex flex-col items-center bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 rounded-2xl p-3 shadow-xl transition group-hover:scale-105"
@@ -191,7 +205,6 @@ export function App() {
                     </span>
                   </div>
 
-                  {/* Card 2: Original Heritage Bottle Cap */}
                   <div
                     onClick={() => setIsBrandAssetsOpen(true)}
                     className="hidden sm:flex cursor-pointer group flex-col items-center bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 rounded-2xl p-3 shadow-xl transition group-hover:scale-105"
@@ -199,60 +212,70 @@ export function App() {
                   >
                     <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-xl overflow-hidden shadow-md">
                       <img
-                        src="/Woodchucker2.jpg"
-                        alt="Original Blue Note Woodchucker Bottle Cap"
-                        className="w-full h-full object-cover transition group-hover:scale-110"
+                        src="/woodchuck.svg"
+                        alt="Woodchuck Bottle Cap Logo"
+                        className="w-full h-full object-cover"
                       />
                     </div>
-                    <span className="text-[10px] font-bold uppercase tracking-wider bg-woodland-300 text-woodland-950 px-2 py-0.5 rounded-full mt-1.5 shadow-xs">
-                      Heritage Badge
+                    <span className="text-[10px] font-bold uppercase tracking-wider bg-white/20 text-white px-2 py-0.5 rounded-full mt-1.5 border border-white/30">
+                      Classic Heritage
                     </span>
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* Filter Bar */}
-            <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-3 rounded-xl border border-stone-200 shadow-xs">
-              <div className="flex items-center gap-2 text-xs font-semibold text-stone-700">
-                <Filter className="w-4 h-4 text-woodland-600" />
-                <span>Surface:</span>
-                {(['All', 'Trail', 'Pavement', 'Mixed'] as const).map((s) => (
+            {/* Run Filters & Header */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-2">
+              <div>
+                <h3 className="text-xl font-bold text-stone-900 font-display">Upcoming Run Schedule</h3>
+                <p className="text-xs text-stone-500">
+                  Wednesdays at Blue Note Brewing (6:00 PM) • 1-Mile, 3-Mile &amp; 5-Mile Options
+                </p>
+              </div>
+
+              {/* Surface Filter Chips */}
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
+                <span className="text-xs font-semibold text-stone-500 flex items-center gap-1 mr-1">
+                  <Filter className="w-3.5 h-3.5" /> Filter:
+                </span>
+                {(['All', 'Trail', 'Pavement', 'Mixed', 'Track'] as const).map((s) => (
                   <button
                     key={s}
                     onClick={() => setSurfaceFilter(s)}
-                    className={`px-3 py-1 rounded-lg transition ${
+                    className={`px-3 py-1.5 rounded-full text-xs font-semibold transition ${
                       surfaceFilter === s
-                        ? 'bg-woodland-600 text-white shadow-xs font-bold'
-                        : 'text-stone-600 hover:bg-stone-100'
+                        ? 'bg-woodland-800 text-white shadow-xs'
+                        : 'bg-white text-stone-600 border border-stone-200 hover:bg-stone-50'
                     }`}
                   >
                     {s}
                   </button>
                 ))}
               </div>
-
-              <div className="text-xs text-stone-500 font-medium">
-                Showing {filteredRuns.length} scheduled run{filteredRuns.length === 1 ? '' : 's'}
-              </div>
             </div>
 
-            {/* Runs Grid */}
+            {/* Run Cards List */}
             {filteredRuns.length === 0 ? (
-              <div className="text-center py-12 bg-white rounded-2xl border border-stone-200">
-                <AlertCircle className="w-10 h-10 text-stone-400 mx-auto mb-2" />
-                <p className="text-sm font-semibold text-stone-700">No runs found for this filter</p>
-                <p className="text-xs text-stone-500 mt-1">Try switching the surface filter or schedule a new run!</p>
+              <div className="text-center py-12 bg-white rounded-2xl border border-stone-200 p-6 space-y-3">
+                <AlertCircle className="w-8 h-8 text-stone-400 mx-auto" />
+                <p className="text-stone-600 font-medium text-sm">No group runs scheduled for this filter.</p>
+                <button
+                  onClick={() => setSurfaceFilter('All')}
+                  className="text-xs font-bold text-woodland-700 hover:underline"
+                >
+                  Clear filter
+                </button>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="space-y-4">
                 {filteredRuns.map((run) => {
-                  const matchedRoute = routes.find((r) => r.id === run.routeId);
+                  const attachedRoute = routes.find((r) => r.id === run.routeId);
                   return (
                     <RunCard
                       key={run.id}
                       run={run}
-                      route={matchedRoute}
+                      route={attachedRoute}
                       currentMember={currentMember}
                       onToggleRSVP={toggleRSVP}
                       onOpenCheckIn={(r) => setSelectedRunForCheckIn(r)}
@@ -265,38 +288,35 @@ export function App() {
           </div>
         )}
 
-        {/* TAB 2: GPX ROUTES & INTERACTIVE MAPS */}
+        {/* TAB 2: GPX ROUTE EXPLORER */}
         {activeTab === 'routes' && (
           <div className="space-y-6">
-            <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
               <div>
-                <h2 className="text-xl font-display font-bold uppercase tracking-wide text-stone-900 flex items-center gap-2">
-                  <span>🗺️</span> GPX Route Library &amp; Interactive Maps
-                </h2>
-                <p className="text-xs text-stone-500 mt-0.5">
-                  100% free OpenStreetMap visualization, elevation profiles, and GPX watch downloads.
+                <h3 className="text-xl font-bold text-stone-900 font-display">Woodland GPX Trail Library</h3>
+                <p className="text-xs text-stone-500">
+                  Interactive OpenStreetMap trail tracks, elevation profiles, and downloadable GPS routes.
                 </p>
               </div>
-
               <button
                 onClick={() => setIsUploadGpxOpen(true)}
-                className="flex items-center gap-1.5 px-4 py-2 bg-woodland-600 hover:bg-woodland-700 text-white text-xs font-semibold rounded-xl transition shadow-sm"
+                className="flex items-center gap-2 px-4 py-2 bg-woodland-800 hover:bg-woodland-900 text-white font-bold text-xs rounded-xl shadow-sm transition"
               >
-                <UploadCloud className="w-4 h-4" />
-                <span>Upload Custom GPX</span>
+                <Plus className="w-4 h-4" />
+                <span>Upload GPX File</span>
               </button>
             </div>
 
-            {/* Route Selector Pills */}
-            <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
+            {/* Route Selector Tabs */}
+            <div className="flex items-center gap-2 overflow-x-auto pb-2">
               {routes.map((r) => (
                 <button
                   key={r.id}
                   onClick={() => setSelectedRoute(r)}
-                  className={`px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition flex items-center gap-2 ${
+                  className={`px-4 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap flex items-center gap-2 ${
                     selectedRoute.id === r.id
                       ? 'bg-woodland-800 text-white shadow-sm'
-                      : 'bg-white border border-stone-200 text-stone-700 hover:bg-stone-50'
+                      : 'bg-white text-stone-700 border border-stone-200 hover:bg-stone-50'
                   }`}
                 >
                   <span>{r.name}</span>
@@ -374,6 +394,11 @@ export function App() {
             members={members}
             routes={routes}
             notifications={notifications}
+            meetupEvents={meetupEvents}
+            checkins={checkins}
+            users={users}
+            legacyMembers={legacyMembers}
+            onSaveMeetupEvent={saveMeetupEvent}
             onOpenNewRun={() => setIsNewRunOpen(true)}
             onEditRun={(r) => setEditingRun(r)}
             onDeleteRun={deleteRun}
@@ -475,15 +500,18 @@ export function App() {
         </div>
       )}
 
-      {/* Modals */}
+      {/* Check In Modal (New Relational Check-in Experience) */}
       {selectedRunForCheckIn && (
         <CheckInModal
-          run={selectedRunForCheckIn}
-          members={members}
-          currentMember={currentMember}
           isOpen={Boolean(selectedRunForCheckIn)}
           onClose={() => setSelectedRunForCheckIn(null)}
-          onCheckIn={checkInMember}
+          meetupEvents={meetupEvents}
+          currentUser={currentUser}
+          users={users}
+          onCheckInRunner={checkInRunner}
+          onRegisterUser={registerUser}
+          onSearchLegacy={searchLegacyMatches}
+          onSwitchUser={switchCurrentUser}
         />
       )}
 

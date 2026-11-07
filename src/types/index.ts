@@ -1,5 +1,7 @@
 export type SurfaceType = 'Trail' | 'Pavement' | 'Mixed' | 'Track';
 export type DifficultyType = 'Easy' | 'Moderate' | 'Challenging';
+export type ActivityType = 'running' | 'walking';
+export type DistanceTier = 1 | 3 | 5;
 
 export interface PaceGroup {
   label: string;
@@ -41,7 +43,7 @@ export interface RunEvent {
   id: string;
   title: string;
   date: string; // YYYY-MM-DD
-  time: string; // "07:30 AM"
+  time: string; // "06:00 PM"
   locationName: string;
   meetingCoordinates?: { lat: number; lon: number };
   address: string;
@@ -64,18 +66,95 @@ export interface Badge {
   requirement: string;
 }
 
-export interface Member {
+// -------------------------------------------------------------
+// NEW RELATIONAL RUN CLUB SCHEMA
+// -------------------------------------------------------------
+
+export interface RouteOption {
+  name: string;
+  actualMiles: number; // Measured GPS/map distance (e.g. 1.15, 3.22, 5.12)
+  routeUrl?: string;   // Strava / Garmin / Apple Watch link
+  imageUrl?: string;   // Route preview image / map screenshot
+  directions?: string; // Step-by-step turn directions
+}
+
+export interface MeetupEvent {
+  id: string;          // Usually date "YYYY-MM-DD"
+  date: string;        // "2026-11-11"
+  time?: string;       // "06:00 PM"
+  title: string;       // e.g. "Thanksgiving Warmup Run"
+  codeWord: string;    // Case-insensitive, e.g. "TURKEY"
+  activeDistances: ('1' | '3' | '5')[]; // Which distances are active tonight
+  routes: {
+    '1'?: RouteOption;
+    '3'?: RouteOption;
+    '5'?: RouteOption;
+  };
+  notes?: string;
+}
+
+export interface CheckInRecord {
+  id: string;                // e.g. "2026-11-11_matt.settles@example.com"
+  date: string;              // YYYY-MM-DD
+  time: string;              // HH:MM:SS
+  userEmail: string;         // Foreign key to UserProfile.email
+  runnerName?: string;       // Display cache
+  activity: ActivityType;    // 'running' | 'walking'
+  distanceChoice: DistanceTier; // 1 | 3 | 5
+  actualMiles: number;       // Actual route distance (e.g. 3.22)
+  routeName?: string;        // Name of route (e.g. "Heritage Park Loop")
+  source: 'pwa' | 'admin' | 'legacy_import';
+  createdAt: string;         // ISO timestamp
+}
+
+export interface UserProfile {
+  email: string;             // Primary Key (lowercase)
+  firstName: string;
+  lastName: string;
+  displayName: string;
+  shirtSize: 'Youth' | 'Youth S' | 'Youth M' | 'Youth L' | 'XS' | 'S' | 'M' | 'L' | 'XL' | '2XL' | string;
+  age?: number;
+  city?: string;
+  zipCode?: string;
+  emergencyContact?: {
+    name: string;
+    phone: string;
+  };
+  preferredPace?: string;
+  // Attendance & Miles
+  pre2021Runs: number;       // From pre-2021 OldCounts
+  loggedRuns: number;        // From individual checkin records
+  totalRuns: number;         // pre2021Runs + loggedRuns
+  totalMiles: number;        // Cumulative miles walked + run
+  runCount: number;          // Total times ran
+  walkCount: number;         // Total times walked
+  firstRunDate?: string;     // Earliest recorded check-in date
+  // Legacy Link
+  linkedLegacyNames: string[]; // Claimed historical names (e.g. ["MATT SETTLES"])
+  unlockedBadgeIds: string[];
+  role: 'member' | 'organizer' | 'admin';
+  createdAt: string;
+}
+
+export interface LegacyMember {
+  id: string;                // Normalized name or unique ID
+  name: string;              // Exact legacy roster name
+  newCount: number;          // From 2021-2026 log (sum is 6,263)
+  oldCount: number;          // Pre-2021 count (sum is 2,473)
+  totalRuns: number;         // newCount + oldCount
+  claimedByEmail: string | null; // Null until runner claims it
+  claimedAt: string | null;
+}
+
+// Retain Member interface for backwards-compatibility with existing views
+export type Member = UserProfile & {
   id: string;
   name: string;
-  email: string;
-  avatarUrl?: string;
-  totalRuns: number;
-  totalMiles: number;
   streak: number;
   favoritePace: string;
-  unlockedBadgeIds: string[];
   joinedDate: string;
-}
+  avatarUrl?: string;
+};
 
 export interface CheckInPayload {
   runId: string;

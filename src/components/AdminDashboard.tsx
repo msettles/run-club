@@ -1,95 +1,199 @@
 import React, { useState } from 'react';
-import { RunEvent, Member, GPXRoute } from '../types';
+import { 
+  RunEvent, 
+  Member, 
+  GPXRoute, 
+  MeetupEvent, 
+  CheckInRecord, 
+  UserProfile, 
+  LegacyMember 
+} from '../types';
 import { ClubNotification } from '../services/notifications';
 import { 
-  ShieldCheck, 
   Calendar, 
   Users, 
   Bell, 
-  Plus, 
-  Edit3, 
-  Trash2, 
   Download, 
   CheckCircle, 
   Send, 
   Search, 
-  Flame,
-  Smartphone
+  Key, 
+  ShieldCheck, 
+  Check, 
+  FileText
 } from 'lucide-react';
 
 interface AdminDashboardProps {
-  runs: RunEvent[];
-  members: Member[];
-  routes: GPXRoute[];
+  runs?: RunEvent[];
+  members?: Member[];
+  routes?: GPXRoute[];
   notifications: ClubNotification[];
-  onOpenNewRun: () => void;
-  onEditRun: (run: RunEvent) => void;
-  onDeleteRun: (runId: string) => void;
-  onUpdateMemberStats: (memberId: string, updates: Partial<Member>) => void;
+  // Relational V2 props
+  meetupEvents: MeetupEvent[];
+  checkins: CheckInRecord[];
+  users: UserProfile[];
+  legacyMembers: LegacyMember[];
+  onSaveMeetupEvent: (event: MeetupEvent) => void;
+  onOpenNewRun?: () => void;
+  onEditRun?: (run: RunEvent) => void;
+  onDeleteRun?: (runId: string) => void;
+  onUpdateMemberStats?: (memberId: string, updates: Partial<Member>) => void;
   onSendBroadcast: (title: string, body: string) => void;
 }
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({
-  runs,
-  members,
   notifications,
-  onOpenNewRun,
-  onEditRun,
-  onDeleteRun,
-  onUpdateMemberStats,
+  meetupEvents,
+  checkins,
+  users,
+  legacyMembers,
+  onSaveMeetupEvent,
   onSendBroadcast,
 }) => {
-  const [adminTab, setAdminTab] = useState<'runs' | 'members' | 'notifications'>('runs');
+  const [adminTab, setAdminTab] = useState<'events' | 'checkins' | 'members' | 'notifications'>('events');
   const [memberSearch, setMemberSearch] = useState<string>('');
-  const [notifTitle, setNotifTitle] = useState<string>('🦫 Run Tomorrow: Saturday Trail Loop!');
-  const [notifBody, setNotifBody] = useState<string>('Meet at 8:00 AM at Creek Park. Hydration pack recommended.');
+  const [checkinFilterDate, setCheckinFilterDate] = useState<string>('all');
+  const [notifTitle, setNotifTitle] = useState<string>('🦫 Run Tonight: Wednesday Code Word!');
+  const [notifBody, setNotifBody] = useState<string>('Meet at 6:00 PM on Blue Note Brewing patio. Check-in is live!');
   const [broadcastSent, setBroadcastSent] = useState<boolean>(false);
 
-  // Edit member modal state
-  const [editingMember, setEditingMember] = useState<Member | null>(null);
+  // Edit / Schedule Meetup Event State
+  const defaultNextDate = '2026-11-18';
+  const [eventDate, setEventDate] = useState<string>(defaultNextDate);
+  const [eventTitle, setEventTitle] = useState<string>('Wednesday Woodchucker Meetup');
+  const [eventCodeWord, setEventCodeWord] = useState<string>('WOODCHUCK');
+  const [eventNotes, setEventNotes] = useState<string>('Weekly social run & post-run social on the patio.');
+  
+  // 1-Mile route state
+  const [has1Mi, setHas1Mi] = useState<boolean>(true);
+  const [name1Mi, setName1Mi] = useState<string>('Downtown Historic Stroll');
+  const [miles1Mi, setMiles1Mi] = useState<number>(1.15);
+  const [url1Mi, setUrl1Mi] = useState<string>('https://www.strava.com/routes/31201');
+  const [dir1Mi, setDir1Mi] = useState<string>('East on Main St, loop at 1st St back to brewery.');
+
+  // 3-Mile route state
+  const [has3Mi, setHas3Mi] = useState<boolean>(true);
+  const [name3Mi, setName3Mi] = useState<string>('Heritage Park Loop');
+  const [miles3Mi, setMiles3Mi] = useState<number>(3.22);
+  const [url3Mi, setUrl3Mi] = useState<string>('https://www.strava.com/routes/31203');
+  const [dir3Mi, setDir3Mi] = useState<string>('East on Main, left on 3rd, through Heritage Park trail, back via Court St.');
+
+  // 5-Mile route state
+  const [has5Mi, setHas5Mi] = useState<boolean>(true);
+  const [name5Mi, setName5Mi] = useState<string>('Spring Lake Trek');
+  const [miles5Mi, setMiles5Mi] = useState<number>(5.12);
+  const [url5Mi, setUrl5Mi] = useState<string>('https://www.strava.com/routes/31205');
+  const [dir5Mi, setDir5Mi] = useState<string>('South on East St to Farmers Central, perimeter loop of Spring Lake, back on 6th St.');
+
+  const [eventSavedToast, setEventSavedToast] = useState<boolean>(false);
 
   // Quick stats
-  const totalRunsLogged = members.reduce((sum, m) => sum + m.totalRuns, 0);
-  const totalMilesLogged = Math.round(members.reduce((sum, m) => sum + m.totalMiles, 0) * 10) / 10;
-  const totalCheckInsAcrossRuns = runs.reduce(
-    (sum, r) => sum + r.attendees.filter((a) => a.checkedIn).length,
-    0
-  );
+  const totalCheckinsLogged = checkins.length;
+  const totalLifetimeMiles = Math.round(users.reduce((sum, u) => sum + u.totalMiles, 0) * 10) / 10;
+  const totalLegacyClaimed = legacyMembers.filter((m) => m.claimedByEmail !== null).length;
+
+  // Filtered checkins
+  const filteredCheckins = checkins.filter((c) => {
+    if (checkinFilterDate === 'all') return true;
+    return c.date === checkinFilterDate;
+  });
 
   // Filtered members
-  const filteredMembers = members.filter(
-    (m) =>
-      m.name.toLowerCase().includes(memberSearch.toLowerCase()) ||
-      m.email.toLowerCase().includes(memberSearch.toLowerCase())
+  const filteredUsers = users.filter(
+    (u) =>
+      u.displayName.toLowerCase().includes(memberSearch.toLowerCase()) ||
+      u.email.toLowerCase().includes(memberSearch.toLowerCase())
   );
 
-  // Export CSV functions
-  const exportMembersCSV = () => {
-    const headers = ['ID', 'Name', 'Email', 'Total Runs', 'Total Miles', 'Streak', 'Pace', 'Joined Date'];
-    const rows = members.map((m) => [
-      m.id,
-      `"${m.name}"`,
-      m.email,
-      m.totalRuns,
-      m.totalMiles,
-      m.streak,
-      `"${m.favoritePace}"`,
-      m.joinedDate,
-    ]);
-    const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
-    downloadCSV(csvContent, 'woodchuckers-membership-roster.csv');
+  // Handle saving the Meetup Event
+  const handleSaveMeetup = (e: React.FormEvent) => {
+    e.preventDefault();
+    const activeDists: ('1' | '3' | '5')[] = [];
+    if (has1Mi) activeDists.push('1');
+    if (has3Mi) activeDists.push('3');
+    if (has5Mi) activeDists.push('5');
+
+    if (activeDists.length === 0) {
+      alert('Please activate at least one distance (1, 3, or 5 miles) for the run.');
+      return;
+    }
+
+    const newEvent: MeetupEvent = {
+      id: eventDate,
+      date: eventDate,
+      time: '06:00 PM',
+      title: eventTitle,
+      codeWord: eventCodeWord.trim().toUpperCase(),
+      activeDistances: activeDists,
+      routes: {
+        ...(has1Mi && {
+          '1': {
+            name: name1Mi,
+            actualMiles: miles1Mi,
+            routeUrl: url1Mi,
+            directions: dir1Mi,
+          },
+        }),
+        ...(has3Mi && {
+          '3': {
+            name: name3Mi,
+            actualMiles: miles3Mi,
+            routeUrl: url3Mi,
+            directions: dir3Mi,
+          },
+        }),
+        ...(has5Mi && {
+          '5': {
+            name: name5Mi,
+            actualMiles: miles5Mi,
+            routeUrl: url5Mi,
+            directions: dir5Mi,
+          },
+        }),
+      },
+      notes: eventNotes,
+    };
+
+    onSaveMeetupEvent(newEvent);
+    setEventSavedToast(true);
+    setTimeout(() => setEventSavedToast(false), 3000);
   };
 
-  const exportRunAttendanceCSV = (run: RunEvent) => {
-    const headers = ['Member Name', 'Checked In', 'Checked In Time', 'RSVP Date'];
-    const rows = run.attendees.map((a) => [
-      `"${a.name}"`,
-      a.checkedIn ? 'YES' : 'NO',
-      a.checkedInAt || 'N/A',
-      a.rsvpDate,
+  // Export CSV functions
+  const exportCheckinsCSV = () => {
+    const headers = ['Date', 'Time', 'User Email', 'Runner Name', 'Activity', 'Distance Choice', 'Actual GPS Miles', 'Route Name', 'Source'];
+    const rows = checkins.map((c) => [
+      c.date,
+      c.time,
+      c.userEmail,
+      `"${c.runnerName || ''}"`,
+      c.activity,
+      `${c.distanceChoice} mi`,
+      c.actualMiles,
+      `"${c.routeName || ''}"`,
+      c.source,
     ]);
     const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
-    downloadCSV(csvContent, `attendance-${run.id}.csv`);
+    downloadCSV(csvContent, 'woodchuckers-checkins-log.csv');
+  };
+
+  const exportUsersCSV = () => {
+    const headers = ['Email', 'Display Name', 'Shirt Size', 'Total Runs', 'Pre-2021 Runs', 'Logged Runs', 'Total Miles', 'Runs Count', 'Walks Count', 'First Run Date', 'Linked Legacy Names'];
+    const rows = users.map((u) => [
+      u.email,
+      `"${u.displayName}"`,
+      u.shirtSize,
+      u.totalRuns,
+      u.pre2021Runs,
+      u.loggedRuns,
+      u.totalMiles,
+      u.runCount,
+      u.walkCount,
+      u.firstRunDate || '',
+      `"${(u.linkedLegacyNames || []).join('; ')}"`,
+    ]);
+    const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
+    downloadCSV(csvContent, 'woodchuckers-users-profiles.csv');
   };
 
   const downloadCSV = (content: string, filename: string) => {
@@ -101,242 +205,407 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    URL.revokeObjectURL(url);
   };
 
   const handleSendBroadcast = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!notifTitle || !notifBody) return;
+    if (!notifTitle.trim() || !notifBody.trim()) return;
     onSendBroadcast(notifTitle, notifBody);
     setBroadcastSent(true);
     setTimeout(() => setBroadcastSent(false), 4000);
   };
 
-  const setPresetBroadcast = (title: string, body: string) => {
-    setNotifTitle(title);
-    setNotifBody(body);
-  };
-
   return (
-    <div className="space-y-6">
-      {/* Admin Header & KPI Cards */}
-      <div className="bg-gradient-to-r from-stone-900 to-woodland-950 text-white rounded-2xl p-6 shadow-md border border-stone-800">
-        <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
-          <div className="flex items-center gap-3">
-            <div className="p-3 bg-woodland-600 rounded-xl shadow-inner">
-              <ShieldCheck className="w-6 h-6 text-white" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-xl sm:text-2xl font-black tracking-tight">Admin & Organizer Portal</h1>
-                <span className="text-[10px] bg-woodland-500/20 text-woodland-300 border border-woodland-400/30 px-2 py-0.5 rounded-full font-bold">
-                  woodlandwoodchuckers@gmail.com
-                </span>
-              </div>
-              <p className="text-xs text-stone-400 mt-0.5">
-                Manage group runs, audit membership run counts, and blast push notifications to runners' phones.
-              </p>
-            </div>
+    <div className="space-y-6 animate-in fade-in duration-200">
+      {/* Top Banner */}
+      <div className="bg-stone-900 text-white rounded-2xl p-6 shadow-md border border-stone-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-amber-400 mb-1">
+            <ShieldCheck className="w-4 h-4" />
+            <span>Organizer Administration Portal</span>
           </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              onClick={onOpenNewRun}
-              className="flex items-center gap-1.5 px-4 py-2 bg-woodland-600 hover:bg-woodland-700 text-white font-bold text-xs rounded-xl transition shadow-sm"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Schedule Run</span>
-            </button>
-            <button
-              onClick={exportMembersCSV}
-              className="flex items-center gap-1.5 px-3 py-2 bg-stone-800 hover:bg-stone-700 text-stone-200 font-semibold text-xs rounded-xl border border-stone-700 transition"
-              title="Export roster as CSV"
-            >
-              <Download className="w-4 h-4" />
-              <span>Export CSV</span>
-            </button>
-          </div>
+          <h2 className="text-2xl font-black font-display tracking-tight text-white">
+            Club Operations &amp; Event Management
+          </h2>
+          <p className="text-xs text-stone-300 mt-1">
+            Define weekly code words, route maps, inspect the live check-in event log, and oversee legacy runner claims.
+          </p>
         </div>
 
-        {/* KPI metrics */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-4 border-t border-stone-800">
-          <div className="bg-stone-800/60 p-3 rounded-xl border border-stone-700/60">
-            <span className="text-[11px] text-stone-400 uppercase tracking-wider block">Club Members</span>
-            <span className="text-xl font-black text-white">{members.length}</span>
+        {/* Global Stats */}
+        <div className="flex items-center gap-3 shrink-0">
+          <div className="px-3.5 py-2 bg-stone-800 rounded-xl border border-stone-700 text-center">
+            <span className="text-[10px] uppercase font-bold text-stone-400 block">Event Check-Ins</span>
+            <span className="text-lg font-black font-mono text-amber-400">{totalCheckinsLogged}</span>
           </div>
-          <div className="bg-stone-800/60 p-3 rounded-xl border border-stone-700/60">
-            <span className="text-[11px] text-stone-400 uppercase tracking-wider block">Member Runs Logged</span>
-            <span className="text-xl font-black text-white">{totalRunsLogged}</span>
+          <div className="px-3.5 py-2 bg-stone-800 rounded-xl border border-stone-700 text-center">
+            <span className="text-[10px] uppercase font-bold text-stone-400 block">Lifetime Miles</span>
+            <span className="text-lg font-black font-mono text-emerald-400">{totalLifetimeMiles}</span>
           </div>
-          <div className="bg-stone-800/60 p-3 rounded-xl border border-stone-700/60">
-            <span className="text-[11px] text-stone-400 uppercase tracking-wider block">Total Run Check-Ins</span>
-            <span className="text-xl font-black text-woodland-400">{totalCheckInsAcrossRuns}</span>
-          </div>
-          <div className="bg-stone-800/60 p-3 rounded-xl border border-stone-700/60">
-            <span className="text-[11px] text-stone-400 uppercase tracking-wider block">Total Club Miles</span>
-            <span className="text-xl font-black text-amber-400">{totalMilesLogged} mi</span>
+          <div className="px-3.5 py-2 bg-stone-800 rounded-xl border border-stone-700 text-center">
+            <span className="text-[10px] uppercase font-bold text-stone-400 block">Legacy Claimed</span>
+            <span className="text-lg font-black font-mono text-cyan-400">{totalLegacyClaimed}</span>
           </div>
         </div>
       </div>
 
-      {/* Admin Tab Navigation */}
-      <div className="flex border-b border-stone-200 bg-white px-4 rounded-xl shadow-xs">
+      {/* Admin Tabs */}
+      <div className="flex border-b border-stone-200 gap-2 overflow-x-auto pb-1">
         <button
-          onClick={() => setAdminTab('runs')}
-          className={`flex items-center gap-2 py-3 px-4 text-xs font-bold border-b-2 transition ${
-            adminTab === 'runs'
-              ? 'border-woodland-600 text-woodland-800'
-              : 'border-transparent text-stone-500 hover:text-stone-800'
+          onClick={() => setAdminTab('events')}
+          className={`flex items-center gap-2 px-4 py-2.5 font-bold text-xs rounded-t-xl transition ${
+            adminTab === 'events'
+              ? 'bg-white text-stone-900 border-t-2 border-amber-500 shadow-xs'
+              : 'text-stone-500 hover:text-stone-800'
           }`}
         >
-          <Calendar className="w-4 h-4 text-woodland-600" />
-          <span>Runs & Schedules ({runs.length})</span>
+          <Key className="w-4 h-4 text-amber-500" />
+          <span>Meetups &amp; Code Words</span>
+        </button>
+
+        <button
+          onClick={() => setAdminTab('checkins')}
+          className={`flex items-center gap-2 px-4 py-2.5 font-bold text-xs rounded-t-xl transition ${
+            adminTab === 'checkins'
+              ? 'bg-white text-stone-900 border-t-2 border-amber-500 shadow-xs'
+              : 'text-stone-500 hover:text-stone-800'
+          }`}
+        >
+          <FileText className="w-4 h-4 text-emerald-600" />
+          <span>Check-In Event Log ({checkins.length})</span>
         </button>
 
         <button
           onClick={() => setAdminTab('members')}
-          className={`flex items-center gap-2 py-3 px-4 text-xs font-bold border-b-2 transition ${
+          className={`flex items-center gap-2 px-4 py-2.5 font-bold text-xs rounded-t-xl transition ${
             adminTab === 'members'
-              ? 'border-woodland-600 text-woodland-800'
-              : 'border-transparent text-stone-500 hover:text-stone-800'
+              ? 'bg-white text-stone-900 border-t-2 border-amber-500 shadow-xs'
+              : 'text-stone-500 hover:text-stone-800'
           }`}
         >
           <Users className="w-4 h-4 text-woodland-600" />
-          <span>Membership & Run Counts ({members.length})</span>
+          <span>Runners &amp; Legacy Claims ({users.length})</span>
         </button>
 
         <button
           onClick={() => setAdminTab('notifications')}
-          className={`flex items-center gap-2 py-3 px-4 text-xs font-bold border-b-2 transition ${
+          className={`flex items-center gap-2 px-4 py-2.5 font-bold text-xs rounded-t-xl transition ${
             adminTab === 'notifications'
-              ? 'border-woodland-600 text-woodland-800'
-              : 'border-transparent text-stone-500 hover:text-stone-800'
+              ? 'bg-white text-stone-900 border-t-2 border-amber-500 shadow-xs'
+              : 'text-stone-500 hover:text-stone-800'
           }`}
         >
-          <Bell className="w-4 h-4 text-amber-500" />
-          <span>Push Alerts & Announcements</span>
+          <Bell className="w-4 h-4 text-indigo-500" />
+          <span>Push Announcements</span>
         </button>
       </div>
 
-      {/* TAB A: RUNS MANAGEMENT */}
-      {adminTab === 'runs' && (
-        <div className="bg-white rounded-2xl shadow-sm border border-stone-200 overflow-hidden">
-          <div className="p-4 border-b border-stone-200 flex items-center justify-between">
-            <h3 className="text-sm font-bold text-stone-900">All Scheduled & Past Group Runs</h3>
-            <button
-              onClick={onOpenNewRun}
-              className="flex items-center gap-1 text-xs font-semibold text-woodland-700 hover:text-woodland-800"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>New Run Event</span>
-            </button>
+      {/* ============================================================== */}
+      {/* TAB 1: MEETUPS & CODE WORDS */}
+      {/* ============================================================== */}
+      {adminTab === 'events' && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Left: Schedule Form */}
+          <div className="lg:col-span-2 bg-white rounded-2xl p-6 shadow-sm border border-stone-200 space-y-5">
+            <div className="flex items-center justify-between border-b border-stone-100 pb-3">
+              <div>
+                <h3 className="font-extrabold text-base text-stone-900 font-display">
+                  Configure Scheduled Run Event
+                </h3>
+                <p className="text-xs text-stone-500">
+                  Set today's secret code word, title, and select which 1, 3, and 5-mile routes are active tonight.
+                </p>
+              </div>
+              {eventSavedToast && (
+                <div className="flex items-center gap-1.5 px-3 py-1 bg-emerald-100 text-emerald-800 text-xs font-bold rounded-lg animate-in fade-in">
+                  <Check className="w-3.5 h-3.5" />
+                  <span>Event Saved!</span>
+                </div>
+              )}
+            </div>
+
+            <form onSubmit={handleSaveMeetup} className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-stone-700 mb-1">Meetup Date *</label>
+                  <input
+                    type="date"
+                    required
+                    value={eventDate}
+                    onChange={(e) => setEventDate(e.target.value)}
+                    className="w-full px-3 py-2 text-sm border rounded-xl font-bold bg-stone-50 focus:bg-white outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-stone-700 mb-1">Event Code Word *</label>
+                  <input
+                    type="text"
+                    required
+                    value={eventCodeWord}
+                    onChange={(e) => setEventCodeWord(e.target.value.toUpperCase())}
+                    placeholder="e.g. TURKEY"
+                    className="w-full px-3 py-2 text-sm border rounded-xl font-mono uppercase font-black text-amber-700 bg-amber-50/50 focus:bg-white outline-none tracking-wider"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-stone-700 mb-1">Event Title</label>
+                  <input
+                    type="text"
+                    required
+                    value={eventTitle}
+                    onChange={(e) => setEventTitle(e.target.value)}
+                    placeholder="Wednesday Woodchucker Meetup"
+                    className="w-full px-3 py-2 text-sm border rounded-xl font-semibold outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-stone-700 mb-1">Meetup Notes &amp; Theme (Optional)</label>
+                <input
+                  type="text"
+                  value={eventNotes}
+                  onChange={(e) => setEventNotes(e.target.value)}
+                  placeholder="e.g. Wear orange/brown for Turkey Trot warmup!"
+                  className="w-full px-3 py-2 text-sm border rounded-xl outline-none"
+                />
+              </div>
+
+              {/* ROUTE DEFINITIONS */}
+              <div className="space-y-3 pt-2">
+                <span className="block text-xs font-extrabold text-stone-800 uppercase tracking-wider">
+                  Active Routes For Tonight (At least one required):
+                </span>
+
+                {/* 1-MILE ROUTE */}
+                <div className={`p-4 rounded-xl border transition ${has1Mi ? 'bg-stone-50 border-stone-300' : 'bg-stone-100/50 border-stone-200 opacity-60'}`}>
+                  <label className="flex items-center gap-2 cursor-pointer font-bold text-xs text-stone-900 mb-2">
+                    <input
+                      type="checkbox"
+                      checked={has1Mi}
+                      onChange={(e) => setHas1Mi(e.target.checked)}
+                      className="rounded text-amber-600 focus:ring-amber-500"
+                    />
+                    <span>[✓] 1-Mile Option Active</span>
+                  </label>
+                  {has1Mi && (
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+                      <input
+                        type="text"
+                        value={name1Mi}
+                        onChange={(e) => setName1Mi(e.target.value)}
+                        placeholder="Route Name (e.g. Downtown Stroll)"
+                        className="px-2.5 py-1.5 border rounded-lg bg-white"
+                      />
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={miles1Mi}
+                        onChange={(e) => setMiles1Mi(parseFloat(e.target.value) || 1.0)}
+                        placeholder="Actual GPS Miles (e.g. 1.15)"
+                        className="px-2.5 py-1.5 border rounded-lg bg-white font-mono font-bold"
+                      />
+                      <input
+                        type="text"
+                        value={url1Mi}
+                        onChange={(e) => setUrl1Mi(e.target.value)}
+                        placeholder="Strava/Garmin Link"
+                        className="px-2.5 py-1.5 border rounded-lg bg-white"
+                      />
+                      <div className="sm:col-span-3">
+                        <textarea
+                          rows={2}
+                          value={dir1Mi}
+                          onChange={(e) => setDir1Mi(e.target.value)}
+                          placeholder="Turn-by-turn directions..."
+                          className="w-full px-2.5 py-1.5 border rounded-lg bg-white"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* 3-MILE ROUTE */}
+                <div className={`p-4 rounded-xl border transition ${has3Mi ? 'bg-stone-50 border-stone-300' : 'bg-stone-100/50 border-stone-200 opacity-60'}`}>
+                  <label className="flex items-center gap-2 cursor-pointer font-bold text-xs text-stone-900 mb-2">
+                    <input
+                      type="checkbox"
+                      checked={has3Mi}
+                      onChange={(e) => setHas3Mi(e.target.checked)}
+                      className="rounded text-amber-600 focus:ring-amber-500"
+                    />
+                    <span>[✓] 3-Mile Option Active</span>
+                  </label>
+                  {has3Mi && (
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+                      <input
+                        type="text"
+                        value={name3Mi}
+                        onChange={(e) => setName3Mi(e.target.value)}
+                        placeholder="Route Name (e.g. Heritage Park Loop)"
+                        className="px-2.5 py-1.5 border rounded-lg bg-white"
+                      />
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={miles3Mi}
+                        onChange={(e) => setMiles3Mi(parseFloat(e.target.value) || 3.0)}
+                        placeholder="Actual GPS Miles (e.g. 3.22)"
+                        className="px-2.5 py-1.5 border rounded-lg bg-white font-mono font-bold"
+                      />
+                      <input
+                        type="text"
+                        value={url3Mi}
+                        onChange={(e) => setUrl3Mi(e.target.value)}
+                        placeholder="Strava/Garmin Link"
+                        className="px-2.5 py-1.5 border rounded-lg bg-white"
+                      />
+                      <div className="sm:col-span-3">
+                        <textarea
+                          rows={2}
+                          value={dir3Mi}
+                          onChange={(e) => setDir3Mi(e.target.value)}
+                          placeholder="Turn-by-turn directions..."
+                          className="w-full px-2.5 py-1.5 border rounded-lg bg-white"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* 5-MILE ROUTE */}
+                <div className={`p-4 rounded-xl border transition ${has5Mi ? 'bg-stone-50 border-stone-300' : 'bg-stone-100/50 border-stone-200 opacity-60'}`}>
+                  <label className="flex items-center gap-2 cursor-pointer font-bold text-xs text-stone-900 mb-2">
+                    <input
+                      type="checkbox"
+                      checked={has5Mi}
+                      onChange={(e) => setHas5Mi(e.target.checked)}
+                      className="rounded text-amber-600 focus:ring-amber-500"
+                    />
+                    <span>[✓] 5-Mile Option Active</span>
+                  </label>
+                  {has5Mi && (
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+                      <input
+                        type="text"
+                        value={name5Mi}
+                        onChange={(e) => setName5Mi(e.target.value)}
+                        placeholder="Route Name (e.g. Spring Lake Trek)"
+                        className="px-2.5 py-1.5 border rounded-lg bg-white"
+                      />
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={miles5Mi}
+                        onChange={(e) => setMiles5Mi(parseFloat(e.target.value) || 5.0)}
+                        placeholder="Actual GPS Miles (e.g. 5.12)"
+                        className="px-2.5 py-1.5 border rounded-lg bg-white font-mono font-bold"
+                      />
+                      <input
+                        type="text"
+                        value={url5Mi}
+                        onChange={(e) => setUrl5Mi(e.target.value)}
+                        placeholder="Strava/Garmin Link"
+                        className="px-2.5 py-1.5 border rounded-lg bg-white"
+                      />
+                      <div className="sm:col-span-3">
+                        <textarea
+                          rows={2}
+                          value={dir5Mi}
+                          onChange={(e) => setDir5Mi(e.target.value)}
+                          placeholder="Turn-by-turn directions..."
+                          className="w-full px-2.5 py-1.5 border rounded-lg bg-white"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="pt-3 flex justify-end">
+                <button
+                  type="submit"
+                  className="px-6 py-2.5 bg-amber-500 hover:bg-amber-600 font-black text-stone-950 text-xs rounded-xl shadow-md transition font-display uppercase tracking-wider"
+                >
+                  Save Scheduled Meetup
+                </button>
+              </div>
+            </form>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-stone-50 text-stone-500 border-b border-stone-200 uppercase font-semibold">
-                <tr>
-                  <th className="py-3 px-4">Date & Time</th>
-                  <th className="py-3 px-4">Run Title</th>
-                  <th className="py-3 px-4">Distance & Surface</th>
-                  <th className="py-3 px-4">Location</th>
-                  <th className="py-3 px-4">RSVPs / Check-Ins</th>
-                  <th className="py-3 px-4 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-stone-100">
-                {runs.map((run) => {
-                  const checkInCount = run.attendees.filter((a) => a.checkedIn).length;
-                  return (
-                    <tr key={run.id} className="hover:bg-stone-50/70 transition">
-                      <td className="py-3.5 px-4 font-semibold text-stone-800 whitespace-nowrap">
-                        {run.date} • {run.time}
-                      </td>
-                      <td className="py-3.5 px-4">
-                        <div className="font-bold text-stone-900 line-clamp-1">{run.title}</div>
-                        {run.completed && (
-                          <span className="text-[10px] bg-stone-200 text-stone-600 px-1.5 py-0.2 rounded font-medium">
-                            Completed
-                          </span>
-                        )}
-                      </td>
-                      <td className="py-3.5 px-4 whitespace-nowrap">
-                        <span className="font-bold text-woodland-800">{run.distanceMiles} mi</span>{' '}
-                        <span className="text-stone-400">({run.surface})</span>
-                      </td>
-                      <td className="py-3.5 px-4 max-w-[200px] truncate text-stone-600">
-                        {run.locationName}
-                      </td>
-                      <td className="py-3.5 px-4 whitespace-nowrap">
-                        <span className="font-semibold text-stone-800">{run.attendees.length} RSVPs</span>
-                        {checkInCount > 0 && (
-                          <span className="text-woodland-700 ml-1.5 font-bold">
-                            ({checkInCount} checked in)
-                          </span>
-                        )}
-                      </td>
-                      <td className="py-3.5 px-4 text-right whitespace-nowrap">
-                        <div className="flex items-center justify-end gap-1.5">
-                          <button
-                            onClick={() => exportRunAttendanceCSV(run)}
-                            className="p-1.5 text-stone-500 hover:text-stone-800 rounded hover:bg-stone-100"
-                            title="Export attendance CSV"
-                          >
-                            <Download className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={() => onEditRun(run)}
-                            className="p-1.5 text-woodland-700 hover:text-woodland-900 rounded hover:bg-woodland-50"
-                            title="Edit run details"
-                          >
-                            <Edit3 className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={() => {
-                              if (confirm(`Delete run "${run.title}"?`)) {
-                                onDeleteRun(run.id);
-                              }
-                            }}
-                            className="p-1.5 text-red-600 hover:text-red-800 rounded hover:bg-red-50"
-                            title="Delete run"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+          {/* Right: Scheduled Events Roster */}
+          <div className="bg-white rounded-2xl p-5 shadow-sm border border-stone-200 space-y-3">
+            <h4 className="text-xs font-bold text-stone-800 uppercase tracking-wider flex items-center gap-1.5">
+              <Calendar className="w-4 h-4 text-amber-500" />
+              <span>Meetups &amp; Active Code Words</span>
+            </h4>
+
+            <div className="space-y-2.5 max-h-[500px] overflow-y-auto">
+              {meetupEvents.map((evt) => (
+                <div
+                  key={evt.date}
+                  className="p-3.5 bg-stone-50 rounded-xl border border-stone-200 text-xs space-y-2"
+                >
+                  <div className="flex items-center justify-between">
+                    <strong className="text-stone-900 font-bold">{evt.title}</strong>
+                    <span className="font-mono text-[10px] text-stone-500">{evt.date}</span>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] text-stone-500">Code Word:</span>
+                    <span className="px-2 py-0.5 bg-amber-200 text-amber-950 font-mono font-bold rounded-md">
+                      {evt.codeWord}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-[10px] text-stone-400">Distances:</span>
+                    {evt.activeDistances.map((d) => (
+                      <span
+                        key={d}
+                        className="px-2 py-0.5 bg-stone-200 text-stone-800 font-bold text-[10px] rounded-full"
+                      >
+                        {d} Mi ({evt.routes[d]?.actualMiles || d} mi)
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       )}
 
-      {/* TAB B: MEMBERSHIP & RUN COUNTS AUDIT */}
-      {adminTab === 'members' && (
-        <div className="bg-white rounded-2xl shadow-sm border border-stone-200 overflow-hidden">
-          <div className="p-4 border-b border-stone-200 flex flex-wrap items-center justify-between gap-3">
+      {/* ============================================================== */}
+      {/* TAB 2: CHECK-IN EVENT LOG */}
+      {/* ============================================================== */}
+      {adminTab === 'checkins' && (
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-stone-200 space-y-4">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-stone-100 pb-3">
             <div>
-              <h3 className="text-sm font-bold text-stone-900">Membership Run Counts & Mileage Roster</h3>
-              <p className="text-xs text-stone-500">Review, audit, or adjust run counts and awards.</p>
+              <h3 className="font-extrabold text-base text-stone-900 font-display">
+                Check-In Single Entry Event Log
+              </h3>
+              <p className="text-xs text-stone-500">
+                Every granular check-in record capturing date, runner, run/walk, distance choice, and actual measured GPS miles.
+              </p>
             </div>
 
             <div className="flex items-center gap-2">
-              <div className="relative">
-                <Search className="w-3.5 h-3.5 text-stone-400 absolute left-2.5 top-2.5" />
-                <input
-                  type="text"
-                  placeholder="Search members..."
-                  value={memberSearch}
-                  onChange={(e) => setMemberSearch(e.target.value)}
-                  className="text-xs pl-8 pr-3 py-1.5 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-woodland-500"
-                />
-              </div>
+              <select
+                value={checkinFilterDate}
+                onChange={(e) => setCheckinFilterDate(e.target.value)}
+                className="text-xs px-3 py-1.5 border rounded-xl bg-stone-50 font-bold outline-none"
+              >
+                <option value="all">All Dates ({checkins.length})</option>
+                {Array.from(new Set(checkins.map((c) => c.date))).map((d) => (
+                  <option key={d} value={d}>{d}</option>
+                ))}
+              </select>
 
               <button
-                onClick={exportMembersCSV}
-                className="flex items-center gap-1 px-3 py-1.5 bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-semibold rounded-lg transition"
+                onClick={exportCheckinsCSV}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-woodland-700 hover:bg-woodland-800 text-white font-bold text-xs rounded-xl transition shadow-xs"
               >
                 <Download className="w-3.5 h-3.5" />
                 <span>Export CSV</span>
@@ -346,147 +615,217 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
-              <thead className="bg-stone-50 text-stone-500 border-b border-stone-200 uppercase font-semibold">
+              <thead className="bg-stone-50 text-stone-600 font-bold uppercase tracking-wider border-b border-stone-200">
                 <tr>
-                  <th className="py-3 px-4">Runner</th>
-                  <th className="py-3 px-4">Email</th>
-                  <th className="py-3 px-4 text-center">Total Runs</th>
-                  <th className="py-3 px-4 text-center">Total Miles</th>
-                  <th className="py-3 px-4 text-center">Streak</th>
-                  <th className="py-3 px-4">Badges</th>
-                  <th className="py-3 px-4 text-right">Admin Actions</th>
+                  <th className="py-2.5 px-3">Date &amp; Time</th>
+                  <th className="py-2.5 px-3">Runner</th>
+                  <th className="py-2.5 px-3">Email</th>
+                  <th className="py-2.5 px-3">Activity</th>
+                  <th className="py-2.5 px-3">Choice</th>
+                  <th className="py-2.5 px-3">Actual Miles</th>
+                  <th className="py-2.5 px-3">Route Name</th>
+                  <th className="py-2.5 px-3">Source</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-stone-100">
-                {filteredMembers.map((member) => (
-                  <tr key={member.id} className="hover:bg-stone-50/70 transition">
-                    <td className="py-3.5 px-4 font-bold text-stone-900">
-                      <div className="flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-full bg-stone-200 overflow-hidden flex items-center justify-center text-xs">
-                          {member.avatarUrl ? (
-                            <img src={member.avatarUrl} alt="" className="w-full h-full object-cover" />
-                          ) : (
-                            member.name.charAt(0)
-                          )}
-                        </div>
-                        <span>{member.name}</span>
-                      </div>
-                    </td>
-                    <td className="py-3.5 px-4 text-stone-500">{member.email}</td>
-                    <td className="py-3.5 px-4 text-center font-extrabold text-stone-900">
-                      {member.totalRuns}
-                    </td>
-                    <td className="py-3.5 px-4 text-center font-extrabold text-woodland-800">
-                      {member.totalMiles} mi
-                    </td>
-                    <td className="py-3.5 px-4 text-center font-bold text-amber-600">
-                      <span className="inline-flex items-center gap-0.5">
-                        <Flame className="w-3.5 h-3.5" /> {member.streak}
-                      </span>
-                    </td>
-                    <td className="py-3.5 px-4">
-                      <span className="text-xs">{member.unlockedBadgeIds.length} unlocked</span>
-                    </td>
-                    <td className="py-3.5 px-4 text-right whitespace-nowrap">
-                      <div className="flex items-center justify-end gap-1.5">
-                        {/* Quick +1 Run button */}
-                        <button
-                          onClick={() => {
-                            onUpdateMemberStats(member.id, {
-                              totalRuns: member.totalRuns + 1,
-                              totalMiles: Math.round((member.totalMiles + 5.0) * 10) / 10,
-                            });
-                          }}
-                          className="px-2 py-1 bg-woodland-50 text-woodland-800 hover:bg-woodland-100 rounded text-[11px] font-semibold transition"
-                          title="Quick +1 group run & +5 miles credit"
-                        >
-                          +1 Run
-                        </button>
-
-                        <button
-                          onClick={() => setEditingMember(member)}
-                          className="px-2.5 py-1 bg-stone-100 hover:bg-stone-200 text-stone-700 rounded text-[11px] font-semibold transition"
-                        >
-                          Edit Stats
-                        </button>
-                      </div>
+              <tbody className="divide-y divide-stone-100 font-sans">
+                {filteredCheckins.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="py-6 text-center text-stone-400">
+                      No check-ins recorded for this date filter.
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  filteredCheckins.map((c) => (
+                    <tr key={c.id} className="hover:bg-stone-50/70 transition">
+                      <td className="py-2.5 px-3 font-mono text-stone-700">
+                        {c.date} <span className="text-stone-400 text-[11px]">{c.time}</span>
+                      </td>
+                      <td className="py-2.5 px-3 font-bold text-stone-900">{c.runnerName || 'Woodchuck Runner'}</td>
+                      <td className="py-2.5 px-3 text-stone-500 font-mono text-[11px]">{c.userEmail}</td>
+                      <td className="py-2.5 px-3">
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                          c.activity === 'running' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'
+                        }`}>
+                          {c.activity === 'running' ? '🏃 Running' : '🚶 Walking'}
+                        </span>
+                      </td>
+                      <td className="py-2.5 px-3 font-bold text-stone-800">{c.distanceChoice} Mi</td>
+                      <td className="py-2.5 px-3 font-mono font-bold text-woodland-800">{c.actualMiles} mi</td>
+                      <td className="py-2.5 px-3 text-stone-600 truncate max-w-xs">{c.routeName || 'Club Route'}</td>
+                      <td className="py-2.5 px-3">
+                        <span className="px-1.5 py-0.5 bg-stone-100 text-stone-600 text-[10px] rounded uppercase font-semibold">
+                          {c.source}
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
         </div>
       )}
 
-      {/* TAB C: PUSH ALERTS & BROADCASTS */}
-      {adminTab === 'notifications' && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Push Broadcast Composer */}
-          <div className="lg:col-span-2 bg-white rounded-2xl p-6 shadow-sm border border-stone-200 space-y-4">
-            <div>
-              <h3 className="text-base font-bold text-stone-900 flex items-center gap-2">
-                <Smartphone className="w-5 h-5 text-woodland-600" />
-                <span>Blast Push Notification to Runners' Phones</span>
-              </h3>
-              <p className="text-xs text-stone-500 mt-0.5">
-                Sends Web Push alert to all members who have the Woodland Woodchuckers PWA installed or alerts enabled.
-              </p>
+      {/* ============================================================== */}
+      {/* TAB 3: RUNNERS & LEGACY CLAIMS */}
+      {/* ============================================================== */}
+      {adminTab === 'members' && (
+        <div className="space-y-6">
+          {/* User Roster */}
+          <div className="bg-white rounded-2xl p-6 shadow-sm border border-stone-200 space-y-4">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-stone-100 pb-3">
+              <div>
+                <h3 className="font-extrabold text-base text-stone-900 font-display">
+                  Active User Profiles (Keyed on Email)
+                </h3>
+                <p className="text-xs text-stone-500">
+                  Roster of registered runners, their shirt sizes, lifetime miles, and claimed legacy records.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <div className="relative">
+                  <Search className="w-3.5 h-3.5 absolute left-2.5 top-2 text-stone-400" />
+                  <input
+                    type="text"
+                    value={memberSearch}
+                    onChange={(e) => setMemberSearch(e.target.value)}
+                    placeholder="Search runner or email..."
+                    className="pl-8 pr-3 py-1.5 text-xs border rounded-xl outline-none"
+                  />
+                </div>
+                <button
+                  onClick={exportUsersCSV}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-woodland-700 hover:bg-woodland-800 text-white font-bold text-xs rounded-xl transition shadow-xs"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Export CSV</span>
+                </button>
+              </div>
             </div>
 
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-stone-50 text-stone-600 font-bold uppercase tracking-wider border-b border-stone-200">
+                  <tr>
+                    <th className="py-2.5 px-3">Runner</th>
+                    <th className="py-2.5 px-3">Email Key</th>
+                    <th className="py-2.5 px-3">Shirt</th>
+                    <th className="py-2.5 px-3">Total Runs</th>
+                    <th className="py-2.5 px-3">Old Counts</th>
+                    <th className="py-2.5 px-3">Lifetime Miles</th>
+                    <th className="py-2.5 px-3">Run/Walk Split</th>
+                    <th className="py-2.5 px-3">Claimed Past Aliases</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-stone-100">
+                  {filteredUsers.map((u) => (
+                    <tr key={u.email} className="hover:bg-stone-50/70 transition">
+                      <td className="py-2.5 px-3 font-bold text-stone-900">{u.displayName}</td>
+                      <td className="py-2.5 px-3 text-stone-500 font-mono text-[11px]">{u.email}</td>
+                      <td className="py-2.5 px-3">
+                        <span className="px-2 py-0.5 bg-stone-100 text-stone-800 font-mono font-bold rounded-md">
+                          {u.shirtSize}
+                        </span>
+                      </td>
+                      <td className="py-2.5 px-3 font-mono font-black text-amber-700">{u.totalRuns}</td>
+                      <td className="py-2.5 px-3 font-mono text-stone-500">{u.pre2021Runs}</td>
+                      <td className="py-2.5 px-3 font-mono font-bold text-emerald-700">{u.totalMiles} mi</td>
+                      <td className="py-2.5 px-3 text-stone-500">
+                        {u.runCount}R / {u.walkCount}W
+                      </td>
+                      <td className="py-2.5 px-3">
+                        {(u.linkedLegacyNames && u.linkedLegacyNames.length > 0) ? (
+                          <div className="flex gap-1 flex-wrap">
+                            {u.linkedLegacyNames.map((leg) => (
+                              <span key={leg} className="px-1.5 py-0.5 bg-cyan-100 text-cyan-800 text-[10px] font-bold rounded">
+                                {leg}
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="text-stone-300 italic text-[11px]">None linked</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Legacy Members Claim Pool */}
+          <div className="bg-white rounded-2xl p-6 shadow-sm border border-stone-200 space-y-4">
+            <div className="border-b border-stone-100 pb-3 flex items-center justify-between">
+              <div>
+                <h3 className="font-extrabold text-base text-stone-900 font-display">
+                  Legacy Members Roster &amp; Claim Pool
+                </h3>
+                <p className="text-xs text-stone-500">
+                  Historical runner entries available for self-service claiming during onboarding.
+                </p>
+              </div>
+              <span className="px-3 py-1 bg-stone-100 text-stone-700 text-xs font-bold rounded-full font-mono">
+                {totalLegacyClaimed} / {legacyMembers.length} Claimed
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+              {legacyMembers.map((leg) => {
+                const isClaimed = leg.claimedByEmail !== null;
+                return (
+                  <div
+                    key={leg.id}
+                    className={`p-3 rounded-xl border text-xs flex items-center justify-between transition ${
+                      isClaimed ? 'bg-emerald-50/70 border-emerald-200' : 'bg-stone-50 border-stone-200'
+                    }`}
+                  >
+                    <div>
+                      <div className="font-bold text-stone-900">{leg.name}</div>
+                      <div className="text-[10px] text-stone-500 font-mono">
+                        {leg.totalRuns} past runs ({leg.newCount} logged + {leg.oldCount} old)
+                      </div>
+                    </div>
+
+                    <div>
+                      {isClaimed ? (
+                        <span className="px-2 py-0.5 bg-emerald-200/80 text-emerald-900 font-bold text-[10px] rounded-full flex items-center gap-1">
+                          <Check className="w-3 h-3" />
+                          <span>Claimed</span>
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 bg-stone-200 text-stone-600 font-semibold text-[10px] rounded-full">
+                          Unclaimed
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================== */}
+      {/* TAB 4: PUSH ANNOUNCEMENTS */}
+      {/* ============================================================== */}
+      {adminTab === 'notifications' && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="bg-white rounded-2xl p-6 shadow-sm border border-stone-200 space-y-4">
+            <h4 className="text-xs font-bold text-stone-800 uppercase tracking-wider flex items-center gap-1.5">
+              <Send className="w-4 h-4 text-woodland-600" />
+              <span>Broadcast Web Push Notification</span>
+            </h4>
+
             {broadcastSent && (
-              <div className="p-3 bg-woodland-50 border border-woodland-200 rounded-xl flex items-center gap-2 text-xs text-woodland-900 font-bold">
-                <CheckCircle className="w-4 h-4 text-woodland-600" />
-                <span>Push alert sent to runners and logged in club announcement history!</span>
+              <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-xs font-semibold flex items-center gap-2">
+                <CheckCircle className="w-4 h-4 text-emerald-600" />
+                <span>Announcement broadcast to all installed PWA devices!</span>
               </div>
             )}
 
-            {/* Quick Templates */}
-            <div>
-              <label className="block text-xs font-semibold text-stone-700 mb-1.5">
-                Quick Template Presets:
-              </label>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() =>
-                    setPresetBroadcast(
-                      '🦫 Run Tomorrow: Saturday Trail Loop!',
-                      'Meet at 8:00 AM at Creek Park. Hydration pack recommended!'
-                    )
-                  }
-                  className="text-xs px-2.5 py-1 bg-stone-100 hover:bg-stone-200 rounded-lg text-stone-700 font-medium"
-                >
-                  ⏰ Saturday Morning Reminder
-                </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setPresetBroadcast(
-                      '🌧️ Trail Alert: Route Adjusted for Mud',
-                      'Due to rain, we will take the paved perimeter loop today. Meet at usual spot!'
-                    )
-                  }
-                  className="text-xs px-2.5 py-1 bg-stone-100 hover:bg-stone-200 rounded-lg text-stone-700 font-medium"
-                >
-                  🌧️ Weather / Mud Alert
-                </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setPresetBroadcast(
-                      '🏁 Check-In is Now Open!',
-                      'Woodchuckers check-in is live for today\'s run. Tap to log your attendance!'
-                    )
-                  }
-                  className="text-xs px-2.5 py-1 bg-stone-100 hover:bg-stone-200 rounded-lg text-stone-700 font-medium"
-                >
-                  🏁 Run Day Check-In Open
-                </button>
-              </div>
-            </div>
-
-            <form onSubmit={handleSendBroadcast} className="space-y-3 pt-2">
+            <form onSubmit={handleSendBroadcast} className="space-y-3">
               <div>
                 <label className="block text-xs font-semibold text-stone-700 mb-1">
                   Notification Title:
@@ -496,8 +835,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   required
                   value={notifTitle}
                   onChange={(e) => setNotifTitle(e.target.value)}
-                  placeholder="e.g. 🦫 Run Tomorrow at 8:00 AM"
-                  className="w-full text-sm px-3 py-2 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-woodland-500"
+                  className="w-full text-sm px-3 py-2 border rounded-xl outline-none"
                 />
               </div>
 
@@ -510,15 +848,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   required
                   value={notifBody}
                   onChange={(e) => setNotifBody(e.target.value)}
-                  placeholder="Details, gear notes, parking directions..."
-                  className="w-full text-sm px-3 py-2 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-woodland-500"
+                  className="w-full text-sm px-3 py-2 border rounded-xl outline-none"
                 />
               </div>
 
               <div className="pt-2 flex justify-end">
                 <button
                   type="submit"
-                  className="flex items-center gap-2 px-5 py-2.5 bg-woodland-600 hover:bg-woodland-700 text-white font-bold text-xs rounded-xl shadow-md transition"
+                  className="flex items-center gap-2 px-5 py-2.5 bg-woodland-700 hover:bg-woodland-800 text-white font-bold text-xs rounded-xl shadow-md transition"
                 >
                   <Send className="w-4 h-4" />
                   <span>Send Push Alert Now</span>
@@ -528,7 +865,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           </div>
 
           {/* Broadcast History */}
-          <div className="bg-white rounded-2xl p-5 shadow-sm border border-stone-200 space-y-3">
+          <div className="bg-white rounded-2xl p-6 shadow-sm border border-stone-200 space-y-3">
             <h4 className="text-xs font-bold text-stone-800 uppercase tracking-wider flex items-center gap-1.5">
               <Bell className="w-4 h-4 text-amber-500" />
               <span>Announcement Feed</span>
@@ -550,93 +887,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   </div>
                 ))
               )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Edit Member Stats Modal */}
-      {editingMember && (
-        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-stone-900/60 p-4">
-          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-stone-200 space-y-4">
-            <div className="flex items-center justify-between border-b pb-2">
-              <h3 className="font-bold text-base text-stone-900">Edit Member Run Counts</h3>
-              <button onClick={() => setEditingMember(null)} className="text-stone-400 hover:text-stone-700">
-                ✕
-              </button>
-            </div>
-
-            <div className="space-y-3 text-xs">
-              <div>
-                <label className="block font-semibold text-stone-700 mb-1">Runner Name</label>
-                <input
-                  type="text"
-                  value={editingMember.name}
-                  onChange={(e) => setEditingMember({ ...editingMember, name: e.target.value })}
-                  className="w-full px-3 py-1.5 border rounded-lg"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block font-semibold text-stone-700 mb-1">Total Runs</label>
-                  <input
-                    type="number"
-                    value={editingMember.totalRuns}
-                    onChange={(e) =>
-                      setEditingMember({ ...editingMember, totalRuns: parseInt(e.target.value, 10) || 0 })
-                    }
-                    className="w-full px-3 py-1.5 border rounded-lg font-bold"
-                  />
-                </div>
-                <div>
-                  <label className="block font-semibold text-stone-700 mb-1">Total Miles</label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    value={editingMember.totalMiles}
-                    onChange={(e) =>
-                      setEditingMember({ ...editingMember, totalMiles: parseFloat(e.target.value) || 0 })
-                    }
-                    className="w-full px-3 py-1.5 border rounded-lg font-bold"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block font-semibold text-stone-700 mb-1">Active Streak</label>
-                <input
-                  type="number"
-                  value={editingMember.streak}
-                  onChange={(e) =>
-                    setEditingMember({ ...editingMember, streak: parseInt(e.target.value, 10) || 0 })
-                  }
-                  className="w-full px-3 py-1.5 border rounded-lg font-bold"
-                />
-              </div>
-            </div>
-
-            <div className="pt-2 flex justify-end gap-2 border-t">
-              <button
-                onClick={() => setEditingMember(null)}
-                className="px-3 py-1.5 text-xs text-stone-600 hover:bg-stone-100 rounded-lg"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => {
-                  onUpdateMemberStats(editingMember.id, {
-                    name: editingMember.name,
-                    totalRuns: editingMember.totalRuns,
-                    totalMiles: editingMember.totalMiles,
-                    streak: editingMember.streak,
-                  });
-                  setEditingMember(null);
-                }}
-                className="px-4 py-1.5 text-xs font-bold bg-woodland-600 text-white rounded-lg hover:bg-woodland-700 shadow-sm"
-              >
-                Save Stats
-              </button>
             </div>
           </div>
         </div>
