@@ -10,6 +10,7 @@ import { CheckInModal } from './components/CheckInModal';
 import { NewRunModal } from './components/NewRunModal';
 import { EditRunModal } from './components/EditRunModal';
 import { GpxUploader } from './components/GpxUploader';
+import { RouteStudioModal } from './components/RouteStudioModal';
 import { FirebaseSetupGuide } from './components/FirebaseSetupGuide';
 import { InstallPwaBanner } from './components/InstallPwaBanner';
 import { MobileBottomNav } from './components/MobileBottomNav';
@@ -30,7 +31,8 @@ import {
   X,
   Palette,
   Gift,
-  UserPlus
+  UserPlus,
+  Edit3
 } from 'lucide-react';
 
 export function App() {
@@ -49,6 +51,8 @@ export function App() {
     updateMemberStats,
     sendPushAnnouncement,
     addRoute,
+    updateRoute,
+    deleteRoute,
     isSyncing,
     isFirebaseConfigured,
     // V2 Relational props
@@ -79,6 +83,8 @@ export function App() {
   const [isNewRunOpen, setIsNewRunOpen] = useState<boolean>(false);
   const [editingRun, setEditingRun] = useState<RunEvent | null>(null);
   const [isUploadGpxOpen, setIsUploadGpxOpen] = useState<boolean>(false);
+  const [isRouteStudioOpen, setIsRouteStudioOpen] = useState<boolean>(false);
+  const [editingRoute, setEditingRoute] = useState<GPXRoute | null>(null);
   const [isSetupGuideOpen, setIsSetupGuideOpen] = useState<boolean>(false);
   const [isBrandAssetsOpen, setIsBrandAssetsOpen] = useState<boolean>(false);
   const [showNotificationsDrawer, setShowNotificationsDrawer] = useState<boolean>(false);
@@ -89,6 +95,7 @@ export function App() {
   const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
 
   const isAdmin = currentUser.role === 'admin' || currentUser.email === 'woodlandwoodchuckers@gmail.com';
+  const isOrganizerOrAdmin = isAdmin || currentUser.role === 'organizer';
 
   // Listen to Firebase Auth state & check for passwordless email link sign-in
   useEffect(() => {
@@ -132,6 +139,28 @@ export function App() {
     });
   };
 
+  const handleSaveRoute = async (routeData: Omit<GPXRoute, 'id'>, existingId?: string) => {
+    if (existingId) {
+      const updated = await updateRoute(existingId, routeData);
+      setSelectedRoute(updated);
+    } else {
+      const saved = await addRoute(routeData);
+      setSelectedRoute(saved);
+    }
+    setIsRouteStudioOpen(false);
+    setEditingRoute(null);
+    setActiveTab('routes');
+  };
+
+  const handleDeleteRoute = async (routeId: string) => {
+    await deleteRoute(routeId);
+    if (selectedRoute.id === routeId && routes.length > 1) {
+      setSelectedRoute(routes.find((r) => r.id !== routeId) || routes[0]);
+    }
+    setIsRouteStudioOpen(false);
+    setEditingRoute(null);
+  };
+
   const handleOpenRegister = () => {
     setCheckInInitialMode('register');
     if (runs.length > 0) {
@@ -161,7 +190,10 @@ export function App() {
         isSyncing={isSyncing}
         unreadNotifsCount={notifications.length}
         onOpenNewRun={() => setIsNewRunOpen(true)}
-        onOpenUploadGpx={() => setIsUploadGpxOpen(true)}
+        onOpenUploadGpx={() => {
+          setEditingRoute(null);
+          setIsRouteStudioOpen(true);
+        }}
         onOpenSetupGuide={() => setIsSetupGuideOpen(true)}
         onOpenBrandAssets={() => setIsBrandAssetsOpen(true)}
         onToggleNotifications={() => setShowNotificationsDrawer(!showNotificationsDrawer)}
@@ -338,11 +370,14 @@ export function App() {
                 </p>
               </div>
               <button
-                onClick={() => setIsUploadGpxOpen(true)}
+                onClick={() => {
+                  setEditingRoute(null);
+                  setIsRouteStudioOpen(true);
+                }}
                 className="flex items-center gap-2 px-4 py-2 bg-woodland-800 hover:bg-woodland-900 text-white font-bold text-xs rounded-xl shadow-sm transition"
               >
                 <Plus className="w-4 h-4" />
-                <span>Upload GPX File</span>
+                <span>Upload &amp; Create Route</span>
               </button>
             </div>
 
@@ -370,7 +405,16 @@ export function App() {
 
             {/* Selected Route Map Viewer */}
             {selectedRoute && (
-              <MapViewer route={selectedRoute} height="480px" showElevationProfile={true} />
+              <MapViewer
+                route={selectedRoute}
+                height="480px"
+                showElevationProfile={true}
+                canEdit={isOrganizerOrAdmin}
+                onEditRoute={(r) => {
+                  setEditingRoute(r);
+                  setIsRouteStudioOpen(true);
+                }}
+              />
             )}
 
             {/* Route Cards Carousel / Grid */}
@@ -399,16 +443,31 @@ export function App() {
                     <span className="flex items-center gap-1 text-stone-500 font-medium">
                       <Mountain className="w-3 h-3 text-amber-600" /> +{r.elevationGainFt} ft
                     </span>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        downloadGPXFile(r);
-                      }}
-                      className="text-stone-400 hover:text-stone-800 p-1"
-                      title="Download GPX"
-                    >
-                      <Download className="w-3.5 h-3.5" />
-                    </button>
+                    <div className="flex items-center gap-1">
+                      {isOrganizerOrAdmin && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingRoute(r);
+                            setIsRouteStudioOpen(true);
+                          }}
+                          className="text-stone-400 hover:text-woodland-800 p-1"
+                          title="Edit Route Details & Directions"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          downloadGPXFile(r);
+                        }}
+                        className="text-stone-400 hover:text-stone-800 p-1"
+                        title="Download GPX"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -593,6 +652,19 @@ export function App() {
           onSave={updateRun}
           onDelete={deleteRun}
           specialEvents={specialEvents}
+        />
+      )}
+
+      {isRouteStudioOpen && (
+        <RouteStudioModal
+          isOpen={isRouteStudioOpen}
+          onClose={() => {
+            setIsRouteStudioOpen(false);
+            setEditingRoute(null);
+          }}
+          existingRoute={editingRoute}
+          onSaveRoute={handleSaveRoute}
+          onDeleteRoute={handleDeleteRoute}
         />
       )}
 

@@ -11,6 +11,7 @@ import {
   MilestoneAlert,
   SpecialEventDefinition
 } from '../types';
+import { THE_123_ROUTE } from './the123Route';
 
 // Center anchor: Woodland area coordinates (Woodland, CA approx 38.678, -121.773)
 const BASE_LAT = 38.6780;
@@ -344,6 +345,7 @@ export const INITIAL_MILESTONE_ALERTS: MilestoneAlert[] = [
 ];
 
 export const INITIAL_ROUTES: GPXRoute[] = [
+  THE_123_ROUTE,
   {
     id: 'route-river-loop',
     name: 'Woodchuck Burrow River Loop',

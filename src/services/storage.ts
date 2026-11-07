@@ -907,6 +907,38 @@ export function useClubStore() {
   };
 
   /**
+   * Update an existing route (Organizer / Admin)
+   */
+  const updateRoute = async (routeId: string, updates: Partial<GPXRoute>): Promise<GPXRoute> => {
+    let updatedObj: GPXRoute | null = null;
+    setRoutes((prev) => {
+      const next: GPXRoute[] = prev.map((r) => {
+        if (r.id === routeId) {
+          const res: GPXRoute = { ...r, ...updates, updatedAt: new Date().toISOString() };
+          updatedObj = res;
+          return res;
+        }
+        return r;
+      });
+      return next;
+    });
+    if (updatedObj && isFirebaseConfigured && db) {
+      setDoc(doc(db, 'routes', routeId), updatedObj, { merge: true }).catch(console.error);
+    }
+    return updatedObj || ({} as GPXRoute);
+  };
+
+  /**
+   * Delete an existing route (Organizer / Admin)
+   */
+  const deleteRoute = async (routeId: string): Promise<void> => {
+    setRoutes((prev) => prev.filter((r) => r.id !== routeId));
+    if (isFirebaseConfigured && db) {
+      deleteDoc(doc(db, 'routes', routeId)).catch(console.error);
+    }
+  };
+
+  /**
    * Update an existing run (Admin)
    */
   const updateRun = async (updatedRun: RunEvent) => {
@@ -1026,6 +1058,8 @@ export function useClubStore() {
     updateMemberStats,
     sendPushAnnouncement,
     addRoute,
+    updateRoute,
+    deleteRoute,
     resetToDefaults,
     isSyncing,
     isFirebaseConfigured,

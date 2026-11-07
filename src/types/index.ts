@@ -17,6 +17,31 @@ export interface GPXPoint {
   time?: string;
 }
 
+export interface RouteTurnStep {
+  step: number;
+  cue: string;                // "START", "L", "R", "Slight R", "Sharp L", "CONT", "U-turn", "FINISH"
+  instruction: string;        // Narrative: "Turn left onto 3rd Street, heading north"
+  instruction_concise: string;// Mobile cue: "L on 3rd St"
+  street: string;
+  street_concise?: string;
+  distance_m: number;
+  distance: string;           // "0.45 mi" or "164 ft"
+  heading_cardinal?: string;  // "N", "E", "S", "W", "NE", etc.
+  turn_degrees?: number | null;
+  at_km: number;
+  point: [number, number];    // [lon, lat] for map pins
+  coordinates?: [number, number][]; // Line segment coordinates
+  crosses?: string[];
+  crosses_concise?: string[];
+  customNotes?: string;       // Custom organizer note for this turn
+}
+
+export interface RouteExternalLinks {
+  stravaUrl?: string;         // e.g. "https://www.strava.com/routes/..."
+  garminUrl?: string;         // e.g. "https://connect.garmin.com/modern/course/..."
+  rungoUrl?: string;          // e.g. "https://routes.rungoapp.com/route/..."
+}
+
 export interface GPXRoute {
   id: string;
   name: string;
@@ -26,8 +51,15 @@ export interface GPXRoute {
   points: GPXPoint[];
   surface: SurfaceType;
   difficulty: DifficultyType;
+  targetDistanceTier?: '1' | '3' | '5' | 'custom' | string;
+  customDistanceLabel?: string; // e.g. "10K", "6-Mile Run"
+  directions?: RouteTurnStep[];
+  geoJson?: any;              // GeoJSON FeatureCollection with line track and turn points
+  externalLinks?: RouteExternalLinks;
+  notes?: string;             // Safety / hazards / parking notes
   gpxXml?: string;
   createdAt: string;
+  updatedAt?: string;
   thumbnailUrl?: string;
 }
 
@@ -135,7 +167,12 @@ export interface RouteOption {
   actualMiles: number; // Measured GPS/map distance (e.g. 1.15, 3.22, 5.12)
   routeUrl?: string;   // Strava / Garmin / Apple Watch link
   imageUrl?: string;   // Route preview image / map screenshot
-  directions?: string; // Step-by-step turn directions
+  directions?: string; // Legacy string / summary
+  routeId?: string;    // Reference to GPXRoute in library
+  targetTier?: '1' | '3' | '5' | 'custom' | string;
+  externalLinks?: RouteExternalLinks;
+  directionsList?: RouteTurnStep[];
+  geoJson?: any;
 }
 
 export interface MeetupEvent {
