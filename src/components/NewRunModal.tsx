@@ -105,7 +105,7 @@ export const NewRunModal: React.FC<NewRunModalProps> = ({
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="e.g. Saturday Trail Exploration & Burrows"
-              className="w-full text-sm px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+              className="w-full text-sm px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-woodland-500 focus:outline-none"
             />
           </div>
 
@@ -119,7 +119,7 @@ export const NewRunModal: React.FC<NewRunModalProps> = ({
                 required
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
-                className="w-full text-sm px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                className="w-full text-sm px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-woodland-500 focus:outline-none"
               />
             </div>
             <div>
@@ -132,7 +132,7 @@ export const NewRunModal: React.FC<NewRunModalProps> = ({
                 value={time}
                 onChange={(e) => setTime(e.target.value)}
                 placeholder="08:00 AM"
-                className="w-full text-sm px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                className="w-full text-sm px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-woodland-500 focus:outline-none"
               />
             </div>
           </div>
@@ -145,7 +145,7 @@ export const NewRunModal: React.FC<NewRunModalProps> = ({
             <select
               value={selectedRouteId}
               onChange={(e) => handleRouteChange(e.target.value)}
-              className="w-full text-sm px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none bg-white"
+              className="w-full text-sm px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-woodland-500 focus:outline-none bg-white"
             >
               <option value="">No specific GPX route attached</option>
               {routes.map((r) => (
@@ -165,7 +165,7 @@ export const NewRunModal: React.FC<NewRunModalProps> = ({
                 required
                 value={distanceMiles}
                 onChange={(e) => setDistanceMiles(parseFloat(e.target.value) || 0)}
-                className="w-full text-sm px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                className="w-full text-sm px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-woodland-500 focus:outline-none"
               />
             </div>
             <div>
@@ -174,7 +174,7 @@ export const NewRunModal: React.FC<NewRunModalProps> = ({
                 type="number"
                 value={elevationGainFt}
                 onChange={(e) => setElevationGainFt(parseInt(e.target.value, 10) || 0)}
-                className="w-full text-sm px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                className="w-full text-sm px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-woodland-500 focus:outline-none"
               />
             </div>
             <div>
@@ -182,7 +182,7 @@ export const NewRunModal: React.FC<NewRunModalProps> = ({
               <select
                 value={surface}
                 onChange={(e) => setSurface(e.target.value as SurfaceType)}
-                className="w-full text-sm px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none bg-white"
+                className="w-full text-sm px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-woodland-500 focus:outline-none bg-white"
               >
                 <option value="Trail">Trail</option>
                 <option value="Pavement">Pavement</option>
@@ -202,14 +202,14 @@ export const NewRunModal: React.FC<NewRunModalProps> = ({
               value={locationName}
               onChange={(e) => setLocationName(e.target.value)}
               placeholder="e.g. Woodland Regional Park Parking Lot"
-              className="w-full text-sm px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none mb-2"
+              className="w-full text-sm px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-woodland-500 focus:outline-none mb-2"
             />
             <input
               type="text"
               value={address}
               onChange={(e) => setAddress(e.target.value)}
               placeholder="Address / Trailhead directions (optional)"
-              className="w-full text-xs px-3 py-1.5 border border-stone-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none text-stone-600"
+              className="w-full text-xs px-3 py-1.5 border border-stone-200 rounded-lg focus:ring-2 focus:ring-woodland-500 focus:outline-none text-stone-600"
             />
           </div>
 
@@ -220,7 +220,7 @@ export const NewRunModal: React.FC<NewRunModalProps> = ({
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Pace info, post-run coffee, route notes..."
-              className="w-full text-sm px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+              className="w-full text-sm px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-woodland-500 focus:outline-none"
             />
           </div>
 
@@ -231,7 +231,7 @@ export const NewRunModal: React.FC<NewRunModalProps> = ({
               <button
                 type="button"
                 onClick={addPaceGroup}
-                className="text-xs text-emerald-700 hover:text-emerald-800 font-semibold flex items-center gap-1"
+                className="text-xs text-woodland-700 hover:text-woodland-800 font-semibold flex items-center gap-1"
               >
                 <Plus className="w-3.5 h-3.5" /> Add Group
               </button>
@@ -286,7 +286,7 @@ export const NewRunModal: React.FC<NewRunModalProps> = ({
             </button>
             <button
               type="submit"
-              className="px-5 py-2 text-xs font-semibold bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 shadow-sm"
+              className="px-5 py-2 text-xs font-semibold bg-woodland-600 text-white rounded-lg hover:bg-woodland-700 shadow-sm"
             >
               Publish Run
             </button>

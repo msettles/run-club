@@ -107,16 +107,16 @@ export const GpxUploader: React.FC<GpxUploaderProps> = ({ onRouteAdded, onCancel
           onDrop={handleDrop}
           className={`border-2 border-dashed rounded-xl p-8 text-center transition ${
             dragActive
-              ? 'border-emerald-500 bg-emerald-50/50'
-              : 'border-stone-300 hover:border-emerald-400 bg-stone-50/50'
+              ? 'border-woodland-500 bg-woodland-50/50'
+              : 'border-stone-300 hover:border-woodland-400 bg-stone-50/50'
           }`}
         >
-          <UploadCloud className="w-12 h-12 text-emerald-600 mx-auto mb-3" />
+          <UploadCloud className="w-12 h-12 text-woodland-600 mx-auto mb-3" />
           <p className="text-sm font-semibold text-stone-800 mb-1">
             Drag and drop your .gpx file here
           </p>
           <p className="text-xs text-stone-500 mb-4">or choose from your computer</p>
-          <label className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white text-xs font-semibold rounded-lg hover:bg-emerald-700 cursor-pointer shadow-sm transition">
+          <label className="inline-flex items-center gap-2 px-4 py-2 bg-woodland-600 text-white text-xs font-semibold rounded-lg hover:bg-woodland-700 cursor-pointer shadow-sm transition">
             <FileText className="w-4 h-4" />
             <span>Select GPX File</span>
             <input
@@ -129,14 +129,14 @@ export const GpxUploader: React.FC<GpxUploaderProps> = ({ onRouteAdded, onCancel
         </div>
       ) : (
         <div className="space-y-4">
-          <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg flex items-center justify-between">
-            <div className="flex items-center gap-2 text-emerald-900 text-sm font-medium">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+          <div className="p-3 bg-woodland-50 border border-woodland-200 rounded-lg flex items-center justify-between">
+            <div className="flex items-center gap-2 text-woodland-900 text-sm font-medium">
+              <CheckCircle2 className="w-4 h-4 text-woodland-600" />
               <span>Route parsed successfully!</span>
             </div>
             <button
               onClick={() => setParsedPreview(null)}
-              className="text-xs text-emerald-700 hover:underline"
+              className="text-xs text-woodland-700 hover:underline"
             >
               Upload different file
             </button>
@@ -146,7 +146,7 @@ export const GpxUploader: React.FC<GpxUploaderProps> = ({ onRouteAdded, onCancel
           <div className="grid grid-cols-2 gap-3">
             <div className="p-3 bg-stone-50 rounded-lg border border-stone-200">
               <span className="text-xs text-stone-500 flex items-center gap-1">
-                <Navigation className="w-3.5 h-3.5 text-emerald-600" /> Total Distance
+                <Navigation className="w-3.5 h-3.5 text-woodland-600" /> Total Distance
               </span>
               <p className="text-lg font-bold text-stone-900">{parsedPreview.distanceMiles} mi</p>
             </div>
@@ -165,7 +165,7 @@ export const GpxUploader: React.FC<GpxUploaderProps> = ({ onRouteAdded, onCancel
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full text-sm px-3 py-2 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              className="w-full text-sm px-3 py-2 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-woodland-500"
               placeholder="e.g. Woodland Valley 10K Loop"
             />
           </div>
@@ -176,7 +176,7 @@ export const GpxUploader: React.FC<GpxUploaderProps> = ({ onRouteAdded, onCancel
               rows={2}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="w-full text-sm px-3 py-2 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              className="w-full text-sm px-3 py-2 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-woodland-500"
               placeholder="Trail details, terrain notes, parking..."
             />
           </div>
@@ -187,7 +187,7 @@ export const GpxUploader: React.FC<GpxUploaderProps> = ({ onRouteAdded, onCancel
               <select
                 value={surface}
                 onChange={(e) => setSurface(e.target.value as SurfaceType)}
-                className="w-full text-sm px-3 py-2 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                className="w-full text-sm px-3 py-2 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-woodland-500"
               >
                 <option value="Trail">Trail (Dirt/Singletrack)</option>
                 <option value="Pavement">Pavement (Road/Path)</option>
@@ -201,7 +201,7 @@ export const GpxUploader: React.FC<GpxUploaderProps> = ({ onRouteAdded, onCancel
               <select
                 value={difficulty}
                 onChange={(e) => setDifficulty(e.target.value as DifficultyType)}
-                className="w-full text-sm px-3 py-2 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                className="w-full text-sm px-3 py-2 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-woodland-500"
               >
                 <option value="Easy">Easy (Flat & Gentle)</option>
                 <option value="Moderate">Moderate</option>
@@ -224,7 +224,7 @@ export const GpxUploader: React.FC<GpxUploaderProps> = ({ onRouteAdded, onCancel
             <button
               type="button"
               onClick={handleSave}
-              className="px-5 py-2 text-xs font-semibold bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 shadow-sm"
+              className="px-5 py-2 text-xs font-semibold bg-woodland-600 text-white rounded-lg hover:bg-woodland-700 shadow-sm"
             >
               Save to Club Routes
             </button>

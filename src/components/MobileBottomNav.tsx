@@ -20,7 +20,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
         <button
           onClick={() => setActiveTab('runs')}
           className={`flex flex-col items-center py-1 px-2 rounded-lg transition ${
-            activeTab === 'runs' ? 'text-emerald-700 font-bold' : 'hover:text-stone-900'
+            activeTab === 'runs' ? 'text-woodland-800 font-bold' : 'hover:text-stone-900'
           }`}
         >
           <Calendar className="w-5 h-5 mb-0.5" />
@@ -30,7 +30,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
         <button
           onClick={() => setActiveTab('routes')}
           className={`flex flex-col items-center py-1 px-2 rounded-lg transition ${
-            activeTab === 'routes' ? 'text-emerald-700 font-bold' : 'hover:text-stone-900'
+            activeTab === 'routes' ? 'text-woodland-800 font-bold' : 'hover:text-stone-900'
           }`}
         >
           <Map className="w-5 h-5 mb-0.5" />
@@ -40,7 +40,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
         {/* Quick Check-In Center Button */}
         <button
           onClick={onQuickCheckIn}
-          className="flex flex-col items-center -mt-4 bg-emerald-600 text-white p-2.5 rounded-full shadow-lg hover:bg-emerald-700 transition ring-4 ring-white"
+          className="flex flex-col items-center -mt-4 bg-woodland-600 text-white p-2.5 rounded-full shadow-lg hover:bg-woodland-700 transition ring-4 ring-white"
         >
           <Award className="w-5 h-5" />
         </button>
@@ -48,7 +48,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
         <button
           onClick={() => setActiveTab('leaderboard')}
           className={`flex flex-col items-center py-1 px-2 rounded-lg transition ${
-            activeTab === 'leaderboard' ? 'text-emerald-700 font-bold' : 'hover:text-stone-900'
+            activeTab === 'leaderboard' ? 'text-woodland-800 font-bold' : 'hover:text-stone-900'
           }`}
         >
           <Trophy className="w-5 h-5 mb-0.5" />
@@ -59,7 +59,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
           <button
             onClick={() => setActiveTab('admin')}
             className={`flex flex-col items-center py-1 px-2 rounded-lg transition ${
-              activeTab === 'admin' ? 'text-emerald-700 font-bold' : 'hover:text-stone-900'
+              activeTab === 'admin' ? 'text-woodland-800 font-bold' : 'hover:text-stone-900'
             }`}
           >
             <Shield className="w-5 h-5 mb-0.5" />

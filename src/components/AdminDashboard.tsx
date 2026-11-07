@@ -120,16 +120,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   return (
     <div className="space-y-6">
       {/* Admin Header & KPI Cards */}
-      <div className="bg-gradient-to-r from-stone-900 to-emerald-950 text-white rounded-2xl p-6 shadow-md border border-stone-800">
+      <div className="bg-gradient-to-r from-stone-900 to-woodland-950 text-white rounded-2xl p-6 shadow-md border border-stone-800">
         <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
           <div className="flex items-center gap-3">
-            <div className="p-3 bg-emerald-600 rounded-xl shadow-inner">
+            <div className="p-3 bg-woodland-600 rounded-xl shadow-inner">
               <ShieldCheck className="w-6 h-6 text-white" />
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-xl sm:text-2xl font-black tracking-tight">Admin & Organizer Portal</h1>
-                <span className="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 px-2 py-0.5 rounded-full font-bold">
+                <span className="text-[10px] bg-woodland-500/20 text-woodland-300 border border-woodland-400/30 px-2 py-0.5 rounded-full font-bold">
                   woodlandwoodchuckers@gmail.com
                 </span>
               </div>
@@ -142,7 +142,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           <div className="flex items-center gap-2">
             <button
               onClick={onOpenNewRun}
-              className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl transition shadow-sm"
+              className="flex items-center gap-1.5 px-4 py-2 bg-woodland-600 hover:bg-woodland-700 text-white font-bold text-xs rounded-xl transition shadow-sm"
             >
               <Plus className="w-4 h-4" />
               <span>Schedule Run</span>
@@ -170,7 +170,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           </div>
           <div className="bg-stone-800/60 p-3 rounded-xl border border-stone-700/60">
             <span className="text-[11px] text-stone-400 uppercase tracking-wider block">Total Run Check-Ins</span>
-            <span className="text-xl font-black text-emerald-400">{totalCheckInsAcrossRuns}</span>
+            <span className="text-xl font-black text-woodland-400">{totalCheckInsAcrossRuns}</span>
           </div>
           <div className="bg-stone-800/60 p-3 rounded-xl border border-stone-700/60">
             <span className="text-[11px] text-stone-400 uppercase tracking-wider block">Total Club Miles</span>
@@ -185,11 +185,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           onClick={() => setAdminTab('runs')}
           className={`flex items-center gap-2 py-3 px-4 text-xs font-bold border-b-2 transition ${
             adminTab === 'runs'
-              ? 'border-emerald-600 text-emerald-800'
+              ? 'border-woodland-600 text-woodland-800'
               : 'border-transparent text-stone-500 hover:text-stone-800'
           }`}
         >
-          <Calendar className="w-4 h-4 text-emerald-600" />
+          <Calendar className="w-4 h-4 text-woodland-600" />
           <span>Runs & Schedules ({runs.length})</span>
         </button>
 
@@ -197,11 +197,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           onClick={() => setAdminTab('members')}
           className={`flex items-center gap-2 py-3 px-4 text-xs font-bold border-b-2 transition ${
             adminTab === 'members'
-              ? 'border-emerald-600 text-emerald-800'
+              ? 'border-woodland-600 text-woodland-800'
               : 'border-transparent text-stone-500 hover:text-stone-800'
           }`}
         >
-          <Users className="w-4 h-4 text-emerald-600" />
+          <Users className="w-4 h-4 text-woodland-600" />
           <span>Membership & Run Counts ({members.length})</span>
         </button>
 
@@ -209,7 +209,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           onClick={() => setAdminTab('notifications')}
           className={`flex items-center gap-2 py-3 px-4 text-xs font-bold border-b-2 transition ${
             adminTab === 'notifications'
-              ? 'border-emerald-600 text-emerald-800'
+              ? 'border-woodland-600 text-woodland-800'
               : 'border-transparent text-stone-500 hover:text-stone-800'
           }`}
         >
@@ -225,7 +225,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             <h3 className="text-sm font-bold text-stone-900">All Scheduled & Past Group Runs</h3>
             <button
               onClick={onOpenNewRun}
-              className="flex items-center gap-1 text-xs font-semibold text-emerald-700 hover:text-emerald-800"
+              className="flex items-center gap-1 text-xs font-semibold text-woodland-700 hover:text-woodland-800"
             >
               <Plus className="w-3.5 h-3.5" />
               <span>New Run Event</span>
@@ -261,7 +261,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         )}
                       </td>
                       <td className="py-3.5 px-4 whitespace-nowrap">
-                        <span className="font-bold text-emerald-800">{run.distanceMiles} mi</span>{' '}
+                        <span className="font-bold text-woodland-800">{run.distanceMiles} mi</span>{' '}
                         <span className="text-stone-400">({run.surface})</span>
                       </td>
                       <td className="py-3.5 px-4 max-w-[200px] truncate text-stone-600">
@@ -270,7 +270,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       <td className="py-3.5 px-4 whitespace-nowrap">
                         <span className="font-semibold text-stone-800">{run.attendees.length} RSVPs</span>
                         {checkInCount > 0 && (
-                          <span className="text-emerald-700 ml-1.5 font-bold">
+                          <span className="text-woodland-700 ml-1.5 font-bold">
                             ({checkInCount} checked in)
                           </span>
                         )}
@@ -286,7 +286,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           </button>
                           <button
                             onClick={() => onEditRun(run)}
-                            className="p-1.5 text-emerald-700 hover:text-emerald-900 rounded hover:bg-emerald-50"
+                            className="p-1.5 text-woodland-700 hover:text-woodland-900 rounded hover:bg-woodland-50"
                             title="Edit run details"
                           >
                             <Edit3 className="w-3.5 h-3.5" />
@@ -330,7 +330,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   placeholder="Search members..."
                   value={memberSearch}
                   onChange={(e) => setMemberSearch(e.target.value)}
-                  className="text-xs pl-8 pr-3 py-1.5 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  className="text-xs pl-8 pr-3 py-1.5 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-woodland-500"
                 />
               </div>
 
@@ -376,7 +376,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     <td className="py-3.5 px-4 text-center font-extrabold text-stone-900">
                       {member.totalRuns}
                     </td>
-                    <td className="py-3.5 px-4 text-center font-extrabold text-emerald-800">
+                    <td className="py-3.5 px-4 text-center font-extrabold text-woodland-800">
                       {member.totalMiles} mi
                     </td>
                     <td className="py-3.5 px-4 text-center font-bold text-amber-600">
@@ -397,7 +397,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                               totalMiles: Math.round((member.totalMiles + 5.0) * 10) / 10,
                             });
                           }}
-                          className="px-2 py-1 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 rounded text-[11px] font-semibold transition"
+                          className="px-2 py-1 bg-woodland-50 text-woodland-800 hover:bg-woodland-100 rounded text-[11px] font-semibold transition"
                           title="Quick +1 group run & +5 miles credit"
                         >
                           +1 Run
@@ -426,7 +426,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           <div className="lg:col-span-2 bg-white rounded-2xl p-6 shadow-sm border border-stone-200 space-y-4">
             <div>
               <h3 className="text-base font-bold text-stone-900 flex items-center gap-2">
-                <Smartphone className="w-5 h-5 text-emerald-600" />
+                <Smartphone className="w-5 h-5 text-woodland-600" />
                 <span>Blast Push Notification to Runners' Phones</span>
               </h3>
               <p className="text-xs text-stone-500 mt-0.5">
@@ -435,8 +435,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </div>
 
             {broadcastSent && (
-              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center gap-2 text-xs text-emerald-900 font-bold">
-                <CheckCircle className="w-4 h-4 text-emerald-600" />
+              <div className="p-3 bg-woodland-50 border border-woodland-200 rounded-xl flex items-center gap-2 text-xs text-woodland-900 font-bold">
+                <CheckCircle className="w-4 h-4 text-woodland-600" />
                 <span>Push alert sent to runners and logged in club announcement history!</span>
               </div>
             )}
@@ -497,7 +497,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   value={notifTitle}
                   onChange={(e) => setNotifTitle(e.target.value)}
                   placeholder="e.g. 🦫 Run Tomorrow at 8:00 AM"
-                  className="w-full text-sm px-3 py-2 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  className="w-full text-sm px-3 py-2 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-woodland-500"
                 />
               </div>
 
@@ -511,14 +511,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   value={notifBody}
                   onChange={(e) => setNotifBody(e.target.value)}
                   placeholder="Details, gear notes, parking directions..."
-                  className="w-full text-sm px-3 py-2 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  className="w-full text-sm px-3 py-2 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-woodland-500"
                 />
               </div>
 
               <div className="pt-2 flex justify-end">
                 <button
                   type="submit"
-                  className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-md transition"
+                  className="flex items-center gap-2 px-5 py-2.5 bg-woodland-600 hover:bg-woodland-700 text-white font-bold text-xs rounded-xl shadow-md transition"
                 >
                   <Send className="w-4 h-4" />
                   <span>Send Push Alert Now</span>
@@ -633,7 +633,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   });
                   setEditingMember(null);
                 }}
-                className="px-4 py-1.5 text-xs font-bold bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 shadow-sm"
+                className="px-4 py-1.5 text-xs font-bold bg-woodland-600 text-white rounded-lg hover:bg-woodland-700 shadow-sm"
               >
                 Save Stats
               </button>

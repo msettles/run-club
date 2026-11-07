@@ -77,19 +77,19 @@ export const InstallPwaBanner: React.FC = () => {
   }
 
   return (
-    <div className="bg-gradient-to-r from-emerald-800 to-emerald-900 text-white border-b border-emerald-700/60 px-4 py-2.5 shadow-sm">
+    <div className="bg-gradient-to-r from-woodland-900 to-woodland-950 text-white border-b border-woodland-700/60 px-4 py-2.5 shadow-sm">
       <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3 text-xs">
         <div className="flex items-center gap-2">
-          <span className="p-1.5 bg-emerald-700/80 rounded-lg text-emerald-200">
+          <span className="p-1.5 bg-woodland-800 rounded-lg text-woodland-200">
             <Smartphone className="w-4 h-4" />
           </span>
           <div>
             <strong className="font-bold">Runner Mobile App:</strong>{' '}
-            <span className="text-emerald-100 hidden sm:inline">
+            <span className="text-woodland-100 hidden sm:inline">
               Install Woodchuckers on your phone for 1-tap check-ins and push notifications.
             </span>
-            <span className="text-emerald-100 sm:hidden">
-              Install app for 1-tap check-ins & alerts.
+            <span className="text-woodland-100 sm:hidden">
+              Install app for 1-tap check-ins &amp; alerts.
             </span>
           </div>
         </div>
@@ -108,8 +108,8 @@ export const InstallPwaBanner: React.FC = () => {
           )}
 
           {pushStatus === 'granted' && (
-            <span className="hidden sm:flex items-center gap-1 text-[11px] text-emerald-200 bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-700/50">
-              <BellRing className="w-3 h-3 text-emerald-400" />
+            <span className="hidden sm:flex items-center gap-1 text-[11px] text-woodland-200 bg-woodland-950/40 px-2 py-0.5 rounded border border-woodland-700/50">
+              <BellRing className="w-3 h-3 text-woodland-400" />
               <span>Push Active</span>
             </span>
           )}
@@ -118,16 +118,16 @@ export const InstallPwaBanner: React.FC = () => {
           {!isInstalled && (
             <button
               onClick={handleInstallClick}
-              className="flex items-center gap-1.5 px-3 py-1 bg-white text-emerald-900 hover:bg-emerald-50 font-bold rounded-lg transition shadow-xs"
+              className="flex items-center gap-1.5 px-3 py-1 bg-white text-woodland-900 hover:bg-woodland-50 font-bold rounded-lg transition shadow-xs"
             >
-              <Download className="w-3.5 h-3.5 text-emerald-700" />
+              <Download className="w-3.5 h-3.5 text-woodland-700" />
               <span>Install PWA</span>
             </button>
           )}
 
           <button
             onClick={handleDismiss}
-            className="p-1 text-emerald-300 hover:text-white rounded"
+            className="p-1 text-woodland-300 hover:text-white rounded"
             title="Dismiss banner"
           >
             <X className="w-4 h-4" />
@@ -152,12 +152,12 @@ export const InstallPwaBanner: React.FC = () => {
             </div>
             <ol className="text-xs text-stone-600 space-y-2.5 list-decimal list-inside bg-stone-50 p-3.5 rounded-xl border border-stone-200">
               <li>In Safari, tap the <strong>Share</strong> button at the bottom of the screen (the square with an arrow pointing up).</li>
-              <li>Scroll down the menu and tap <strong>"Add to Home Screen"</strong>.</li>
-              <li>Tap <strong>"Add"</strong> in the top-right corner.</li>
+              <li>Scroll down the menu and tap <strong>&quot;Add to Home Screen&quot;</strong>.</li>
+              <li>Tap <strong>&quot;Add&quot;</strong> in the top-right corner.</li>
             </ol>
             <button
               onClick={() => setShowIOSGuide(false)}
-              className="w-full py-2 bg-emerald-600 text-white rounded-xl font-bold text-xs hover:bg-emerald-700 transition"
+              className="w-full py-2 bg-woodland-600 text-white rounded-xl font-bold text-xs hover:bg-woodland-700 transition"
             >
               Got It!
             </button>

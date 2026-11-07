@@ -27,10 +27,10 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
   return (
     <div className="space-y-6">
       {/* Current Member Spotlight */}
-      <div className="bg-gradient-to-r from-emerald-800 to-emerald-950 text-white rounded-2xl p-6 shadow-md border border-emerald-700">
+      <div className="bg-gradient-to-r from-woodland-900 via-woodland-950 to-[#103b4b] text-white rounded-2xl p-6 shadow-md border border-woodland-700/60">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-4">
-            <div className="w-14 h-14 rounded-full ring-4 ring-emerald-500/30 overflow-hidden bg-emerald-700 flex items-center justify-center text-xl font-black text-white shrink-0">
+            <div className="w-14 h-14 rounded-full ring-4 ring-woodland-500/30 overflow-hidden bg-woodland-700 flex items-center justify-center text-xl font-black text-white shrink-0">
               {currentMember.avatarUrl ? (
                 <img
                   src={currentMember.avatarUrl}
@@ -44,34 +44,34 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-xl font-extrabold">{currentMember.name}</h2>
-                <span className="text-[11px] bg-emerald-600/60 px-2 py-0.5 rounded-full font-semibold border border-emerald-400/40">
+                <span className="text-[11px] bg-woodland-600/60 px-2 py-0.5 rounded-full font-semibold border border-woodland-400/40">
                   Active Woodchucker
                 </span>
               </div>
-              <p className="text-xs text-emerald-200 mt-0.5">
+              <p className="text-xs text-woodland-200 mt-0.5">
                 Preferred Pace: {currentMember.favoritePace}
               </p>
             </div>
           </div>
 
           {/* Quick Stats Pill */}
-          <div className="flex items-center gap-3 bg-emerald-900/60 px-4 py-2.5 rounded-xl border border-emerald-700/50">
+          <div className="flex items-center gap-3 bg-woodland-900/60 px-4 py-2.5 rounded-xl border border-woodland-700/50">
             <div className="text-center">
-              <span className="text-[10px] text-emerald-300 uppercase tracking-wider block">
+              <span className="text-[10px] text-woodland-300 uppercase tracking-wider block">
                 Total Runs
               </span>
               <span className="text-lg font-black">{currentMember.totalRuns}</span>
             </div>
-            <div className="w-px h-8 bg-emerald-700/60" />
+            <div className="w-px h-8 bg-woodland-700/60" />
             <div className="text-center">
-              <span className="text-[10px] text-emerald-300 uppercase tracking-wider block">
+              <span className="text-[10px] text-woodland-300 uppercase tracking-wider block">
                 Miles
               </span>
               <span className="text-lg font-black">{currentMember.totalMiles}</span>
             </div>
-            <div className="w-px h-8 bg-emerald-700/60" />
+            <div className="w-px h-8 bg-woodland-700/60" />
             <div className="text-center">
-              <span className="text-[10px] text-emerald-300 uppercase tracking-wider block">
+              <span className="text-[10px] text-woodland-300 uppercase tracking-wider block">
                 Streak
               </span>
               <span className="text-lg font-black text-amber-300 flex items-center justify-center gap-0.5">
@@ -83,8 +83,8 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
         </div>
 
         {/* Member unlocked badges */}
-        <div className="mt-5 pt-4 border-t border-emerald-800/80">
-          <span className="text-xs font-semibold text-emerald-200 uppercase tracking-wider flex items-center gap-1.5 mb-2.5">
+        <div className="mt-5 pt-4 border-t border-woodland-800/80">
+          <span className="text-xs font-semibold text-woodland-200 uppercase tracking-wider flex items-center gap-1.5 mb-2.5">
             <Award className="w-4 h-4 text-amber-400" />
             <span>Badges Earned ({currentMember.unlockedBadgeIds.length} / {badges.length})</span>
           </span>
@@ -96,15 +96,15 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
                   key={badge.id}
                   className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-medium border transition ${
                     unlocked
-                      ? 'bg-emerald-900/80 border-emerald-500/50 text-white shadow-xs'
-                      : 'bg-emerald-950/40 border-emerald-900 text-emerald-400/50 opacity-40'
+                      ? 'bg-woodland-900/80 border-woodland-500/50 text-white shadow-xs'
+                      : 'bg-woodland-950/40 border-woodland-900 text-woodland-400/50 opacity-40'
                   }`}
                   title={badge.description}
                 >
                   <span className="text-lg">{badge.emoji}</span>
                   <div>
                     <div className="font-bold leading-tight">{badge.name}</div>
-                    <div className="text-[10px] text-emerald-300/80 leading-tight">
+                    <div className="text-[10px] text-woodland-300/80 leading-tight">
                       {badge.requirement}
                     </div>
                   </div>
@@ -166,7 +166,7 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
               <div
                 key={member.id}
                 className={`p-4 flex items-center justify-between gap-3 hover:bg-stone-50/80 transition ${
-                  isMe ? 'bg-emerald-50/40' : ''
+                  isMe ? 'bg-woodland-50/50' : ''
                 }`}
               >
                 <div className="flex items-center gap-3">
@@ -205,7 +205,7 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
                     <div className="flex items-center gap-1.5">
                       <span className="font-bold text-sm text-stone-900">{member.name}</span>
                       {isMe && (
-                        <span className="text-[10px] bg-emerald-100 text-emerald-800 px-1.5 py-0.2 rounded font-semibold">
+                        <span className="text-[10px] bg-woodland-100 text-woodland-900 px-1.5 py-0.2 rounded font-semibold border border-woodland-200">
                           You
                         </span>
                       )}

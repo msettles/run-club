@@ -59,20 +59,20 @@ export const MapViewer: React.FC<MapViewerProps> = ({
 
       // Route Polyline
       const polyline = L.polyline(latLngs, {
-        color: '#15803d',
+        color: '#1a607c',
         weight: 5,
-        opacity: 0.85,
+        opacity: 0.9,
         lineCap: 'round',
         lineJoin: 'round',
       }).addTo(map);
 
       polylineRef.current = polyline;
 
-      // Start Marker (Green icon)
+      // Start Marker (Teal brand icon)
       const startPt = latLngs[0];
       const startIcon = L.divIcon({
         className: 'custom-start-pin',
-        html: `<div style="background-color:#16a34a;color:white;padding:4px 8px;border-radius:12px;font-size:11px;font-weight:bold;box-shadow:0 2px 6px rgba(0,0,0,0.3);border:2px solid white;display:flex;align-items:center;gap:3px;">
+        html: `<div style="background-color:#1a607c;color:white;padding:4px 8px;border-radius:12px;font-size:11px;font-weight:bold;box-shadow:0 2px 6px rgba(0,0,0,0.3);border:2px solid white;display:flex;align-items:center;gap:3px;">
           <span>🟢</span> START
         </div>`,
         iconSize: [60, 24],
@@ -80,11 +80,11 @@ export const MapViewer: React.FC<MapViewerProps> = ({
       });
       L.marker(startPt, { icon: startIcon }).addTo(map);
 
-      // Finish Marker (Checkered / Amber icon)
+      // Finish Marker (Craft Amber Beer Gold icon)
       const endPt = latLngs[latLngs.length - 1];
       const finishIcon = L.divIcon({
         className: 'custom-end-pin',
-        html: `<div style="background-color:#d97706;color:white;padding:4px 8px;border-radius:12px;font-size:11px;font-weight:bold;box-shadow:0 2px 6px rgba(0,0,0,0.3);border:2px solid white;display:flex;align-items:center;gap:3px;">
+        html: `<div style="background-color:#de9c1e;color:#0d1113;padding:4px 8px;border-radius:12px;font-size:11px;font-weight:800;box-shadow:0 2px 6px rgba(0,0,0,0.3);border:2px solid white;display:flex;align-items:center;gap:3px;">
           <span>🏁</span> FINISH
         </div>`,
         iconSize: [64, 24],
@@ -172,8 +172,8 @@ export const MapViewer: React.FC<MapViewerProps> = ({
 
     // Draw elevation gradient fill
     const gradient = ctx.createLinearGradient(0, padTop, 0, height - padBottom);
-    gradient.addColorStop(0, 'rgba(34, 197, 94, 0.45)');
-    gradient.addColorStop(1, 'rgba(34, 197, 94, 0.02)');
+    gradient.addColorStop(0, 'rgba(26, 96, 124, 0.45)');
+    gradient.addColorStop(1, 'rgba(26, 96, 124, 0.02)');
 
     ctx.beginPath();
     elevations.forEach((ele, idx) => {
@@ -204,7 +204,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
         ctx.lineTo(x, y);
       }
     });
-    ctx.strokeStyle = '#15803d';
+    ctx.strokeStyle = '#1a607c';
     ctx.lineWidth = 2.5;
     ctx.stroke();
 
@@ -260,7 +260,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
             <span
               className={`text-xs px-2 py-0.5 rounded-full font-medium ${
                 route.surface === 'Trail'
-                  ? 'bg-emerald-100 text-emerald-800'
+                  ? 'bg-woodland-100 text-woodland-800'
                   : route.surface === 'Pavement'
                   ? 'bg-blue-100 text-blue-800'
                   : 'bg-amber-100 text-amber-800'
@@ -278,7 +278,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
         {/* Quick stats & Actions */}
         <div className="flex items-center gap-4 text-xs">
           <div className="flex items-center gap-1.5 font-semibold text-stone-700">
-            <Navigation className="w-4 h-4 text-emerald-600" />
+            <Navigation className="w-4 h-4 text-woodland-600" />
             <span>{route.distanceMiles} mi</span>
           </div>
           <div className="flex items-center gap-1.5 font-semibold text-stone-700">
@@ -306,7 +306,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
             onClick={() => setActiveTileLayer('osm')}
             className={`px-2 py-1 text-xs rounded font-medium flex items-center gap-1 ${
               activeTileLayer === 'osm'
-                ? 'bg-emerald-600 text-white shadow-sm'
+                ? 'bg-woodland-600 text-white shadow-sm'
                 : 'text-stone-600 hover:bg-stone-100'
             }`}
           >
@@ -316,7 +316,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
             onClick={() => setActiveTileLayer('topo')}
             className={`px-2 py-1 text-xs rounded font-medium flex items-center gap-1 ${
               activeTileLayer === 'topo'
-                ? 'bg-emerald-600 text-white shadow-sm'
+                ? 'bg-woodland-600 text-white shadow-sm'
                 : 'text-stone-600 hover:bg-stone-100'
             }`}
           >
@@ -335,7 +335,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
         <div className="p-3 bg-white border-t border-stone-100">
           <div className="flex items-center justify-between text-xs text-stone-500 mb-1 px-1">
             <span className="font-medium text-stone-700 flex items-center gap-1">
-              <Mountain className="w-3.5 h-3.5 text-emerald-600" /> Elevation Profile
+              <Mountain className="w-3.5 h-3.5 text-woodland-600" /> Elevation Profile
             </span>
             {hoveredPointIndex !== null && route.points[hoveredPointIndex] ? (
               <span className="text-orange-600 font-semibold">

@@ -56,17 +56,17 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
     <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-stone-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
       <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-stone-200 overflow-hidden">
         {/* Header */}
-        <div className="bg-gradient-to-r from-emerald-800 to-emerald-700 text-white p-5 flex items-center justify-between">
+        <div className="bg-gradient-to-r from-woodland-900 to-woodland-700 text-white p-5 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="text-2xl">🦫</span>
             <div>
               <h3 className="font-bold text-base leading-tight">Run Day Check-In</h3>
-              <p className="text-xs text-emerald-100">{run.title}</p>
+              <p className="text-xs text-woodland-200">{run.title}</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1 rounded-full text-emerald-100 hover:text-white hover:bg-emerald-600/50 transition"
+            className="p-1 rounded-full text-woodland-200 hover:text-white hover:bg-woodland-600/50 transition"
           >
             <X className="w-5 h-5" />
           </button>
@@ -75,13 +75,13 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
         <div className="p-6">
           {justCheckedIn ? (
             <div className="text-center py-4 space-y-4">
-              <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto ring-8 ring-emerald-50">
+              <div className="w-16 h-16 bg-woodland-100 text-woodland-600 rounded-full flex items-center justify-center mx-auto ring-8 ring-woodland-50">
                 <CheckCircle className="w-10 h-10" />
               </div>
               <div>
-                <h4 className="text-xl font-bold text-stone-900">You're Checked In!</h4>
+                <h4 className="text-xl font-bold text-stone-900">You&apos;re Checked In!</h4>
                 <p className="text-xs text-stone-500 mt-1">
-                  Attendance & +{run.distanceMiles} miles added to your Woodchuckers log.
+                  Attendance &amp; +{run.distanceMiles} miles added to your Woodchuckers log.
                 </p>
               </div>
 
@@ -106,7 +106,7 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
 
               <button
                 onClick={onClose}
-                className="w-full py-2.5 bg-emerald-600 text-white rounded-xl font-semibold text-sm hover:bg-emerald-700 shadow-md transition"
+                className="w-full py-2.5 bg-woodland-600 text-white rounded-xl font-semibold text-sm hover:bg-woodland-700 shadow-md transition"
               >
                 Done
               </button>
@@ -120,7 +120,7 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
                 <select
                   value={selectedMemberId}
                   onChange={(e) => setSelectedMemberId(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
+                  className="w-full px-3 py-2 text-sm border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-woodland-500 bg-white"
                 >
                   {members.map((m) => (
                     <option key={m.id} value={m.id}>
@@ -146,18 +146,18 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
               </div>
 
               {isAlreadyCheckedIn ? (
-                <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800 text-xs font-medium flex items-center gap-2">
-                  <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <span>This runner is already checked in for today's run!</span>
+                <div className="p-3 bg-woodland-50 border border-woodland-200 rounded-xl text-woodland-800 text-xs font-medium flex items-center gap-2">
+                  <CheckCircle className="w-4 h-4 text-woodland-600 shrink-0" />
+                  <span>This runner is already checked in for today&apos;s run!</span>
                 </div>
               ) : (
                 <button
                   type="button"
                   onClick={handlePerformCheckIn}
-                  className="w-full py-3 bg-emerald-600 text-white rounded-xl font-bold text-sm hover:bg-emerald-700 shadow-md transition flex items-center justify-center gap-2"
+                  className="w-full py-3 bg-woodland-600 text-white rounded-xl font-bold text-sm hover:bg-woodland-700 shadow-md transition flex items-center justify-center gap-2"
                 >
                   <Award className="w-4 h-4" />
-                  <span>Check In & Log Attendance</span>
+                  <span>Check In &amp; Log Attendance</span>
                 </button>
               )}
 
@@ -166,7 +166,7 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
                 <button
                   type="button"
                   onClick={() => setShowQR(!showQR)}
-                  className="text-xs text-stone-500 hover:text-emerald-700 flex items-center gap-1 font-medium"
+                  className="text-xs text-stone-500 hover:text-woodland-700 flex items-center gap-1 font-medium"
                 >
                   <QrCode className="w-3.5 h-3.5" />
                   <span>{showQR ? 'Hide Check-In QR' : 'Show Event Check-In QR'}</span>

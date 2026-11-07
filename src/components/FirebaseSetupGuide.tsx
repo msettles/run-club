@@ -18,17 +18,17 @@ export const FirebaseSetupGuide: React.FC<FirebaseSetupGuideProps> = ({
     <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-stone-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
       <div className="bg-white rounded-2xl max-w-xl w-full max-h-[90vh] shadow-2xl border border-stone-200 flex flex-col overflow-hidden">
         {/* Header */}
-        <div className="bg-gradient-to-r from-emerald-800 to-emerald-700 text-white p-5 flex items-center justify-between">
+        <div className="bg-gradient-to-r from-woodland-800 to-woodland-700 text-white p-5 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <span className="text-2xl">🌱</span>
             <div>
               <h3 className="font-bold text-base leading-tight">100% Free & Zero-Credit-Card Setup</h3>
-              <p className="text-xs text-emerald-100">Woodland Woodchuckers Run Club Architecture</p>
+              <p className="text-xs text-woodland-100">Woodland Woodchuckers Run Club Architecture</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1 rounded-full text-emerald-100 hover:text-white hover:bg-emerald-600/50"
+            className="p-1 rounded-full text-woodland-100 hover:text-white hover:bg-woodland-600/50"
           >
             <X className="w-5 h-5" />
           </button>
@@ -40,12 +40,12 @@ export const FirebaseSetupGuide: React.FC<FirebaseSetupGuideProps> = ({
           <div
             className={`p-4 rounded-xl border flex items-start gap-3 ${
               isConfigured
-                ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                ? 'bg-woodland-50 border-woodland-200 text-woodland-900'
                 : 'bg-amber-50 border-amber-200 text-amber-900'
             }`}
           >
             {isConfigured ? (
-              <CheckCircle className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+              <CheckCircle className="w-5 h-5 text-woodland-600 shrink-0 mt-0.5" />
             ) : (
               <Sparkles className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
             )}
@@ -66,7 +66,7 @@ export const FirebaseSetupGuide: React.FC<FirebaseSetupGuideProps> = ({
           {/* Zero-Cost Breakdown */}
           <div>
             <h4 className="font-bold text-stone-900 text-sm mb-2 flex items-center gap-1.5">
-              <ShieldCheck className="w-4 h-4 text-emerald-600" />
+              <ShieldCheck className="w-4 h-4 text-woodland-600" />
               How this app stays 100% free with NO credit card:
             </h4>
             <div className="space-y-2">
@@ -109,7 +109,7 @@ export const FirebaseSetupGuide: React.FC<FirebaseSetupGuideProps> = ({
                   href="https://console.firebase.google.com"
                   target="_blank"
                   rel="noreferrer"
-                  className="text-emerald-700 underline font-semibold"
+                  className="text-woodland-700 underline font-semibold"
                 >
                   console.firebase.google.com
                 </a>{' '}
@@ -123,7 +123,7 @@ export const FirebaseSetupGuide: React.FC<FirebaseSetupGuideProps> = ({
               </li>
               <li>
                 Create a file named <code className="bg-stone-200 px-1 rounded">.env</code> in this project folder:
-                <pre className="mt-1.5 p-2 bg-stone-900 text-emerald-400 rounded-lg text-[10px] overflow-x-auto">
+                <pre className="mt-1.5 p-2 bg-stone-900 text-woodland-400 rounded-lg text-[10px] overflow-x-auto">
 {`VITE_FIREBASE_API_KEY=AIzaSy...
 VITE_FIREBASE_AUTH_DOMAIN=woodland-woodchuckers.firebaseapp.com
 VITE_FIREBASE_PROJECT_ID=woodland-woodchuckers
@@ -142,7 +142,7 @@ VITE_FIREBASE_APP_ID=1:123456789:web:abcdef`}
         <div className="p-4 bg-stone-50 border-t border-stone-200 flex justify-end">
           <button
             onClick={onClose}
-            className="px-5 py-2 text-xs font-semibold bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition"
+            className="px-5 py-2 text-xs font-semibold bg-woodland-600 text-white rounded-lg hover:bg-woodland-700 transition"
           >
             Got It!
           </button>

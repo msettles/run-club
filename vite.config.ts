@@ -8,13 +8,13 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'woodchuck.svg'],
+      includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'woodchuck.svg', 'Woodchucker2.jpg', 'Woodchucker2026.png'],
       manifest: {
         name: 'Woodland Woodchuckers Run Club',
         short_name: 'Woodchuckers',
         description: 'Run schedules, member check-ins, and GPX trail routes for Woodland Woodchuckers',
-        theme_color: '#2c5e27',
-        background_color: '#f2f9f1',
+        theme_color: '#1a607c',
+        background_color: '#edf7fa',
         display: 'standalone',
         icons: [
           {

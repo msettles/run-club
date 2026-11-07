@@ -63,7 +63,7 @@ export const RunCard: React.FC<RunCardProps> = ({
       <div className="p-5 pb-3 flex items-start gap-4">
         {/* Date block */}
         <div className="flex flex-col items-center justify-center w-14 h-16 rounded-xl bg-woodland-50 border border-woodland-200 text-woodland-900 shrink-0 shadow-sm">
-          <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-700">
+          <span className="text-[10px] font-extrabold uppercase tracking-wider text-woodland-700">
             {formattedDay}
           </span>
           <span className="text-lg font-black leading-tight text-stone-900">
@@ -80,7 +80,7 @@ export const RunCard: React.FC<RunCardProps> = ({
             <span
               className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
                 run.surface === 'Trail'
-                  ? 'bg-emerald-100 text-emerald-800'
+                  ? 'bg-woodland-100 text-woodland-800'
                   : run.surface === 'Pavement'
                   ? 'bg-blue-100 text-blue-800'
                   : 'bg-amber-100 text-amber-800'
@@ -135,7 +135,7 @@ export const RunCard: React.FC<RunCardProps> = ({
                 key={idx}
                 className="text-xs bg-stone-50 border border-stone-200 text-stone-700 px-2.5 py-1 rounded-lg"
               >
-                <strong className="text-emerald-800">{pg.label}:</strong> {pg.targetPace}
+                <strong className="text-woodland-800">{pg.label}:</strong> {pg.targetPace}
               </span>
             ))}
           </div>
@@ -149,7 +149,7 @@ export const RunCard: React.FC<RunCardProps> = ({
             {run.attendees.slice(0, 4).map((att, i) => (
               <div
                 key={i}
-                className="inline-block h-6 w-6 rounded-full ring-2 ring-white bg-emerald-600 text-white text-[10px] font-bold flex items-center justify-center uppercase shadow-xs"
+                className="inline-block h-6 w-6 rounded-full ring-2 ring-white bg-woodland-600 text-white text-[10px] font-bold flex items-center justify-center uppercase shadow-xs"
                 title={att.name}
               >
                 {att.name.charAt(0)}
@@ -159,7 +159,7 @@ export const RunCard: React.FC<RunCardProps> = ({
           <span className="text-xs text-stone-600 font-medium">
             {run.attendees.length} RSVP{run.attendees.length === 1 ? '' : 's'}
             {checkedInCount > 0 && (
-              <span className="text-emerald-700 ml-1 font-semibold">
+              <span className="text-woodland-700 ml-1 font-semibold">
                 ({checkedInCount} checked in)
               </span>
             )}
@@ -182,7 +182,7 @@ export const RunCard: React.FC<RunCardProps> = ({
         {route ? (
           <button
             onClick={() => onViewRoute(route)}
-            className="flex items-center gap-1 text-xs font-semibold text-emerald-700 hover:text-emerald-800 px-2 py-1.5 rounded-lg hover:bg-emerald-50 transition"
+            className="flex items-center gap-1 text-xs font-semibold text-woodland-700 hover:text-woodland-800 px-2 py-1.5 rounded-lg hover:bg-woodland-50 transition"
           >
             <Map className="w-3.5 h-3.5" />
             <span>View GPX Map</span>
@@ -203,7 +203,7 @@ export const RunCard: React.FC<RunCardProps> = ({
           >
             {isAttending ? (
               <>
-                <Check className="w-3.5 h-3.5 text-emerald-600" />
+                <Check className="w-3.5 h-3.5 text-woodland-600" />
                 <span>Going</span>
               </>
             ) : (
@@ -216,13 +216,13 @@ export const RunCard: React.FC<RunCardProps> = ({
             onClick={() => onOpenCheckIn(run)}
             className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition flex items-center gap-1.5 ${
               isCheckedIn
-                ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
-                : 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm'
+                ? 'bg-woodland-100 text-woodland-800 border border-woodland-200'
+                : 'bg-woodland-600 text-white hover:bg-woodland-700 shadow-sm'
             }`}
           >
             {isCheckedIn ? (
               <>
-                <Check className="w-3.5 h-3.5 text-emerald-700" />
+                <Check className="w-3.5 h-3.5 text-woodland-700" />
                 <span>Checked In</span>
               </>
             ) : (
