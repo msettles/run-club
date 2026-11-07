@@ -1,11 +1,29 @@
-import React from 'react';
-import { Member } from '../types';
-import { Calendar, Map, Trophy, Plus, UploadCloud, Info, RefreshCw, Shield, Bell, Palette } from 'lucide-react';
+import React, { useState } from 'react';
+import { UserProfile } from '../types';
+import { User as FirebaseUser } from 'firebase/auth';
+import { 
+  Calendar, 
+  Map, 
+  Trophy, 
+  Plus, 
+  UploadCloud, 
+  Info, 
+  RefreshCw, 
+  Shield, 
+  Bell, 
+  Palette,
+  LogIn,
+  LogOut,
+  Shirt,
+  Flame,
+  ChevronDown
+} from 'lucide-react';
 
 interface NavbarProps {
   activeTab: 'runs' | 'routes' | 'leaderboard' | 'admin';
   setActiveTab: (tab: 'runs' | 'routes' | 'leaderboard' | 'admin') => void;
-  currentMember: Member;
+  currentUser: UserProfile;
+  firebaseUser: FirebaseUser | null;
   isFirebaseConfigured: boolean;
   isSyncing: boolean;
   unreadNotifsCount?: number;
@@ -14,12 +32,15 @@ interface NavbarProps {
   onOpenSetupGuide: () => void;
   onOpenBrandAssets?: () => void;
   onToggleNotifications?: () => void;
+  onOpenAuthModal: () => void;
+  onLogout: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
   activeTab,
   setActiveTab,
-  currentMember,
+  currentUser,
+  firebaseUser,
   isFirebaseConfigured,
   isSyncing,
   unreadNotifsCount = 0,
@@ -28,8 +49,11 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenSetupGuide,
   onOpenBrandAssets,
   onToggleNotifications,
+  onOpenAuthModal,
+  onLogout,
 }) => {
-  const isAdmin = currentMember.email === 'woodlandwoodchuckers@gmail.com' || currentMember.id === 'mem-admin';
+  const [showProfileMenu, setShowProfileMenu] = useState<boolean>(false);
+  const isAdmin = currentUser.role === 'admin' || currentUser.email === 'woodlandwoodchuckers@gmail.com';
 
   return (
     <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-stone-200 shadow-xs">
@@ -115,7 +139,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             )}
           </nav>
 
-          {/* Action Tools */}
+          {/* Action Tools & User Profile / Login */}
           <div className="flex items-center gap-2">
             {/* Club Brand Assets Modal Trigger */}
             {onOpenBrandAssets && (
@@ -183,24 +207,101 @@ export const Navbar: React.FC<NavbarProps> = ({
               <span className="sm:hidden">Run</span>
             </button>
 
-            {/* Current Member avatar icon */}
-            <button
-              onClick={() => setActiveTab('leaderboard')}
-              className="w-8 h-8 rounded-full overflow-hidden border-2 border-woodland-600 ring-2 ring-woodland-100 shrink-0 shadow-xs"
-              title={`Logged in as ${currentMember.name}`}
-            >
-              {currentMember.avatarUrl ? (
-                <img
-                  src={currentMember.avatarUrl}
-                  alt={currentMember.name}
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <div className="w-full h-full bg-woodland-700 text-white flex items-center justify-center text-xs font-bold">
-                  {currentMember.name.charAt(0)}
-                </div>
-              )}
-            </button>
+            {/* USER LOGIN / PROFILE AREA */}
+            {firebaseUser ? (
+              /* LOGGED IN RUNNER PILL */
+              <div className="relative">
+                <button
+                  onClick={() => setShowProfileMenu(!showProfileMenu)}
+                  className="flex items-center gap-2 p-1 sm:px-2.5 sm:py-1 rounded-full bg-stone-100 hover:bg-stone-200 border border-stone-200 transition text-left"
+                >
+                  <div className="w-7 h-7 rounded-full bg-woodland-800 text-white flex items-center justify-center text-xs font-bold shrink-0">
+                    {currentUser.firstName?.[0] || firebaseUser.email?.[0]?.toUpperCase() || 'W'}
+                  </div>
+                  <div className="hidden sm:block">
+                    <span className="block text-xs font-bold text-stone-900 leading-tight">
+                      {currentUser.firstName || 'Runner'}
+                    </span>
+                    <span className="block text-[10px] text-amber-700 font-bold leading-none">
+                      {currentUser.totalRuns} Runs
+                    </span>
+                  </div>
+                  <ChevronDown className="w-3.5 h-3.5 text-stone-400 hidden sm:block" />
+                </button>
+
+                {/* Dropdown Menu */}
+                {showProfileMenu && (
+                  <div className="absolute right-0 mt-2 w-64 bg-white rounded-2xl shadow-xl border border-stone-200 p-4 space-y-3 z-[100] animate-in fade-in duration-150">
+                    <div className="border-b border-stone-100 pb-2">
+                      <div className="font-bold text-stone-900 text-sm">{currentUser.displayName}</div>
+                      <div className="text-xs text-stone-500 font-mono truncate">{currentUser.email}</div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 text-center text-xs bg-stone-50 rounded-xl p-2">
+                      <div>
+                        <span className="text-[10px] text-stone-400 uppercase font-bold block">Runs</span>
+                        <span className="text-sm font-black text-amber-700">{currentUser.totalRuns}</span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-stone-400 uppercase font-bold block">Miles</span>
+                        <span className="text-sm font-black text-emerald-700">{currentUser.totalMiles} mi</span>
+                      </div>
+                    </div>
+
+                    <div className="text-xs space-y-1.5 text-stone-600">
+                      <div className="flex items-center justify-between">
+                        <span className="flex items-center gap-1.5">
+                          <Shirt className="w-3.5 h-3.5 text-amber-500" />
+                          <span>Shirt Size:</span>
+                        </span>
+                        <span className="font-bold font-mono text-stone-900">{currentUser.shirtSize}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="flex items-center gap-1.5">
+                          <Flame className="w-3.5 h-3.5 text-orange-500" />
+                          <span>Status:</span>
+                        </span>
+                        <span className="font-bold text-stone-900 capitalize">{currentUser.role}</span>
+                      </div>
+                    </div>
+
+                    <div className="border-t border-stone-100 pt-2 space-y-1">
+                      {isAdmin && (
+                        <button
+                          onClick={() => {
+                            setShowProfileMenu(false);
+                            setActiveTab('admin');
+                          }}
+                          className="w-full text-left px-2.5 py-1.5 text-xs font-semibold text-stone-700 hover:bg-stone-100 rounded-lg flex items-center gap-2"
+                        >
+                          <Shield className="w-3.5 h-3.5 text-woodland-600" />
+                          <span>Admin Portal</span>
+                        </button>
+                      )}
+                      <button
+                        onClick={() => {
+                          setShowProfileMenu(false);
+                          onLogout();
+                        }}
+                        className="w-full text-left px-2.5 py-1.5 text-xs font-bold text-red-600 hover:bg-red-50 rounded-lg flex items-center gap-2 transition"
+                      >
+                        <LogOut className="w-3.5 h-3.5" />
+                        <span>Sign Out</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              /* GUEST - SIGN IN BUTTON */
+              <button
+                onClick={onOpenAuthModal}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-stone-950 font-black text-xs rounded-xl transition shadow-xs font-display uppercase tracking-wider cursor-pointer"
+              >
+                <LogIn className="w-3.5 h-3.5" />
+                <span>Sign In</span>
+              </button>
+            )}
           </div>
         </div>
       </div>

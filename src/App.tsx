@@ -14,6 +14,9 @@ import { FirebaseSetupGuide } from './components/FirebaseSetupGuide';
 import { InstallPwaBanner } from './components/InstallPwaBanner';
 import { MobileBottomNav } from './components/MobileBottomNav';
 import { BrandAssetsModal } from './components/BrandAssetsModal';
+import { AuthModal } from './components/AuthModal';
+import { onAuthChange, logoutUser, checkAndCompleteEmailLinkSignIn } from './services/authService';
+import { User as FirebaseUser } from 'firebase/auth';
 import { downloadGPXFile } from './utils/gpxParser';
 import {
   Plus,
@@ -73,8 +76,29 @@ export function App() {
 
   // Selected route for viewing
   const [selectedRoute, setSelectedRoute] = useState<GPXRoute>(routes[0]);
+  const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
 
   const isAdmin = currentUser.role === 'admin' || currentUser.email === 'woodlandwoodchuckers@gmail.com';
+
+  // Listen to Firebase Auth state & check for passwordless email link sign-in
+  useEffect(() => {
+    checkAndCompleteEmailLinkSignIn().then((user) => {
+      if (user && user.email) {
+        console.info('Passwordless sign in verified for:', user.email);
+        switchCurrentUser(user.email);
+      }
+    }).catch((err) => console.error('Email sign in check error:', err));
+
+    const unsubscribe = onAuthChange((user) => {
+      setFirebaseUser(user);
+      if (user && user.email) {
+        switchCurrentUser(user.email);
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   // Auto-open check-in modal if scanned from table QR code (e.g. ?checkin=true or #checkin)
   useEffect(() => {
@@ -120,7 +144,8 @@ export function App() {
       <Navbar
         activeTab={activeTab}
         setActiveTab={setActiveTab}
-        currentMember={currentMember}
+        currentUser={currentUser}
+        firebaseUser={firebaseUser}
         isFirebaseConfigured={isFirebaseConfigured}
         isSyncing={isSyncing}
         unreadNotifsCount={notifications.length}
@@ -129,6 +154,11 @@ export function App() {
         onOpenSetupGuide={() => setIsSetupGuideOpen(true)}
         onOpenBrandAssets={() => setIsBrandAssetsOpen(true)}
         onToggleNotifications={() => setShowNotificationsDrawer(!showNotificationsDrawer)}
+        onOpenAuthModal={() => setIsAuthModalOpen(true)}
+        onLogout={async () => {
+          await logoutUser();
+          setFirebaseUser(null);
+        }}
       />
 
       {/* Main Content Area */}
@@ -522,6 +552,7 @@ export function App() {
           onRegisterUser={registerUser}
           onSearchLegacy={searchLegacyMatches}
           onSwitchUser={switchCurrentUser}
+          onOpenAuthModal={() => setIsAuthModalOpen(true)}
         />
       )}
 
@@ -566,6 +597,16 @@ export function App() {
       <BrandAssetsModal
         isOpen={isBrandAssetsOpen}
         onClose={() => setIsBrandAssetsOpen(false)}
+      />
+
+      {/* Passwordless & Google Auth Modal */}
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+        onAuthSuccess={(email) => {
+          switchCurrentUser(email);
+          setIsAuthModalOpen(false);
+        }}
       />
     </div>
   );

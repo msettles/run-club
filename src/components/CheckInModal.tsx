@@ -46,6 +46,7 @@ interface CheckInModalProps {
   ) => Promise<UserProfile>;
   onSearchLegacy: (query: string) => LegacyMember[];
   onSwitchUser: (email: string) => void;
+  onOpenAuthModal?: () => void;
 }
 
 export const CheckInModal: React.FC<CheckInModalProps> = ({
@@ -58,6 +59,7 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
   onRegisterUser,
   onSearchLegacy,
   onSwitchUser,
+  onOpenAuthModal,
 }) => {
   // Current active meetup event (default to most recent or upcoming)
   const activeEvent = meetupEvents[0] || {
@@ -329,9 +331,20 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
                 </div>
 
                 <div className="flex items-center gap-2">
+                  {onOpenAuthModal && (
+                    <>
+                      <button
+                        onClick={onOpenAuthModal}
+                        className="text-[11px] text-woodland-700 hover:text-woodland-900 font-bold hover:underline"
+                      >
+                        Sign In
+                      </button>
+                      <span className="text-stone-300">|</span>
+                    </>
+                  )}
                   <button
                     onClick={() => setViewMode('switch')}
-                    className="text-[11px] text-woodland-700 hover:text-woodland-900 font-semibold hover:underline"
+                    className="text-[11px] text-stone-600 hover:text-stone-900 font-semibold hover:underline"
                   >
                     Switch
                   </button>
