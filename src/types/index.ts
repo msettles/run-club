@@ -59,7 +59,56 @@ export interface RunEvent {
   specialEvent?: SpecialEventType;
 }
 
-export type SpecialEventType = 'none' | 'turkey_trot' | 'halloween' | 'anniversary';
+export type SpecialEventType = string; // 'none' | 'turkey_trot' | 'halloween' | 'anniversary' | custom slug
+
+export interface SpecialEventDefinition {
+  id: string; // e.g. "turkey_trot", "halloween", "anniversary", "st_patricks"
+  name: string; // e.g. "Turkey Trot", "St. Patrick's Day Run"
+  emoji: string; // e.g. "🦃", "🍀"
+  badgeId: string; // e.g. "special-turkey", "special-st_patricks"
+  badgeDescription?: string;
+  badgeRequirement?: string;
+  isDefault?: boolean;
+  createdAt?: string;
+}
+
+export type BadgeCategory = 
+  | 'milestone' 
+  | 'walking' 
+  | 'streak' 
+  | 'special_event' 
+  | 'attendance'
+  | 'activity'
+  | 'distance';
+
+export type BadgeTriggerType =
+  | 'milestone'      // Total runs milestone (5, 25, 50, 100, etc.)
+  | 'activity'       // Walk or Run count
+  | 'distance'       // 1, 3, or 5 mile routes completed
+  | 'special_event'  // Event marked as special event
+  | 'streak'         // Consecutive attendance streak
+  | 'attendance';    // General attendance (e.g. first run)
+
+export interface BadgeTriggerConfig {
+  type: BadgeTriggerType;
+  // Milestone:
+  minTotalRuns?: number;
+  reward?: string;
+  perks?: string;
+  // Activity (walk/run):
+  activityType?: ActivityType; // 'walking' | 'running'
+  activityCount?: number;
+  // Distance:
+  distanceTier?: DistanceTier; // 1 | 3 | 5
+  distanceCount?: number;
+  // Special Event:
+  specialEventId?: string;
+  // Streak:
+  streakWeeks?: number;
+  // Incremental multiplier:
+  isIncremental?: boolean;
+  step?: number; // Level up every N (e.g. 10 walks)
+}
 
 export interface Badge {
   id: string;
@@ -67,8 +116,11 @@ export interface Badge {
   emoji: string;
   description: string;
   requirement: string;
-  category?: 'milestone' | 'walking' | 'streak' | 'special_event' | 'attendance';
+  category?: BadgeCategory;
   isIncremental?: boolean; // Can be leveled up or earned multiple times (e.g. x2, x3)
+  triggerConfig?: BadgeTriggerConfig;
+  isDefault?: boolean;
+  createdAt?: string;
 }
 
 // -------------------------------------------------------------
@@ -134,6 +186,7 @@ export interface UserProfile {
   totalMiles: number;        // Cumulative miles walked + run
   runCount: number;          // Total times ran
   walkCount: number;         // Total times walked
+  distanceCounts?: { '1'?: number; '3'?: number; '5'?: number }; // Route choices count
   firstRunDate?: string;     // Earliest recorded check-in date
   // Legacy Link
   linkedLegacyNames: string[]; // Claimed historical names (e.g. ["MATT SETTLES"])

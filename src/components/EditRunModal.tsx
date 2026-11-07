@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { RunEvent, GPXRoute, SurfaceType, PaceGroup, SpecialEventType } from '../types';
+import { RunEvent, GPXRoute, SurfaceType, PaceGroup, SpecialEventType, SpecialEventDefinition } from '../types';
+import { INITIAL_SPECIAL_EVENTS } from '../data/initialData';
 import { X, Calendar, Clock, MapPin, Plus, Trash2, Sparkles } from 'lucide-react';
 
 interface EditRunModalProps {
@@ -9,6 +10,7 @@ interface EditRunModalProps {
   onClose: () => void;
   onSave: (updatedRun: RunEvent) => void;
   onDelete?: (runId: string) => void;
+  specialEvents?: SpecialEventDefinition[];
 }
 
 export const EditRunModal: React.FC<EditRunModalProps> = ({
@@ -18,6 +20,7 @@ export const EditRunModal: React.FC<EditRunModalProps> = ({
   onClose,
   onSave,
   onDelete,
+  specialEvents = INITIAL_SPECIAL_EVENTS,
 }) => {
   const [title, setTitle] = useState(run.title);
   const [specialEvent, setSpecialEvent] = useState<SpecialEventType>(run.specialEvent || 'none');
@@ -115,9 +118,11 @@ export const EditRunModal: React.FC<EditRunModalProps> = ({
                 className="w-full text-sm px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-amber-500 bg-amber-50/60 font-semibold"
               >
                 <option value="none">None (Regular Run)</option>
-                <option value="turkey_trot">🦃 Turkey Trot</option>
-                <option value="halloween">🎃 Halloween Run</option>
-                <option value="anniversary">🎂 Anniversary Run</option>
+                {specialEvents.map((se) => (
+                  <option key={se.id} value={se.id}>
+                    {se.emoji} {se.name}
+                  </option>
+                ))}
               </select>
             </div>
           </div>

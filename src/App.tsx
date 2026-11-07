@@ -64,6 +64,11 @@ export function App() {
     switchCurrentUser,
     milestoneAlerts,
     markMilestoneFulfilled,
+    specialEvents,
+    createBadge,
+    deleteBadge,
+    createSpecialEvent,
+    deleteSpecialEvent,
   } = useClubStore();
 
   const [activeTab, setActiveTab] = useState<'runs' | 'routes' | 'milestones' | 'leaderboard' | 'admin'>('runs');
@@ -435,6 +440,7 @@ export function App() {
             runs={runs}
             members={members}
             routes={routes}
+            badges={badges}
             notifications={notifications}
             meetupEvents={meetupEvents}
             checkins={checkins}
@@ -443,6 +449,11 @@ export function App() {
             milestoneAlerts={milestoneAlerts}
             onMarkMilestoneFulfilled={markMilestoneFulfilled}
             currentUser={currentUser}
+            specialEvents={specialEvents}
+            onCreateBadge={createBadge}
+            onDeleteBadge={deleteBadge}
+            onCreateSpecialEvent={createSpecialEvent}
+            onDeleteSpecialEvent={deleteSpecialEvent}
             onSaveMeetupEvent={saveMeetupEvent}
             onOpenNewRun={() => setIsNewRunOpen(true)}
             onEditRun={(r) => setEditingRun(r)}
@@ -569,6 +580,7 @@ export function App() {
           routes={routes}
           organizerName={currentMember.name}
           onAddRun={addRun}
+          specialEvents={specialEvents}
         />
       )}
 
@@ -580,6 +592,7 @@ export function App() {
           onClose={() => setEditingRun(null)}
           onSave={updateRun}
           onDelete={deleteRun}
+          specialEvents={specialEvents}
         />
       )}
 

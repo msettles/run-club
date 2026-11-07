@@ -8,7 +8,8 @@ import {
   LegacyMember, 
   UserProfile,
   MilestoneReward,
-  MilestoneAlert
+  MilestoneAlert,
+  SpecialEventDefinition
 } from '../types';
 
 // Center anchor: Woodland area coordinates (Woodland, CA approx 38.678, -121.773)
@@ -54,6 +55,10 @@ export const INITIAL_BADGES: Badge[] = [
     requirement: '1st group run attendance',
     category: 'attendance',
     isIncremental: false,
+    isDefault: true,
+    triggerConfig: {
+      type: 'attendance',
+    },
   },
   {
     id: 'milestone-5',
@@ -63,6 +68,15 @@ export const INITIAL_BADGES: Badge[] = [
     requirement: '5 group runs (Official Shirt + $1 Off Beers)',
     category: 'milestone',
     isIncremental: true,
+    isDefault: true,
+    triggerConfig: {
+      type: 'milestone',
+      minTotalRuns: 5,
+      reward: 'Official Woodchucker Member Shirt',
+      perks: '$1 off draft beers at Blue Note Brewing on run nights',
+      isIncremental: true,
+      step: 5,
+    },
   },
   {
     id: 'milestone-50',
@@ -72,6 +86,15 @@ export const INITIAL_BADGES: Badge[] = [
     requirement: '50 group runs (Running Hat)',
     category: 'milestone',
     isIncremental: true,
+    isDefault: true,
+    triggerConfig: {
+      type: 'milestone',
+      minTotalRuns: 50,
+      reward: 'Woodchucker Running Hat',
+      perks: 'Official Club Headwear',
+      isIncremental: true,
+      step: 50,
+    },
   },
   {
     id: 'milestone-100',
@@ -81,6 +104,15 @@ export const INITIAL_BADGES: Badge[] = [
     requirement: '100 group runs (Glass Beer Mug)',
     category: 'milestone',
     isIncremental: true,
+    isDefault: true,
+    triggerConfig: {
+      type: 'milestone',
+      minTotalRuns: 100,
+      reward: 'Century Woodchucker Glass Beer Mug',
+      perks: 'Custom Glass Beer Mug at Blue Note',
+      isIncremental: true,
+      step: 100,
+    },
   },
   {
     id: 'milestone-200',
@@ -90,6 +122,15 @@ export const INITIAL_BADGES: Badge[] = [
     requirement: '200 group runs (Custom Water Bottle)',
     category: 'milestone',
     isIncremental: true,
+    isDefault: true,
+    triggerConfig: {
+      type: 'milestone',
+      minTotalRuns: 200,
+      reward: 'Double Century Legend Custom Water Bottle',
+      perks: 'Custom Runner Name Engraved Water Bottle',
+      isIncremental: true,
+      step: 200,
+    },
   },
   {
     id: 'power-walker',
@@ -99,6 +140,14 @@ export const INITIAL_BADGES: Badge[] = [
     requirement: 'Every 10 walking check-ins',
     category: 'walking',
     isIncremental: true,
+    isDefault: true,
+    triggerConfig: {
+      type: 'activity',
+      activityType: 'walking',
+      activityCount: 10,
+      isIncremental: true,
+      step: 10,
+    },
   },
   {
     id: 'streak-4',
@@ -108,6 +157,13 @@ export const INITIAL_BADGES: Badge[] = [
     requirement: '4-week streak (1 Month)',
     category: 'streak',
     isIncremental: true,
+    isDefault: true,
+    triggerConfig: {
+      type: 'streak',
+      streakWeeks: 4,
+      isIncremental: true,
+      step: 4,
+    },
   },
   {
     id: 'streak-10',
@@ -117,6 +173,13 @@ export const INITIAL_BADGES: Badge[] = [
     requirement: '10-week consecutive streak',
     category: 'streak',
     isIncremental: true,
+    isDefault: true,
+    triggerConfig: {
+      type: 'streak',
+      streakWeeks: 10,
+      isIncremental: true,
+      step: 10,
+    },
   },
   {
     id: 'special-turkey',
@@ -126,6 +189,13 @@ export const INITIAL_BADGES: Badge[] = [
     requirement: 'Annual Thanksgiving Eve run',
     category: 'special_event',
     isIncremental: true,
+    isDefault: true,
+    triggerConfig: {
+      type: 'special_event',
+      specialEventId: 'turkey_trot',
+      isIncremental: true,
+      step: 1,
+    },
   },
   {
     id: 'special-halloween',
@@ -135,6 +205,13 @@ export const INITIAL_BADGES: Badge[] = [
     requirement: 'Annual Halloween costume run',
     category: 'special_event',
     isIncremental: true,
+    isDefault: true,
+    triggerConfig: {
+      type: 'special_event',
+      specialEventId: 'halloween',
+      isIncremental: true,
+      step: 1,
+    },
   },
   {
     id: 'special-anniversary',
@@ -144,6 +221,43 @@ export const INITIAL_BADGES: Badge[] = [
     requirement: 'Annual Club Anniversary run',
     category: 'special_event',
     isIncremental: true,
+    isDefault: true,
+    triggerConfig: {
+      type: 'special_event',
+      specialEventId: 'anniversary',
+      isIncremental: true,
+      step: 1,
+    },
+  },
+];
+
+export const INITIAL_SPECIAL_EVENTS: SpecialEventDefinition[] = [
+  {
+    id: 'turkey_trot',
+    name: 'Turkey Trot',
+    emoji: '🦃',
+    badgeId: 'special-turkey',
+    badgeDescription: 'Ran the annual Thanksgiving Eve Turkey Trot with the Woodchuckers!',
+    badgeRequirement: 'Annual Thanksgiving Eve run',
+    isDefault: true,
+  },
+  {
+    id: 'halloween',
+    name: 'Halloween Costume Run',
+    emoji: '🎃',
+    badgeId: 'special-halloween',
+    badgeDescription: 'Joined the annual spooky Halloween night costume run at Blue Note!',
+    badgeRequirement: 'Annual Halloween costume run',
+    isDefault: true,
+  },
+  {
+    id: 'anniversary',
+    name: 'Anniversary Run',
+    emoji: '🎂',
+    badgeId: 'special-anniversary',
+    badgeDescription: 'Celebrated the Woodland Woodchuckers annual Club Anniversary run at Blue Note!',
+    badgeRequirement: 'Annual Club Anniversary run',
+    isDefault: true,
   },
 ];
 

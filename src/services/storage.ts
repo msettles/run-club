@@ -11,13 +11,17 @@ import {
   ActivityType,
   DistanceTier,
   RouteOption,
-  MilestoneAlert
+  MilestoneAlert,
+  SpecialEventDefinition,
+  BadgeCategory,
+  BadgeTriggerConfig
 } from '../types';
 import { 
   INITIAL_RUNS, 
   INITIAL_ROUTES, 
   INITIAL_MEMBERS, 
   INITIAL_BADGES,
+  INITIAL_SPECIAL_EVENTS,
   INITIAL_USERS,
   INITIAL_MEETUP_EVENTS,
   INITIAL_CHECKINS,
@@ -53,6 +57,8 @@ const STORAGE_KEYS = {
   LEGACY_MEMBERS: 'woodchuckers_legacy_members_v2',
   CURRENT_USER_EMAIL: 'woodchuckers_current_user_email_v2',
   MILESTONE_ALERTS: 'woodchuckers_milestone_alerts_v2',
+  BADGES: 'woodchuckers_badges_v2',
+  SPECIAL_EVENTS: 'woodchuckers_special_events_v2',
 };
 
 // Safe localStorage getters
@@ -83,7 +89,18 @@ export function useClubStore() {
   const [currentMemberId, setCurrentMemberId] = useState<string>(() =>
     loadFromStorage(STORAGE_KEYS.CURRENT_USER_ID, INITIAL_MEMBERS[0].id)
   );
-  const [badges] = useState<Badge[]>(INITIAL_BADGES);
+  const [badges, setBadges] = useState<Badge[]>(() => {
+    const stored = loadFromStorage<Badge[]>(STORAGE_KEYS.BADGES, INITIAL_BADGES);
+    const existingIds = new Set(stored.map((b) => b.id));
+    const missing = INITIAL_BADGES.filter((b) => !existingIds.has(b.id));
+    return [...stored, ...missing];
+  });
+  const [specialEvents, setSpecialEvents] = useState<SpecialEventDefinition[]>(() => {
+    const stored = loadFromStorage<SpecialEventDefinition[]>(STORAGE_KEYS.SPECIAL_EVENTS, INITIAL_SPECIAL_EVENTS);
+    const existingIds = new Set(stored.map((s) => s.id));
+    const missing = INITIAL_SPECIAL_EVENTS.filter((s) => !existingIds.has(s.id));
+    return [...stored, ...missing];
+  });
   const [notifications, setNotifications] = useState<ClubNotification[]>(() => getStoredNotifications());
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
 
@@ -140,6 +157,14 @@ export function useClubStore() {
   useEffect(() => {
     saveToStorage(STORAGE_KEYS.MILESTONE_ALERTS, milestoneAlerts);
   }, [milestoneAlerts]);
+
+  useEffect(() => {
+    saveToStorage(STORAGE_KEYS.BADGES, badges);
+  }, [badges]);
+
+  useEffect(() => {
+    saveToStorage(STORAGE_KEYS.SPECIAL_EVENTS, specialEvents);
+  }, [specialEvents]);
 
   // Derived current user (Falls back to GUEST_USER if not logged in)
   const currentUser: UserProfile = currentUserEmail
@@ -228,25 +253,21 @@ export function useClubStore() {
 
     const initialBadgeIds: string[] = [];
     const initialBadgeCounts: Record<string, number> = {};
-    if (totalLegacyRuns >= 1) {
-      initialBadgeIds.push('first-chuck');
-      initialBadgeCounts['first-chuck'] = 1;
-    }
-    if (totalLegacyRuns >= 5) {
-      initialBadgeIds.push('milestone-5');
-      initialBadgeCounts['milestone-5'] = Math.floor(totalLegacyRuns / 5);
-    }
-    if (totalLegacyRuns >= 50) {
-      initialBadgeIds.push('milestone-50');
-      initialBadgeCounts['milestone-50'] = Math.floor(totalLegacyRuns / 50);
-    }
-    if (totalLegacyRuns >= 100) {
-      initialBadgeIds.push('milestone-100');
-      initialBadgeCounts['milestone-100'] = Math.floor(totalLegacyRuns / 100);
-    }
-    if (totalLegacyRuns >= 200) {
-      initialBadgeIds.push('milestone-200');
-      initialBadgeCounts['milestone-200'] = Math.floor(totalLegacyRuns / 200);
+    for (const b of badges) {
+      const cfg = b.triggerConfig;
+      if (cfg?.type === 'attendance' || b.id === 'first-chuck') {
+        if (totalLegacyRuns >= 1) {
+          initialBadgeIds.push(b.id);
+          initialBadgeCounts[b.id] = 1;
+        }
+      } else if (cfg?.type === 'milestone' || b.category === 'milestone') {
+        const req = cfg?.minTotalRuns || (b.id === 'milestone-5' ? 5 : b.id === 'milestone-50' ? 50 : b.id === 'milestone-100' ? 100 : b.id === 'milestone-200' ? 200 : 0);
+        if (req > 0 && totalLegacyRuns >= req) {
+          initialBadgeIds.push(b.id);
+          const step = cfg?.step || req;
+          initialBadgeCounts[b.id] = b.isIncremental ? Math.max(1, Math.floor(totalLegacyRuns / step)) : 1;
+        }
+      }
     }
 
     const newUser: UserProfile = {
@@ -398,6 +419,12 @@ export function useClubStore() {
         const newRunCount = activity === 'running' ? u.runCount + 1 : u.runCount;
         const newWalkCount = activity === 'walking' ? u.walkCount + 1 : u.walkCount;
 
+        const newDistanceCounts = {
+          '1': (u.distanceCounts?.['1'] || 0) + (distanceChoice === 1 ? 1 : 0),
+          '3': (u.distanceCounts?.['3'] || 0) + (distanceChoice === 3 ? 1 : 0),
+          '5': (u.distanceCounts?.['5'] || 0) + (distanceChoice === 5 ? 1 : 0),
+        };
+
         const unlocked = [...(u.unlockedBadgeIds || [])];
         const counts: Record<string, number> = { ...(u.badgeCounts || {}) };
 
@@ -425,63 +452,77 @@ export function useClubStore() {
           }
         };
 
-        // 1. First Chuck (1 run attendance)
-        if (newTotalRuns >= 1) {
-          awardBadge('first-chuck', 1);
-        }
+        // Unified badge evaluation (handles built-in and admin-created custom badges)
+        for (const badge of badges) {
+          const cfg = badge.triggerConfig;
+          if (!cfg) {
+            // Fallback for any badge without triggerConfig
+            if (badge.id === 'first-chuck' && newTotalRuns >= 1) awardBadge(badge.id, 1);
+            if (badge.id === 'milestone-5' && newTotalRuns >= 5) awardBadge(badge.id, Math.floor(newTotalRuns / 5));
+            if (badge.id === 'milestone-50' && newTotalRuns >= 50) awardBadge(badge.id, Math.floor(newTotalRuns / 50));
+            if (badge.id === 'milestone-100' && newTotalRuns >= 100) awardBadge(badge.id, Math.floor(newTotalRuns / 100));
+            if (badge.id === 'milestone-200' && newTotalRuns >= 200) awardBadge(badge.id, Math.floor(newTotalRuns / 200));
+            if (badge.id === 'power-walker' && newWalkCount >= 10) awardBadge(badge.id, Math.floor(newWalkCount / 10));
+            if (badge.id === 'streak-4' && newTotalRuns >= 4) awardBadge(badge.id, Math.max(1, Math.floor(newTotalRuns / 4)));
+            if (badge.id === 'streak-10' && newTotalRuns >= 10) awardBadge(badge.id, Math.max(1, Math.floor(newTotalRuns / 10)));
+            continue;
+          }
 
-        // 2. WoodChucker Milestones (5, 50, 100, 200 runs)
-        if (newTotalRuns >= 5) {
-          awardBadge('milestone-5', Math.floor(newTotalRuns / 5));
-        }
-        if (newTotalRuns >= 50) {
-          awardBadge('milestone-50', Math.floor(newTotalRuns / 50));
-        }
-        if (newTotalRuns >= 100) {
-          awardBadge('milestone-100', Math.floor(newTotalRuns / 100));
-        }
-        if (newTotalRuns >= 200) {
-          awardBadge('milestone-200', Math.floor(newTotalRuns / 200));
-        }
-
-        // 3. Power Walker (Incremental: every 10 walking check-ins)
-        if (newWalkCount >= 10) {
-          awardBadge('power-walker', Math.floor(newWalkCount / 10));
-        }
-
-        // 4. Streaks: Burrow Regular (4 weeks / 1 month) & Burrow Extreme (10 weeks)
-        if (newTotalRuns >= 4) {
-          awardBadge('streak-4', Math.max(1, Math.floor(newTotalRuns / 4)));
-        }
-        if (newTotalRuns >= 10) {
-          awardBadge('streak-10', Math.max(1, Math.floor(newTotalRuns / 10)));
-        }
-
-        // 5. Special Events: Turkey Trot, Halloween Run, Anniversary Run
-        // Detected via event.specialEvent dropdown OR code word / title matching
-        if (
-          event.specialEvent === 'turkey_trot' || 
-          event.codeWord.toUpperCase().includes('TURKEY') || 
-          event.title.toLowerCase().includes('turkey')
-        ) {
-          awardBadge('special-turkey');
-        }
-
-        if (
-          event.specialEvent === 'halloween' || 
-          event.codeWord.toUpperCase().includes('HALLOWEEN') || 
-          event.codeWord.toUpperCase().includes('SPOOKY') || 
-          event.title.toLowerCase().includes('halloween')
-        ) {
-          awardBadge('special-halloween');
-        }
-
-        if (
-          event.specialEvent === 'anniversary' || 
-          event.codeWord.toUpperCase().includes('ANNIVERSARY') || 
-          event.title.toLowerCase().includes('anniversary')
-        ) {
-          awardBadge('special-anniversary');
+          switch (cfg.type) {
+            case 'milestone': {
+              const threshold = cfg.minTotalRuns || 1;
+              if (newTotalRuns >= threshold) {
+                const mult = cfg.isIncremental ? Math.floor(newTotalRuns / (cfg.step || threshold)) : 1;
+                awardBadge(badge.id, Math.max(1, mult));
+              }
+              break;
+            }
+            case 'activity': {
+              const isWalk = cfg.activityType === 'walking';
+              const count = isWalk ? newWalkCount : newRunCount;
+              const threshold = cfg.activityCount || 10;
+              if (count >= threshold) {
+                const mult = cfg.isIncremental ? Math.floor(count / (cfg.step || threshold)) : 1;
+                awardBadge(badge.id, Math.max(1, mult));
+              }
+              break;
+            }
+            case 'distance': {
+              const tierKey = (cfg.distanceTier || 3).toString() as '1' | '3' | '5';
+              const count = newDistanceCounts[tierKey] || 0;
+              const threshold = cfg.distanceCount || 1;
+              if (count >= threshold) {
+                const mult = cfg.isIncremental ? Math.floor(count / (cfg.step || threshold)) : 1;
+                awardBadge(badge.id, Math.max(1, mult));
+              }
+              break;
+            }
+            case 'special_event': {
+              const seId = cfg.specialEventId || badge.id.replace(/^special-/, '');
+              const isMatch = (event.specialEvent && event.specialEvent === seId) ||
+                (seId === 'turkey_trot' && (event.codeWord.toUpperCase().includes('TURKEY') || event.title.toLowerCase().includes('turkey'))) ||
+                (seId === 'halloween' && (event.codeWord.toUpperCase().includes('HALLOWEEN') || event.codeWord.toUpperCase().includes('SPOOKY') || event.title.toLowerCase().includes('halloween'))) ||
+                (seId === 'anniversary' && (event.codeWord.toUpperCase().includes('ANNIVERSARY') || event.title.toLowerCase().includes('anniversary')));
+              if (isMatch) {
+                awardBadge(badge.id);
+              }
+              break;
+            }
+            case 'streak': {
+              const weeks = cfg.streakWeeks || 4;
+              if (newTotalRuns >= weeks) {
+                const mult = cfg.isIncremental ? Math.floor(newTotalRuns / weeks) : 1;
+                awardBadge(badge.id, Math.max(1, mult));
+              }
+              break;
+            }
+            case 'attendance': {
+              if (newTotalRuns >= 1) {
+                awardBadge(badge.id, 1);
+              }
+              break;
+            }
+          }
         }
 
         updatedUser = {
@@ -491,6 +532,7 @@ export function useClubStore() {
           totalMiles: newTotalMiles,
           runCount: newRunCount,
           walkCount: newWalkCount,
+          distanceCounts: newDistanceCounts,
           unlockedBadgeIds: unlocked,
           badgeCounts: counts,
         };
@@ -513,9 +555,32 @@ export function useClubStore() {
       })
     );
 
-    // Check if runner unlocked a major club milestone (5, 50, 100, 200 runs)
+    // Check if runner unlocked a major club milestone (5, 50, 100, 200 runs, or custom milestone with reward)
     let unlockedMilestone: MilestoneAlert | undefined;
-    if ([5, 50, 100, 200].includes(updatedUser.totalRuns)) {
+    const allMilestoneBadges = badges.filter((b) => b.category === 'milestone' && Boolean(b.triggerConfig?.reward));
+    for (const mb of allMilestoneBadges) {
+      const runsReq = mb.triggerConfig?.minTotalRuns;
+      const rewardName = mb.triggerConfig?.reward;
+      if (runsReq && updatedUser.totalRuns === runsReq && rewardName) {
+        unlockedMilestone = {
+          id: `milestone-${Date.now()}_${cleanEmail}`,
+          userEmail: cleanEmail,
+          runnerName: updatedUser.displayName,
+          shirtSize: updatedUser.shirtSize,
+          milestoneRuns: updatedUser.totalRuns,
+          milestoneName: mb.name,
+          reward: rewardName,
+          perks: mb.triggerConfig?.perks || '$1 off draft beers at Blue Note',
+          date: eventDate,
+          time: timeStr,
+          fulfilled: false,
+        };
+        setMilestoneAlerts((prev) => [unlockedMilestone!, ...prev]);
+        break;
+      }
+    }
+
+    if (!unlockedMilestone && [5, 50, 100, 200].includes(updatedUser.totalRuns)) {
       const mDef = CLUB_MILESTONES.find((m) => m.runsRequired === updatedUser.totalRuns);
       if (mDef) {
         unlockedMilestone = {
@@ -570,6 +635,177 @@ export function useClubStore() {
       }
       return [event, ...prev];
     });
+  };
+
+  /**
+   * Create a new badge (Admin) - supports Milestones, Activity (Walk/Run), Distance (1/3/5), Special Events, Streaks
+   */
+  const createBadge = async (badgeData: {
+    name: string;
+    emoji: string;
+    description: string;
+    requirement: string;
+    category: BadgeCategory;
+    isIncremental?: boolean;
+    triggerConfig: BadgeTriggerConfig;
+    createSpecialEventOption?: boolean;
+  }): Promise<Badge> => {
+    const cleanName = badgeData.name.trim();
+    const cleanEmoji = badgeData.emoji.trim() || '🏅';
+    const baseSlug = cleanName.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || `custom_${Date.now()}`;
+    
+    let uniqueId = `badge_${baseSlug}`;
+    let counter = 1;
+    while (badges.some((b) => b.id === uniqueId)) {
+      uniqueId = `badge_${baseSlug}_${counter++}`;
+    }
+
+    const newBadge: Badge = {
+      id: uniqueId,
+      name: cleanName,
+      emoji: cleanEmoji,
+      description: badgeData.description.trim(),
+      requirement: badgeData.requirement.trim(),
+      category: badgeData.category,
+      isIncremental: badgeData.isIncremental ?? false,
+      triggerConfig: badgeData.triggerConfig,
+      isDefault: false,
+      createdAt: new Date().toISOString(),
+    };
+
+    // If it's a special event badge, also add a SpecialEventDefinition so it shows in event creator dropdowns
+    if (badgeData.category === 'special_event' || badgeData.createSpecialEventOption) {
+      let seId = badgeData.triggerConfig.specialEventId || baseSlug;
+      if (specialEvents.some((se) => se.id === seId)) {
+        seId = `${baseSlug}_${counter}`;
+      }
+      const newSE: SpecialEventDefinition = {
+        id: seId,
+        name: cleanName,
+        emoji: cleanEmoji,
+        badgeId: uniqueId,
+        badgeDescription: newBadge.description,
+        badgeRequirement: newBadge.requirement,
+        isDefault: false,
+        createdAt: new Date().toISOString(),
+      };
+      if (newBadge.triggerConfig) {
+        newBadge.triggerConfig.specialEventId = seId;
+      }
+      setSpecialEvents((prev) => [...prev, newSE]);
+      if (isFirebaseConfigured && db) {
+        try {
+          await setDoc(doc(db, 'special_events', seId), newSE);
+        } catch (e) {
+          console.warn('Firebase SE save error:', e);
+        }
+      }
+    }
+
+    setBadges((prev) => [...prev, newBadge]);
+
+    if (isFirebaseConfigured && db) {
+      try {
+        await setDoc(doc(db, 'badges', uniqueId), newBadge);
+      } catch (e) {
+        console.warn('Firebase badge save error:', e);
+      }
+    }
+
+    return newBadge;
+  };
+
+  /**
+   * Delete a custom badge (Admin)
+   */
+  const deleteBadge = async (badgeId: string): Promise<void> => {
+    const b = badges.find((x) => x.id === badgeId);
+    if (!b) return;
+    if (b.isDefault) {
+      console.warn('Cannot delete default club badge');
+      return;
+    }
+    setBadges((prev) => prev.filter((x) => x.id !== badgeId));
+    if (b.triggerConfig?.specialEventId) {
+      setSpecialEvents((prev) => prev.filter((se) => se.id !== b.triggerConfig?.specialEventId && se.badgeId !== badgeId));
+    }
+    if (isFirebaseConfigured && db) {
+      try {
+        await deleteDoc(doc(db, 'badges', badgeId));
+        if (b.triggerConfig?.specialEventId) {
+          await deleteDoc(doc(db, 'special_events', b.triggerConfig.specialEventId));
+        }
+      } catch (e) {
+        console.warn('Firebase badge delete error:', e);
+      }
+    }
+  };
+
+  /**
+   * Create a special event directly (Admin)
+   */
+  const createSpecialEvent = async (name: string, emoji: string, description?: string): Promise<SpecialEventDefinition> => {
+    const cleanName = name.trim();
+    const cleanEmoji = emoji.trim() || '🏅';
+    const baseSlug = cleanName.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || `custom_${Date.now()}`;
+    let uniqueId = baseSlug;
+    let counter = 1;
+    while (specialEvents.some((se) => se.id === uniqueId)) {
+      uniqueId = `${baseSlug}_${counter++}`;
+    }
+
+    const badgeId = `special-${uniqueId}`;
+    const badge = await createBadge({
+      name: `${cleanName} Veteran`,
+      emoji: cleanEmoji,
+      description: description?.trim() || `Ran the annual ${cleanName} with the Woodchuckers!`,
+      requirement: `Attended ${cleanName}`,
+      category: 'special_event',
+      isIncremental: true,
+      triggerConfig: {
+        type: 'special_event',
+        specialEventId: uniqueId,
+        isIncremental: true,
+        step: 1,
+      },
+      createSpecialEventOption: false,
+    });
+
+    const newSE: SpecialEventDefinition = {
+      id: uniqueId,
+      name: cleanName,
+      emoji: cleanEmoji,
+      badgeId,
+      badgeDescription: badge.description,
+      badgeRequirement: badge.requirement,
+      isDefault: false,
+      createdAt: new Date().toISOString(),
+    };
+
+    setSpecialEvents((prev) => {
+      if (prev.some((se) => se.id === uniqueId)) return prev;
+      return [...prev, newSE];
+    });
+
+    return newSE;
+  };
+
+  /**
+   * Delete a custom special event (Admin)
+   */
+  const deleteSpecialEvent = async (eventId: string): Promise<void> => {
+    const se = specialEvents.find((x) => x.id === eventId);
+    if (!se || se.isDefault) return;
+    setSpecialEvents((prev) => prev.filter((x) => x.id !== eventId));
+    setBadges((prev) => prev.filter((b) => b.id !== se.badgeId));
+    if (isFirebaseConfigured && db) {
+      try {
+        await deleteDoc(doc(db, 'special_events', eventId));
+        await deleteDoc(doc(db, 'badges', se.badgeId));
+      } catch (e) {
+        console.warn('Firebase SE delete error:', e);
+      }
+    }
   };
 
   /**
@@ -753,6 +989,11 @@ export function useClubStore() {
     switchCurrentUser,
     milestoneAlerts,
     markMilestoneFulfilled,
+    specialEvents,
+    createBadge,
+    deleteBadge,
+    createSpecialEvent,
+    deleteSpecialEvent,
 
     // V1 / Shared
     runs,
