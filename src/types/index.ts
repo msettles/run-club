@@ -112,7 +112,7 @@ export interface UserProfile {
   firstName: string;
   lastName: string;
   displayName: string;
-  shirtSize: 'Youth' | 'Youth S' | 'Youth M' | 'Youth L' | 'XS' | 'S' | 'M' | 'L' | 'XL' | '2XL' | string;
+  shirtSize: 'Youth' | 'XS' | 'S' | 'M' | 'L' | 'XL' | '2XL' | string;
   age?: number;
   city?: string;
   zipCode?: string;

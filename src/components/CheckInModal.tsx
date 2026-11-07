@@ -515,20 +515,13 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
                     onChange={(e) => setRegShirtSize(e.target.value)}
                     className="w-full px-3 py-2 text-sm rounded-xl border border-stone-300 focus:ring-2 focus:ring-amber-500 outline-none bg-white font-bold"
                   >
-                    <optgroup label="Youth">
-                      <option value="Youth">Youth</option>
-                      <option value="Youth S">Youth S</option>
-                      <option value="Youth M">Youth M</option>
-                      <option value="Youth L">Youth L</option>
-                    </optgroup>
-                    <optgroup label="Adult">
-                      <option value="XS">Adult XS</option>
-                      <option value="S">Adult S</option>
-                      <option value="M">Adult M</option>
-                      <option value="L">Adult L</option>
-                      <option value="XL">Adult XL</option>
-                      <option value="2XL">Adult 2XL</option>
-                    </optgroup>
+                    <option value="Youth">Youth</option>
+                    <option value="XS">XS</option>
+                    <option value="S">S</option>
+                    <option value="M">M</option>
+                    <option value="L">L</option>
+                    <option value="XL">XL</option>
+                    <option value="2XL">2XL</option>
                   </select>
                 </div>
                 <div>

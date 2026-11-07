@@ -274,7 +274,7 @@ export const INITIAL_USERS: UserProfile[] = [
     firstName: 'Leo',
     lastName: 'Miller',
     displayName: 'Leo Miller',
-    shirtSize: 'Youth M',
+    shirtSize: 'Youth',
     age: 11,
     city: 'Woodland',
     zipCode: '95695',
