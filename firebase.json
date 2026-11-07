@@ -3,6 +3,7 @@
     "rules": "firestore.rules"
   },
   "hosting": {
+    "site": "woodland-woodchuckers",
     "public": "dist",
     "ignore": [
       "firebase.json",
