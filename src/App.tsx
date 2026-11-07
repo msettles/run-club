@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useClubStore } from './services/storage';
 import { RunEvent, GPXRoute, SurfaceType } from './types';
 import { Navbar } from './components/Navbar';
@@ -75,6 +75,16 @@ export function App() {
   const [selectedRoute, setSelectedRoute] = useState<GPXRoute>(routes[0]);
 
   const isAdmin = currentUser.role === 'admin' || currentUser.email === 'woodlandwoodchuckers@gmail.com';
+
+  // Auto-open check-in modal if scanned from table QR code (e.g. ?checkin=true or #checkin)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('checkin') === 'true' || window.location.hash === '#checkin') {
+      if (runs.length > 0) {
+        setSelectedRunForCheckIn(runs[0]);
+      }
+    }
+  }, [runs]);
 
   // Filtered runs
   const filteredRuns = runs.filter((r) => {
