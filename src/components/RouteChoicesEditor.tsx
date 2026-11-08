@@ -98,7 +98,7 @@ export const RouteChoicesEditor: React.FC<RouteChoicesEditorProps> = ({ routes, 
                   {!r && <option value={c.routeId}>Select route...</option>}
                   {routes.map((rt) => (
                     <option key={rt.id} value={rt.id}>
-                      {rt.name} — {rt.distanceMiles} mi ({rt.surface})
+                      {rt.name} — {(Math.round(rt.distanceMiles * 10) / 10).toFixed(1)} mi ({rt.surface})
                     </option>
                   ))}
                 </select>
@@ -118,7 +118,7 @@ export const RouteChoicesEditor: React.FC<RouteChoicesEditorProps> = ({ routes, 
               {r && (
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-stone-600 pl-8">
                   <span className="font-extrabold text-stone-900 bg-stone-200/70 px-2 py-0.5 rounded-md">
-                    {r.distanceMiles} mi
+                    {(Math.round(r.distanceMiles * 10) / 10).toFixed(1)} mi
                   </span>
                   <span className="flex items-center gap-0.5 font-medium">
                     <Mountain className="w-3 h-3 text-stone-400" />+{r.elevationGainFt} ft
@@ -159,7 +159,7 @@ export const RouteChoicesEditor: React.FC<RouteChoicesEditorProps> = ({ routes, 
             📊 Derived from selected routes:
           </span>
           <span className="font-bold text-[11px] text-woodland-950 font-mono">
-            {resolved.map((c) => `${c.miles} mi`).join(' · ')} | +{stats.elevationGainFt} ft | {stats.surface}
+            {resolved.map((c) => `${c.miles.toFixed(1)} mi`).join(' · ')} | +{stats.elevationGainFt} ft | {stats.surface}
           </span>
         </div>
       )}

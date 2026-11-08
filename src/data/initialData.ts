@@ -584,25 +584,40 @@ export const INITIAL_MEETUP_EVENTS: MeetupEvent[] = [
     title: 'Wednesday Turkey Warmup & Social Stride',
     codeWord: 'TURKEY',
     specialEvent: 'turkey_trot',
-    activeDistances: ['1', '3', '5'],
+    activeDistances: ['1.2', '3.2', '5.1'],
     routes: {
-      '1': {
+      '1.2': {
         name: 'Downtown Blue Note Stroll',
         actualMiles: 1.15,
         routeUrl: 'https://www.strava.com/routes/31201',
         directions: 'Start at Blue Note Brewing heading East on Main St. Turn Right on 2nd St, loop down to Court St, and back to the brewery patio.',
       },
-      '3': {
+      '3.2': {
         name: 'Heritage Park Greenbelt Loop',
         actualMiles: 3.22,
         routeUrl: 'https://www.strava.com/routes/31203',
         directions: 'East on Main St, Left on 3rd St, cut through Heritage Park greenbelt trail, return West via Court St back to Blue Note.',
       },
-      '5': {
+      '5.1': {
         name: 'Spring Lake Trek',
         actualMiles: 5.12,
         routeUrl: 'https://www.strava.com/routes/31205',
         directions: 'South on East St to Farmers Central Rd, complete perimeter loop of Spring Lake Park, and return North via 6th St.',
+      },
+      '1': {
+        name: 'Downtown Blue Note Stroll',
+        actualMiles: 1.15,
+        routeUrl: 'https://www.strava.com/routes/31201',
+      },
+      '3': {
+        name: 'Heritage Park Greenbelt Loop',
+        actualMiles: 3.22,
+        routeUrl: 'https://www.strava.com/routes/31203',
+      },
+      '5': {
+        name: 'Spring Lake Trek',
+        actualMiles: 5.12,
+        routeUrl: 'https://www.strava.com/routes/31205',
       },
     },
     notes: 'Thanksgiving warm-up run! Wear orange or brown for extra festive cheer.',
@@ -613,19 +628,29 @@ export const INITIAL_MEETUP_EVENTS: MeetupEvent[] = [
     time: '06:00 PM',
     title: 'Wednesday Autumn Leaves Run',
     codeWord: 'FALLFOLIAGE',
-    activeDistances: ['3', '5'],
+    activeDistances: ['3.1', '5.1'],
     routes: {
-      '3': {
+      '3.1': {
         name: 'Historic Cemetery Perimeter',
         actualMiles: 3.08,
         routeUrl: 'https://www.strava.com/routes/31202',
         directions: 'West on Court St to historic Woodland Cemetery, perimeter trail loop, and return East along Main St.',
       },
-      '5': {
+      '5.1': {
         name: 'Woodland Sports Park Out & Back',
         actualMiles: 5.05,
         routeUrl: 'https://www.strava.com/routes/31204',
         directions: 'West on Main St to Sports Park Dr, loop softball complex trails, and return on Court St.',
+      },
+      '3': {
+        name: 'Historic Cemetery Perimeter',
+        actualMiles: 3.08,
+        routeUrl: 'https://www.strava.com/routes/31202',
+      },
+      '5': {
+        name: 'Woodland Sports Park Out & Back',
+        actualMiles: 5.05,
+        routeUrl: 'https://www.strava.com/routes/31204',
       },
     },
   },

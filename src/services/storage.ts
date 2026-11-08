@@ -9,7 +9,7 @@ import {
   CheckInRecord,
   LegacyMember,
   ActivityType,
-  DistanceTier,
+  DistanceChoice,
   RouteOption,
   MilestoneAlert,
   SpecialEventDefinition,
@@ -422,7 +422,7 @@ export function useClubStore() {
     userEmail: string;
     codeWordEntered: string;
     activity: ActivityType;
-    distanceChoice: DistanceTier;
+    distanceChoice: DistanceChoice;
     withPet?: boolean;
   }): Promise<{
     success: boolean;
@@ -519,10 +519,13 @@ export function useClubStore() {
         const newPetRunCount = withPet ? (u.petRunCount || 0) + 1 : (u.petRunCount || 0);
 
         const numMiles = routeOption.actualMiles;
+        const roundedDistKey = (Math.round(numMiles * 10) / 10).toFixed(1);
         const legacyBucket = numMiles <= 2.0 ? '1' : numMiles <= 4.0 ? '3' : '5';
         const newDistanceCounts: Record<string, number> = {
           ...(u.distanceCounts || {}),
           [legacyBucket]: ((u.distanceCounts?.[legacyBucket] || 0) + 1),
+          [roundedDistKey]: ((u.distanceCounts?.[roundedDistKey] || 0) + 1),
+          [`${roundedDistKey} mi`]: ((u.distanceCounts?.[`${roundedDistKey} mi`] || 0) + 1),
         };
 
         const unlocked = [...(u.unlockedBadgeIds || [])];
@@ -589,8 +592,8 @@ export function useClubStore() {
               break;
             }
             case 'distance': {
-              const tierKey = (cfg.distanceTier || 3).toString();
-              const count = newDistanceCounts[tierKey] || 0;
+              const distKey = (cfg.distanceChoice || cfg.distanceTier || '3.1').toString();
+              const count = newDistanceCounts[distKey] || 0;
               const threshold = cfg.distanceCount || 1;
               if (count >= threshold) {
                 const mult = cfg.isIncremental ? Math.floor(count / (cfg.step || threshold)) : 1;

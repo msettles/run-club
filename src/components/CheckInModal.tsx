@@ -684,13 +684,8 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-2">
                               <span className="text-base font-black font-display text-stone-950">
-                                {opt.route.actualMiles} mi
+                                {(Math.round(opt.route.actualMiles * 10) / 10).toFixed(1)} mi
                               </span>
-                              {opt.route.targetTier && (
-                                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-stone-100 text-stone-600 border border-stone-200">
-                                  {opt.route.targetTier}
-                                </span>
-                              )}
                             </div>
                             <h5 className="font-extrabold text-xs text-stone-900 mt-0.5 truncate">
                               {opt.route.name}
@@ -983,7 +978,7 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
                       >
                         {availableOptions.map((opt) => (
                           <option key={opt.key} value={opt.key}>
-                            {opt.route.actualMiles} mi — {opt.route.name}
+                            {(Math.round(opt.route.actualMiles * 10) / 10).toFixed(1)} mi — {opt.route.name}
                           </option>
                         ))}
                       </select>

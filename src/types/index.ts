@@ -1,7 +1,8 @@
 export type SurfaceType = 'Trail' | 'Pavement' | 'Mixed' | 'Track';
 export type DifficultyType = 'Easy' | 'Moderate' | 'Challenging';
 export type ActivityType = 'running' | 'walking';
-export type DistanceTier = number | string; // e.g. 1 | 3 | 5 | 3.1 | '5K' | '10K'
+export type DistanceChoice = number | string; // Chosen run distance (rounded to 1 decimal point e.g. 1.2, 3.1, 5.2)
+export type DistanceTier = DistanceChoice; // Backwards-compatible alias
 
 export interface PaceGroup {
   label: string;
@@ -51,8 +52,7 @@ export interface GPXRoute {
   points: GPXPoint[];
   surface: SurfaceType;
   difficulty: DifficultyType;
-  targetDistanceTier?: '1' | '3' | '5' | 'custom' | string;
-  customDistanceLabel?: string; // e.g. "10K", "6-Mile Run"
+  customDistanceLabel?: string; // Optional label (e.g. "10K", "6-Mile Run")
   directions?: RouteTurnStep[];
   geoJson?: any;              // GeoJSON FeatureCollection with line track and turn points
   externalLinks?: RouteExternalLinks;
@@ -75,7 +75,6 @@ export interface Attendee {
 export interface RunRouteChoice {
   routeId: string;
   customLabel?: string;
-  tier?: string;
 }
 
 export interface RunEvent {
@@ -141,7 +140,8 @@ export interface BadgeTriggerConfig {
   activityType?: ActivityType; // 'walking' | 'running'
   activityCount?: number;
   // Distance:
-  distanceTier?: DistanceTier; // 1 | 3 | 5
+  distanceChoice?: DistanceChoice;
+  distanceTier?: DistanceTier; // Deprecated alias
   distanceCount?: number;
   // Special Event:
   specialEventId?: string;
@@ -177,7 +177,6 @@ export interface RouteOption {
   imageUrl?: string;   // Route preview image / map screenshot
   directions?: string; // Legacy string / summary
   routeId?: string;    // Reference to GPXRoute in library
-  targetTier?: '1' | '3' | '5' | 'custom' | string;
   externalLinks?: RouteExternalLinks;
   directionsList?: RouteTurnStep[];
   geoJson?: any;

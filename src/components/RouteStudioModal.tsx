@@ -100,7 +100,7 @@ export const RouteStudioModal: React.FC<RouteStudioModalProps> = ({
         }
       }
       setGeoJson(initGeoJson);
-      setCustomDistanceLabel(existingRoute.customDistanceLabel || existingRoute.targetDistanceTier || '');
+      setCustomDistanceLabel(existingRoute.customDistanceLabel || (existingRoute as any).targetDistanceTier || '');
 
       setStravaUrl(existingRoute.externalLinks?.stravaUrl || '');
       setGarminUrl(existingRoute.externalLinks?.garminUrl || '');
@@ -387,7 +387,6 @@ export const RouteStudioModal: React.FC<RouteStudioModalProps> = ({
 
       if (customDistanceLabel.trim()) {
         routeData.customDistanceLabel = customDistanceLabel.trim();
-        routeData.targetDistanceTier = customDistanceLabel.trim();
       }
       if (gpxXml) {
         routeData.gpxXml = gpxXml;
@@ -531,7 +530,7 @@ export const RouteStudioModal: React.FC<RouteStudioModalProps> = ({
             )}
           </div>
 
-          {/* SECTION 2: ROUTE METADATA & ROUND DISTANCE TIER */}
+          {/* SECTION 2: ROUTE METADATA */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Route Name */}
             <div>

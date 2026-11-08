@@ -72,7 +72,7 @@ export const NewRunModal: React.FC<NewRunModalProps> = ({
       address,
       ...stats,
       routeId: resolved[0].route.id,
-      routeChoices: resolved.map((c) => ({ routeId: c.route.id, customLabel: c.label, tier: c.tier })),
+      routeChoices: resolved.map((c) => ({ routeId: c.route.id, customLabel: c.label })),
       description,
       organizerName,
       paceGroups,

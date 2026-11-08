@@ -65,7 +65,7 @@ export const EditRunModal: React.FC<EditRunModalProps> = ({
       address,
       ...deriveRunStats(resolved),
       routeId: resolved[0].route.id,
-      routeChoices: resolved.map((c) => ({ routeId: c.route.id, customLabel: c.label, tier: c.tier })),
+      routeChoices: resolved.map((c) => ({ routeId: c.route.id, customLabel: c.label })),
       description,
       paceGroups,
       completed,

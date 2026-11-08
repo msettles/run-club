@@ -2,18 +2,15 @@ import { GPXRoute, MeetupEvent, RouteOption, RunEvent, RunRouteChoice, SurfaceTy
 
 export interface ResolvedChoice {
   id: string; // route ID
-  label: string; // display e.g. "1.22 mi • The 123"
-  miles: number;
+  label: string; // display e.g. "1.2 mi • The 123"
+  miles: number; // distance rounded to 1 decimal point (e.g. 1.2)
+  actualMiles: number; // exact GPS distance (e.g. 1.22)
   route: GPXRoute;
-  tier?: string; // legacy '1' | '3' | '5'
 }
 
-/** Legacy tier guesser (e.g. for default grouping) */
-export function guessTier(route: GPXRoute): string {
-  const t = route.targetDistanceTier;
-  if (t === '1' || t === '3' || t === '5') return t;
-  const m = route.distanceMiles || 0;
-  return m < 2 ? '1' : m < 4 ? '3' : '5';
+/** Formats a distance in miles rounded to 1 decimal point */
+export function formatMiles(miles: number): number {
+  return Math.round(miles * 10) / 10;
 }
 
 /** A run's choices, falling back to the legacy single routeId. */
@@ -21,7 +18,7 @@ export function getRunChoices(run: Pick<RunEvent, 'routeChoices' | 'routeId'>, r
   if (run.routeChoices && run.routeChoices.length > 0) return run.routeChoices;
   if (run.routeId) {
     const r = routes.find((x) => x.id === run.routeId);
-    if (r) return [{ routeId: r.id, tier: guessTier(r) }];
+    if (r) return [{ routeId: r.id }];
   }
   return [];
 }
@@ -32,16 +29,18 @@ export function resolveChoices(choices: RunRouteChoice[], routes: GPXRoute[]): R
   for (const c of choices) {
     const r = routes.find((rt) => rt.id === c.routeId);
     if (r) {
+      const actualMiles = r.distanceMiles || 0;
+      const miles = formatMiles(actualMiles);
       resolved.push({
         id: r.id,
-        label: c.customLabel || `${r.distanceMiles || 0} mi • ${r.name}`,
-        miles: r.distanceMiles || 0,
+        label: c.customLabel || `${miles.toFixed(1)} mi • ${r.name}`,
+        miles,
+        actualMiles,
         route: r,
-        tier: c.tier || guessTier(r),
       });
     }
   }
-  return resolved.sort((a, b) => a.miles - b.miles);
+  return resolved.sort((a, b) => a.actualMiles - b.actualMiles);
 }
 
 /** Distance, elevation and surface for the event, derived from its routes (never typed in). */
@@ -52,19 +51,19 @@ export function deriveRunStats(resolved: ResolvedChoice[]): {
 } {
   if (resolved.length === 0) return { distanceMiles: 0, elevationGainFt: 0, surface: 'Pavement' };
   const surfaces = Array.from(new Set(resolved.map((c) => c.route.surface || 'Pavement')));
+  const maxMiles = Math.max(...resolved.map((c) => c.actualMiles || 0));
   return {
-    distanceMiles: Math.max(...resolved.map((c) => c.route.distanceMiles || 0)),
+    distanceMiles: formatMiles(maxMiles),
     elevationGainFt: Math.max(...resolved.map((c) => c.route.elevationGainFt || 0)),
     surface: surfaces.length === 1 ? surfaces[0] : 'Mixed',
   };
 }
 
-export function routeOptionFromRoute(route: GPXRoute, tierKey?: string): RouteOption {
+export function routeOptionFromRoute(route: GPXRoute): RouteOption {
   return {
     name: route.name,
     actualMiles: route.distanceMiles,
     routeId: route.id,
-    targetTier: tierKey,
     externalLinks: route.externalLinks,
     directionsList: route.directions,
     geoJson: route.geoJson,
@@ -88,12 +87,13 @@ export function buildMeetupFromRun(
   const activeKeys: string[] = [];
 
   resolved.forEach((c) => {
-    routeMap[c.route.id] = routeOptionFromRoute(c.route, c.tier || String(c.miles));
+    const routeOption = routeOptionFromRoute(c.route);
+    // Key by route ID
+    routeMap[c.route.id] = routeOption;
+    // Also key by rounded distance (e.g. "1.2", "3.1", "5.2") for easy lookup
+    routeMap[c.miles.toFixed(1)] = routeOption;
+    routeMap[String(c.miles)] = routeOption;
     activeKeys.push(c.route.id);
-    // Also mirror to legacy '1', '3', '5' keys if matching so older logic/badges stay happy
-    if (c.tier && !routeMap[c.tier]) {
-      routeMap[c.tier] = routeOptionFromRoute(c.route, c.tier);
-    }
   });
 
   return {

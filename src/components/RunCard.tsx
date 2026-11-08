@@ -40,7 +40,7 @@ export const RunCard: React.FC<RunCardProps> = ({
       'PRODID:-//Woodland Woodchuckers Run Club//NONSGML v1.0//EN',
       'BEGIN:VEVENT',
       `SUMMARY:🦫 Woodchuckers: ${run.title}`,
-      `DESCRIPTION:${run.description}\\nDistance: ${choices.length ? choices.map((c) => `${c.miles} mi (${c.route.name})`).join(', ') : `${run.distanceMiles} miles`}\\nSurface: ${run.surface}`,
+      `DESCRIPTION:${run.description}\\nDistance: ${choices.length ? choices.map((c) => `${c.miles.toFixed(1)} mi (${c.route.name})`).join(', ') : `${(Math.round(run.distanceMiles * 10) / 10).toFixed(1)} miles`}\\nSurface: ${run.surface}`,
       `LOCATION:${run.locationName}, ${run.address}`,
       `DTSTART:${startIso}`,
       `DTEND:${startIso}`,
@@ -101,12 +101,12 @@ export const RunCard: React.FC<RunCardProps> = ({
                   className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-stone-100 text-stone-700"
                   title={`${c.route.name} • ${c.route.distanceMiles} mi`}
                 >
-                  {c.miles} mi
+                  {c.miles.toFixed(1)} mi
                 </span>
               ))
             ) : (
               <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-stone-100 text-stone-700">
-                {run.distanceMiles} mi
+                {(Math.round(run.distanceMiles * 10) / 10).toFixed(1)} mi
               </span>
             )}
             {run.elevationGainFt > 0 && (

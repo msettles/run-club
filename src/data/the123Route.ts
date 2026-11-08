@@ -8,7 +8,6 @@ export const THE_123_ROUTE: GPXRoute = {
   elevationGainFt: 18,
   surface: "Pavement",
   difficulty: "Easy",
-  targetDistanceTier: "1",
   notes: "Start and finish on Dead Cat Alley behind Blue Note Brewing. Use pedestrian crosswalks on 3rd and Court St.",
   externalLinks: {
     stravaUrl: "https://www.strava.com/routes/3081829424823901",

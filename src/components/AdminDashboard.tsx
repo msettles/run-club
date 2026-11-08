@@ -14,7 +14,7 @@ import {
   BadgeCategory,
   BadgeTriggerConfig,
   ActivityType,
-  DistanceTier
+  DistanceChoice
 } from '../types';
 import { INITIAL_BADGES, INITIAL_SPECIAL_EVENTS } from '../data/initialData';
 import { ClubNotification } from '../services/notifications';
@@ -148,7 +148,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [triggerMilestonePerks, setTriggerMilestonePerks] = useState<string>('$1 off draft beers at Blue Note');
   const [triggerActivityType, setTriggerActivityType] = useState<ActivityType>('walking');
   const [triggerActivityThreshold, setTriggerActivityThreshold] = useState<number>(10);
-  const [triggerDistanceTier, setTriggerDistanceTier] = useState<DistanceTier>(3);
+  const [triggerDistanceChoice, setTriggerDistanceChoice] = useState<DistanceChoice>('3.1');
   const [triggerDistanceThreshold, setTriggerDistanceThreshold] = useState<number>(10);
   const [triggerStreakWeeks, setTriggerStreakWeeks] = useState<number>(4);
   const [triggerMaxMultiplier, setTriggerMaxMultiplier] = useState<number>(10);
@@ -829,7 +829,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   Woodchucker Badges &amp; Special Events Studio
                 </h3>
                 <p className="text-xs text-stone-300 mt-0.5">
-                  Create new "Is Special Event?" options, Milestone gear tiers, walking/running achievements, and 1, 3, 5-mile route mastery badges.
+                  Create new "Is Special Event?" options, Milestone gear, walking/running achievements, and route distance mastery badges.
                 </p>
               </div>
             </div>
@@ -887,7 +887,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       triggerConfig.activityCount = Number(triggerActivityThreshold);
                       triggerConfig.step = Number(triggerActivityThreshold);
                     } else if (newBadgeCategory === 'distance') {
-                      triggerConfig.distanceTier = Number(triggerDistanceTier) as DistanceTier;
+                      triggerConfig.distanceTier = triggerDistanceChoice;
                       triggerConfig.distanceCount = Number(triggerDistanceThreshold);
                       triggerConfig.step = Number(triggerDistanceThreshold);
                     } else if (newBadgeCategory === 'streak') {
@@ -1072,8 +1072,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         setNewBadgeDesc(`Completed ${triggerActivityThreshold} group ${triggerActivityType === 'walking' ? 'walks' : 'runs'} with the crew!`);
                         setNewBadgeReq(`Every ${triggerActivityThreshold} ${triggerActivityType === 'walking' ? 'walking' : 'running'} check-ins`);
                       } else if (newBadgeCategory === 'distance') {
-                        setNewBadgeDesc(`Completed ${triggerDistanceThreshold} ${triggerDistanceTier}-mile routes with the club!`);
-                        setNewBadgeReq(`${triggerDistanceThreshold} times completing ${triggerDistanceTier}-mile route`);
+                        const distStr = typeof triggerDistanceChoice === 'number' ? `${triggerDistanceChoice.toFixed(1)} mi` : `${triggerDistanceChoice}`;
+                        setNewBadgeDesc(`Completed ${triggerDistanceThreshold} ${distStr} routes with the club!`);
+                        setNewBadgeReq(`${triggerDistanceThreshold} times completing ${distStr} route`);
                       } else if (newBadgeCategory === 'streak') {
                         setNewBadgeDesc(`Maintained an active ${triggerStreakWeeks}-week consecutive attendance streak!`);
                         setNewBadgeReq(`${triggerStreakWeeks}-week consecutive streak`);
@@ -1094,7 +1095,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       { id: 'special_event', label: '🌟 Special Event', desc: 'Adds to "Is Special Event?" dropdown' },
                       { id: 'milestone', label: '🏆 Runs Milestone', desc: 'Total runs reached (5, 25, 50...)' },
                       { id: 'activity', label: '🚶 Walk / 🏃 Run Pack', desc: 'Walk or run input count' },
-                      { id: 'distance', label: '📍 Route Distance', desc: '1, 3, or 5-mile choices completed' },
+                      { id: 'distance', label: '📍 Route Distance', desc: 'Route choices completed (e.g. 1.2 mi, 3.1 mi, 5.2 mi)' },
                       { id: 'pet', label: '🐕 Pet Run', desc: 'Running or walking with a pet (up to 10+)' },
                       { id: 'streak', label: '🔥 Streak', desc: 'Consecutive weekly runs' },
                       { id: 'attendance', label: '🦫 Attendance', desc: 'General attendance milestone' },
@@ -1116,8 +1117,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                               setNewBadgeDesc(`Completed ${triggerActivityThreshold} group walks/runs with the crew!`);
                               setNewBadgeReq(`Every ${triggerActivityThreshold} check-ins`);
                             } else if (catId === 'distance') {
-                              setNewBadgeDesc(`Completed ${triggerDistanceThreshold} ${triggerDistanceTier}-mile routes!`);
-                              setNewBadgeReq(`${triggerDistanceThreshold} times completing ${triggerDistanceTier}-mile route`);
+                              const distStr = typeof triggerDistanceChoice === 'number' ? `${triggerDistanceChoice.toFixed(1)} mi` : `${triggerDistanceChoice}`;
+                              setNewBadgeDesc(`Completed ${triggerDistanceThreshold} ${distStr} routes!`);
+                              setNewBadgeReq(`${triggerDistanceThreshold} times completing ${distStr} route`);
                             } else if (catId === 'pet') {
                               setNewBadgeDesc(`Ran or walked the club route with your four-legged running buddy!`);
                               setNewBadgeReq(`Running or walking with a pet (multiplier up to ${triggerMaxMultiplier}+)`);
@@ -1244,13 +1246,31 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           Which Route Distance?
                         </label>
                         <select
-                          value={triggerDistanceTier}
-                          onChange={(e) => setTriggerDistanceTier(Number(e.target.value) as DistanceTier)}
+                          value={triggerDistanceChoice}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setTriggerDistanceChoice(val);
+                            setNewBadgeDesc(`Completed ${triggerDistanceThreshold} ${val} routes!`);
+                            setNewBadgeReq(`${triggerDistanceThreshold} times completing ${val} route`);
+                          }}
                           className="w-full px-3 py-1.5 text-xs border rounded-lg bg-white font-bold"
                         >
-                          <option value={1}>1-Mile Route (Downtown Stroll)</option>
-                          <option value={3}>3-Mile Route (Heritage Park)</option>
-                          <option value={5}>5-Mile Route (Spring Lake Trek)</option>
+                          {routes && routes.length > 0 ? (
+                            routes.map((r) => {
+                              const mi = (Math.round(r.distanceMiles * 10) / 10).toFixed(1);
+                              return (
+                                <option key={r.id} value={`${mi} mi`}>
+                                  {mi} mi ({r.name})
+                                </option>
+                              );
+                            })
+                          ) : (
+                            <>
+                              <option value="1.2 mi">1.2 mi (The 123)</option>
+                              <option value="3.1 mi">3.1 mi (Pine Ridge 5K)</option>
+                              <option value="5.2 mi">5.2 mi (River Loop)</option>
+                            </>
+                          )}
                         </select>
                       </div>
                       <div>
