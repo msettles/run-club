@@ -183,3 +183,61 @@ export function simplify(
 
   return xy.filter((_, i) => keep[i]);
 }
+
+/**
+ * Offsets a polyline laterally by `offsetMeters` to the right-hand side of travel
+ * (perpendicular to heading) so that the route does not obscure street names
+ * printed along the street centerline on the underlying map tiles.
+ */
+export function offsetPolylineCoords(
+  coords: [number, number][],
+  offsetMeters = 3.5
+): [number, number][] {
+  if (coords.length < 2 || offsetMeters === 0) return coords;
+
+  const result: [number, number][] = [];
+  const mPerDegLat = 111139;
+
+  for (let i = 0; i < coords.length; i++) {
+    const curr = coords[i];
+    const prev = i > 0 ? coords[i - 1] : null;
+    const next = i < coords.length - 1 ? coords[i + 1] : null;
+
+    let dLat = 0;
+    let dLon = 0;
+
+    if (next && prev) {
+      dLat = next[0] - prev[0];
+      dLon = next[1] - prev[1];
+    } else if (next) {
+      dLat = next[0] - curr[0];
+      dLon = next[1] - curr[1];
+    } else if (prev) {
+      dLat = curr[0] - prev[0];
+      dLon = curr[1] - prev[1];
+    }
+
+    const cosLat = Math.cos((curr[0] * Math.PI) / 180);
+    const mPerDegLon = mPerDegLat * cosLat;
+
+    const dy = dLat * mPerDegLat;
+    const dx = dLon * mPerDegLon;
+    const len = Math.hypot(dx, dy);
+
+    if (len < 0.001) {
+      result.push(curr);
+      continue;
+    }
+
+    // Normal vector pointing 90 degrees to the right: (dy, -dx) / len
+    const nx = dy / len;
+    const ny = -dx / len;
+
+    const offsetLat = (ny * offsetMeters) / mPerDegLat;
+    const offsetLon = (nx * offsetMeters) / mPerDegLon;
+
+    result.push([curr[0] + offsetLat, curr[1] + offsetLon]);
+  }
+
+  return result;
+}

@@ -3,6 +3,7 @@ import L from 'leaflet';
 import { GPXRoute } from '../types';
 import { Download, Mountain, Navigation, Layers, Compass, Locate, Edit3 } from 'lucide-react';
 import { downloadGPXFile } from '../utils/gpxParser';
+import { offsetPolylineCoords } from '../utils/routeEngine/geometry';
 
 interface MapViewerProps {
   route: GPXRoute;
@@ -63,46 +64,80 @@ export const MapViewer: React.FC<MapViewerProps> = ({
         '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
     }).addTo(map);
 
+    // Dedicated high-contrast label pane rendered above the polyline
+    // so street names are never obscured by the route path
+    map.createPane('streetLabelsPane');
+    const labelsPane = map.getPane('streetLabelsPane');
+    if (labelsPane) {
+      labelsPane.style.zIndex = '450';
+      labelsPane.style.pointerEvents = 'none';
+    }
+
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}.png', {
+      pane: 'streetLabelsPane',
+      maxZoom: 19,
+    }).addTo(map);
+
     turnMarkersGroupRef.current = L.layerGroup().addTo(map);
 
     // If route has points, plot polyline and markers
     if (route.points && route.points.length > 0) {
       const latLngs: [number, number][] = route.points.map((p) => [p.lat, p.lon]);
 
+      // Offset polyline by 3.5m to the right onto sidewalk/shoulder so centerline street names stay visible
+      const offsetLatLngs = offsetPolylineCoords(latLngs, 3.5);
+
       // Route Polyline
-      const polyline = L.polyline(latLngs, {
+      const polyline = L.polyline(offsetLatLngs, {
         color: '#1a607c',
-        weight: 5,
-        opacity: 0.9,
+        weight: 4,
+        opacity: 0.85,
         lineCap: 'round',
         lineJoin: 'round',
       }).addTo(map);
 
       polylineRef.current = polyline;
 
-      // Start Marker at Blue Note Brewing
       const startPt = latLngs[0];
-      const startIcon = L.divIcon({
-        className: 'custom-start-pin',
-        html: `<div style="background-color:#1a607c;color:white;padding:3px 7px;border-radius:12px;font-size:10px;font-weight:900;border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.35);display:flex;align-items:center;gap:3px;white-space:nowrap;">
-          <span>🍺</span> Blue Note (Start)
-        </div>`,
-        iconSize: [110, 24],
-        iconAnchor: [55, 12],
-      });
-      L.marker(startPt, { icon: startIcon }).addTo(map);
-
-      // Finish Marker
       const endPt = latLngs[latLngs.length - 1];
-      const finishIcon = L.divIcon({
-        className: 'custom-end-pin',
-        html: `<div style="background-color:#de9c1e;color:#0d1113;padding:3px 7px;border-radius:12px;font-size:10px;font-weight:900;border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.35);display:flex;align-items:center;gap:3px;white-space:nowrap;">
-          <span>🏁</span> FINISH
-        </div>`,
-        iconSize: [64, 24],
-        iconAnchor: [32, 12],
-      });
-      L.marker(endPt, { icon: finishIcon }).addTo(map);
+
+      // Check if start and finish are the same location (e.g. within 60 meters, typical of loop / Blue Note runs)
+      const isStartFinishSame = Math.hypot(startPt[0] - endPt[0], startPt[1] - endPt[1]) < 0.0006;
+
+      if (isStartFinishSame) {
+        // Unified Blue Note (Start/End) Pin
+        const combinedIcon = L.divIcon({
+          className: 'custom-start-finish-pin',
+          html: `<div style="background:linear-gradient(135deg, #1a607c 0%, #13495d 100%);color:white;padding:3.5px 8px;border-radius:12px;font-size:10px;font-weight:900;border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.4);display:flex;align-items:center;gap:4px;white-space:nowrap;">
+            <span>🍺</span> Blue Note (Start/End) <span>🏁</span>
+          </div>`,
+          iconSize: [160, 24],
+          iconAnchor: [80, 12],
+        });
+        L.marker(startPt, { icon: combinedIcon, zIndexOffset: 500 }).addTo(map);
+      } else {
+        // Separate Start Marker at Blue Note Brewing
+        const startIcon = L.divIcon({
+          className: 'custom-start-pin',
+          html: `<div style="background-color:#1a607c;color:white;padding:3px 7px;border-radius:12px;font-size:10px;font-weight:900;border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.35);display:flex;align-items:center;gap:3px;white-space:nowrap;">
+            <span>🍺</span> Blue Note (Start)
+          </div>`,
+          iconSize: [110, 24],
+          iconAnchor: [55, 12],
+        });
+        L.marker(startPt, { icon: startIcon, zIndexOffset: 500 }).addTo(map);
+
+        // Separate Finish Marker
+        const finishIcon = L.divIcon({
+          className: 'custom-end-pin',
+          html: `<div style="background-color:#de9c1e;color:#0d1113;padding:3px 7px;border-radius:12px;font-size:10px;font-weight:900;border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.35);display:flex;align-items:center;gap:3px;white-space:nowrap;">
+            <span>🏁</span> FINISH
+          </div>`,
+          iconSize: [64, 24],
+          iconAnchor: [32, 12],
+        });
+        L.marker(endPt, { icon: finishIcon, zIndexOffset: 500 }).addTo(map);
+      }
 
       // Numbered Turn Pins (if route has directions)
       if (route.directions && route.directions.length > 0) {
