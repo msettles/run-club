@@ -65,6 +65,67 @@ export function cleanFirestoreData<T>(obj: T): T {
   return obj;
 }
 
+/**
+ * Prepares a route document for Firestore storage by serializing
+ * rich GeoJSON and direction step objects to JSON strings.
+ * Firestore strictly forbids nested arrays (e.g. coordinates: [[x, y], ...])
+ * and arrays within maps within arrays (e.g. step.point: [x, y]).
+ */
+export function formatRouteForFirestore(route: Partial<GPXRoute>): any {
+  const cleaned = cleanFirestoreData(route);
+  const formatted: any = { ...cleaned };
+
+  if (formatted.directions !== undefined && typeof formatted.directions !== 'string') {
+    formatted.directions = JSON.stringify(formatted.directions);
+  }
+  if (formatted.geoJson !== undefined && typeof formatted.geoJson !== 'string') {
+    formatted.geoJson = JSON.stringify(formatted.geoJson);
+  }
+
+  // Ensure points does not contain nested arrays
+  if (Array.isArray(formatted.points)) {
+    formatted.points = formatted.points.map((pt: any) => {
+      if (Array.isArray(pt)) {
+        return { lat: pt[0], lon: pt[1] };
+      }
+      return pt;
+    });
+  }
+
+  return formatted;
+}
+
+/**
+ * Hydrates a route document fetched from Firestore or storage, parsing
+ * directions and geoJson from JSON strings back into rich objects/arrays.
+ */
+export function hydrateRouteFromFirestore(data: any): GPXRoute {
+  if (!data) return data;
+  let directions = data.directions;
+  if (typeof directions === 'string') {
+    try {
+      directions = JSON.parse(directions);
+    } catch (e) {
+      console.warn('Failed to parse route directions JSON from Firestore:', e);
+      directions = [];
+    }
+  }
+  let geoJson = data.geoJson;
+  if (typeof geoJson === 'string') {
+    try {
+      geoJson = JSON.parse(geoJson);
+    } catch (e) {
+      console.warn('Failed to parse route geoJson from Firestore:', e);
+      geoJson = null;
+    }
+  }
+  return {
+    ...data,
+    directions: Array.isArray(directions) ? directions : [],
+    geoJson: geoJson || null,
+  } as GPXRoute;
+}
+
 const STORAGE_KEYS = {
   RUNS: 'woodchuckers_runs_v1',
   ROUTES: 'woodchuckers_routes_v1',
@@ -104,7 +165,9 @@ function saveToStorage<T>(key: string, data: T): void {
 export function useClubStore() {
   // Legacy / existing state
   const [runs, setRuns] = useState<RunEvent[]>(() => loadFromStorage(STORAGE_KEYS.RUNS, INITIAL_RUNS));
-  const [routes, setRoutes] = useState<GPXRoute[]>(() => loadFromStorage(STORAGE_KEYS.ROUTES, INITIAL_ROUTES));
+  const [routes, setRoutes] = useState<GPXRoute[]>(() => 
+    loadFromStorage<GPXRoute[]>(STORAGE_KEYS.ROUTES, INITIAL_ROUTES).map(hydrateRouteFromFirestore)
+  );
   const [members, setMembers] = useState<Member[]>(() => loadFromStorage(STORAGE_KEYS.MEMBERS, INITIAL_MEMBERS));
   const [currentMemberId, setCurrentMemberId] = useState<string>(() =>
     loadFromStorage(STORAGE_KEYS.CURRENT_USER_ID, INITIAL_MEMBERS[0].id)
@@ -210,7 +273,7 @@ export function useClubStore() {
 
         const routesSnap = await getDocs(collection(db, 'routes'));
         if (!routesSnap.empty) {
-          const remoteRoutes = routesSnap.docs.map((d) => d.data() as GPXRoute);
+          const remoteRoutes = routesSnap.docs.map((d) => hydrateRouteFromFirestore(d.data()));
           setRoutes(remoteRoutes);
         }
 
@@ -905,7 +968,7 @@ export function useClubStore() {
 
     setRuns((prev) => [run, ...prev]);
     if (isFirebaseConfigured && db) {
-      setDoc(doc(db, 'runs', id), run).catch(console.error);
+      setDoc(doc(db, 'runs', id), cleanFirestoreData(run)).catch(console.error);
     }
   };
 
@@ -921,9 +984,11 @@ export function useClubStore() {
 
     setRoutes((prev) => [newRoute, ...prev]);
     if (isFirebaseConfigured && db) {
-      setDoc(doc(db, 'routes', id), cleanFirestoreData(newRoute)).catch((err) => {
+      try {
+        await setDoc(doc(db, 'routes', id), formatRouteForFirestore(newRoute));
+      } catch (err) {
         console.error('Firebase save route error:', err);
-      });
+      }
     }
     return newRoute;
   };
@@ -932,24 +997,24 @@ export function useClubStore() {
    * Update an existing route (Organizer / Admin)
    */
   const updateRoute = async (routeId: string, updates: Partial<GPXRoute>): Promise<GPXRoute> => {
-    let updatedObj: GPXRoute | null = null;
-    setRoutes((prev) => {
-      const next: GPXRoute[] = prev.map((r) => {
-        if (r.id === routeId) {
-          const res: GPXRoute = { ...r, ...updates, updatedAt: new Date().toISOString() };
-          updatedObj = res;
-          return res;
-        }
-        return r;
-      });
-      return next;
-    });
-    if (updatedObj && isFirebaseConfigured && db) {
-      setDoc(doc(db, 'routes', routeId), cleanFirestoreData(updatedObj), { merge: true }).catch((err) => {
+    const existing = routes.find((r) => r.id === routeId);
+    const updatedObj: GPXRoute = {
+      ...(existing || ({} as GPXRoute)),
+      ...updates,
+      id: routeId,
+      updatedAt: new Date().toISOString(),
+    };
+
+    setRoutes((prev) => prev.map((r) => (r.id === routeId ? updatedObj : r)));
+
+    if (isFirebaseConfigured && db) {
+      try {
+        await setDoc(doc(db, 'routes', routeId), formatRouteForFirestore(updatedObj), { merge: true });
+      } catch (err) {
         console.error('Firebase update route error:', err);
-      });
+      }
     }
-    return updatedObj || ({} as GPXRoute);
+    return updatedObj;
   };
 
   /**
@@ -968,7 +1033,7 @@ export function useClubStore() {
   const updateRun = async (updatedRun: RunEvent) => {
     setRuns((prev) => prev.map((r) => (r.id === updatedRun.id ? updatedRun : r)));
     if (isFirebaseConfigured && db) {
-      setDoc(doc(db, 'runs', updatedRun.id), updatedRun, { merge: true }).catch(console.error);
+      setDoc(doc(db, 'runs', updatedRun.id), cleanFirestoreData(updatedRun), { merge: true }).catch(console.error);
     }
   };
 

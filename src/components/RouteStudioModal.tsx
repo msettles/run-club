@@ -81,8 +81,26 @@ export const RouteStudioModal: React.FC<RouteStudioModalProps> = ({
       setElevationGainFt(existingRoute.elevationGainFt || 0);
       setPoints(existingRoute.points || []);
       setGpxXml(existingRoute.gpxXml || '');
-      setDirections(existingRoute.directions || []);
-      setGeoJson(existingRoute.geoJson || null);
+      
+      let initDirs = existingRoute.directions || [];
+      if (typeof initDirs === 'string') {
+        try {
+          initDirs = JSON.parse(initDirs);
+        } catch (e) {
+          initDirs = [];
+        }
+      }
+      setDirections(Array.isArray(initDirs) ? initDirs : []);
+
+      let initGeoJson = existingRoute.geoJson || null;
+      if (typeof initGeoJson === 'string') {
+        try {
+          initGeoJson = JSON.parse(initGeoJson);
+        } catch (e) {
+          initGeoJson = null;
+        }
+      }
+      setGeoJson(initGeoJson);
 
       if (['1', '3', '5'].includes(existingRoute.targetDistanceTier as string)) {
         setDistanceTier(existingRoute.targetDistanceTier as '1' | '3' | '5');
