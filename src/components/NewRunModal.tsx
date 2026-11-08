@@ -175,10 +175,30 @@ export const NewRunModal: React.FC<NewRunModalProps> = ({
               <option value="">No specific GPX route attached</option>
               {routes.map((r) => (
                 <option key={r.id} value={r.id}>
-                  {r.name} ({r.distanceMiles} mi, +{r.elevationGainFt} ft)
+                  {r.name} ({r.distanceMiles} mi{r.directions?.length ? ` • ${r.directions.length} turns` : ''})
                 </option>
               ))}
             </select>
+            {selectedRouteId && routes.find((r) => r.id === selectedRouteId)?.externalLinks && (
+              <div className="flex items-center gap-1.5 mt-1.5 text-xs">
+                <span className="font-semibold text-[11px] text-stone-500">Linked Apps:</span>
+                {routes.find((r) => r.id === selectedRouteId)?.externalLinks?.stravaUrl && (
+                  <span className="text-[10px] bg-orange-100 text-orange-800 px-1.5 py-0.2 rounded font-bold">
+                    Strava
+                  </span>
+                )}
+                {routes.find((r) => r.id === selectedRouteId)?.externalLinks?.garminUrl && (
+                  <span className="text-[10px] bg-cyan-100 text-cyan-900 px-1.5 py-0.2 rounded font-bold">
+                    Garmin
+                  </span>
+                )}
+                {routes.find((r) => r.id === selectedRouteId)?.externalLinks?.rungoUrl && (
+                  <span className="text-[10px] bg-emerald-100 text-emerald-900 px-1.5 py-0.2 rounded font-bold">
+                    RunGo
+                  </span>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-3 gap-3">

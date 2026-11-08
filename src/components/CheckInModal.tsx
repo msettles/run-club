@@ -650,8 +650,58 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
                     );
                   })}
                 </div>
+
+                {/* Route Preview Card under Distance */}
+                {activeEvent.routes[String(selectedDistance) as '1' | '3' | '5'] && (
+                  <div className="p-2.5 bg-woodland-50/80 border border-woodland-200 rounded-xl text-xs space-y-1 mt-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-woodland-950">
+                        📍 {activeEvent.routes[String(selectedDistance) as '1' | '3' | '5']?.name}
+                      </span>
+                      <span className="font-mono text-woodland-800 font-bold text-[11px]">
+                        {activeEvent.routes[String(selectedDistance) as '1' | '3' | '5']?.actualMiles} mi
+                      </span>
+                    </div>
+                    {/* External App Links if present */}
+                    {activeEvent.routes[String(selectedDistance) as '1' | '3' | '5']?.externalLinks && (
+                      <div className="flex items-center gap-1.5 pt-1 flex-wrap">
+                        {activeEvent.routes[String(selectedDistance) as '1' | '3' | '5']?.externalLinks?.stravaUrl && (
+                          <a
+                            href={activeEvent.routes[String(selectedDistance) as '1' | '3' | '5']?.externalLinks?.stravaUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-2 py-0.5 bg-orange-100 text-orange-800 text-[10px] font-bold rounded"
+                          >
+                            🟠 Strava
+                          </a>
+                        )}
+                        {activeEvent.routes[String(selectedDistance) as '1' | '3' | '5']?.externalLinks?.garminUrl && (
+                          <a
+                            href={activeEvent.routes[String(selectedDistance) as '1' | '3' | '5']?.externalLinks?.garminUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-2 py-0.5 bg-cyan-100 text-cyan-900 text-[10px] font-bold rounded"
+                          >
+                            🔵 Garmin
+                          </a>
+                        )}
+                        {activeEvent.routes[String(selectedDistance) as '1' | '3' | '5']?.externalLinks?.rungoUrl && (
+                          <a
+                            href={activeEvent.routes[String(selectedDistance) as '1' | '3' | '5']?.externalLinks?.rungoUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-2 py-0.5 bg-emerald-100 text-emerald-900 text-[10px] font-bold rounded"
+                          >
+                            🟢 RunGo
+                          </a>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <p className="text-[11px] text-stone-500">
-                  Select your target route distance. The actual route map will display on check-in.
+                  Select your target route distance. All runs start and finish at Blue Note Brewing.
                 </p>
               </div>
 

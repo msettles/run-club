@@ -181,15 +181,53 @@ export const RunCard: React.FC<RunCardProps> = ({
       </div>
 
       {/* Footer Actions */}
-      <div className="p-4 bg-stone-50 border-t border-stone-200 flex items-center justify-between gap-2">
+      <div className="p-4 bg-stone-50 border-t border-stone-200 flex flex-wrap items-center justify-between gap-2">
         {route ? (
-          <button
-            onClick={() => onViewRoute(route)}
-            className="flex items-center gap-1 text-xs font-semibold text-woodland-700 hover:text-woodland-800 px-2 py-1.5 rounded-lg hover:bg-woodland-50 transition"
-          >
-            <Map className="w-3.5 h-3.5" />
-            <span>View GPX Map</span>
-          </button>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <button
+              onClick={() => onViewRoute(route)}
+              className="flex items-center gap-1 text-xs font-bold text-woodland-800 hover:text-woodland-950 px-2.5 py-1.5 rounded-lg bg-woodland-100/60 hover:bg-woodland-100 transition border border-woodland-200 shadow-2xs"
+            >
+              <Map className="w-3.5 h-3.5 text-woodland-600" />
+              <span>Map &amp; Turns {route.directions?.length ? `(${route.directions.length})` : ''}</span>
+            </button>
+
+            {route.externalLinks?.stravaUrl && (
+              <a
+                href={route.externalLinks.stravaUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-2 py-1 bg-orange-50 hover:bg-orange-100 text-orange-800 text-[11px] font-bold rounded-lg border border-orange-200 transition"
+                title="Open Course in Strava"
+              >
+                <span>🟠 Strava</span>
+              </a>
+            )}
+
+            {route.externalLinks?.garminUrl && (
+              <a
+                href={route.externalLinks.garminUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-2 py-1 bg-cyan-50 hover:bg-cyan-100 text-cyan-900 text-[11px] font-bold rounded-lg border border-cyan-200 transition"
+                title="Send Course to Garmin"
+              >
+                <span>🔵 Garmin</span>
+              </a>
+            )}
+
+            {route.externalLinks?.rungoUrl && (
+              <a
+                href={route.externalLinks.rungoUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 text-[11px] font-bold rounded-lg border border-emerald-200 transition"
+                title="RunGo Voice Navigation"
+              >
+                <span>🟢 RunGo</span>
+              </a>
+            )}
+          </div>
         ) : (
           <div />
         )}

@@ -79,6 +79,7 @@ interface AdminDashboardProps {
 }
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({
+  routes = [],
   notifications,
   meetupEvents,
   checkins,
@@ -542,6 +543,29 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   </label>
                   {has1Mi && (
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+                      {routes && routes.length > 0 && (
+                        <div className="sm:col-span-3 pb-1">
+                          <select
+                            onChange={(e) => {
+                              const r = routes.find((x) => x.id === e.target.value);
+                              if (r) {
+                                setName1Mi(r.name);
+                                setMiles1Mi(r.distanceMiles);
+                                setUrl1Mi(r.externalLinks?.stravaUrl || r.externalLinks?.garminUrl || r.externalLinks?.rungoUrl || '');
+                                if (r.directions && r.directions.length > 0) {
+                                  setDir1Mi(r.directions.map((d) => `${d.step}. ${d.instruction_concise}`).join(' | '));
+                                }
+                              }
+                            }}
+                            className="text-xs px-2.5 py-1.5 border border-woodland-300 rounded-lg bg-woodland-50 text-woodland-900 font-semibold w-full"
+                          >
+                            <option value="">⚡ Autofill 1-Mile from Route Library...</option>
+                            {routes.map((r) => (
+                              <option key={r.id} value={r.id}>{r.name} ({r.distanceMiles} mi)</option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
                       <input
                         type="text"
                         value={name1Mi}
@@ -590,6 +614,29 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   </label>
                   {has3Mi && (
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+                      {routes && routes.length > 0 && (
+                        <div className="sm:col-span-3 pb-1">
+                          <select
+                            onChange={(e) => {
+                              const r = routes.find((x) => x.id === e.target.value);
+                              if (r) {
+                                setName3Mi(r.name);
+                                setMiles3Mi(r.distanceMiles);
+                                setUrl3Mi(r.externalLinks?.stravaUrl || r.externalLinks?.garminUrl || r.externalLinks?.rungoUrl || '');
+                                if (r.directions && r.directions.length > 0) {
+                                  setDir3Mi(r.directions.map((d) => `${d.step}. ${d.instruction_concise}`).join(' | '));
+                                }
+                              }
+                            }}
+                            className="text-xs px-2.5 py-1.5 border border-woodland-300 rounded-lg bg-woodland-50 text-woodland-900 font-semibold w-full"
+                          >
+                            <option value="">⚡ Autofill 3-Mile from Route Library...</option>
+                            {routes.map((r) => (
+                              <option key={r.id} value={r.id}>{r.name} ({r.distanceMiles} mi)</option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
                       <input
                         type="text"
                         value={name3Mi}
@@ -638,6 +685,29 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   </label>
                   {has5Mi && (
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+                      {routes && routes.length > 0 && (
+                        <div className="sm:col-span-3 pb-1">
+                          <select
+                            onChange={(e) => {
+                              const r = routes.find((x) => x.id === e.target.value);
+                              if (r) {
+                                setName5Mi(r.name);
+                                setMiles5Mi(r.distanceMiles);
+                                setUrl5Mi(r.externalLinks?.stravaUrl || r.externalLinks?.garminUrl || r.externalLinks?.rungoUrl || '');
+                                if (r.directions && r.directions.length > 0) {
+                                  setDir5Mi(r.directions.map((d) => `${d.step}. ${d.instruction_concise}`).join(' | '));
+                                }
+                              }
+                            }}
+                            className="text-xs px-2.5 py-1.5 border border-woodland-300 rounded-lg bg-woodland-50 text-woodland-900 font-semibold w-full"
+                          >
+                            <option value="">⚡ Autofill 5-Mile from Route Library...</option>
+                            {routes.map((r) => (
+                              <option key={r.id} value={r.id}>{r.name} ({r.distanceMiles} mi)</option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
                       <input
                         type="text"
                         value={name5Mi}
