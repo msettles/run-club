@@ -92,6 +92,15 @@ export function App() {
 
   // Selected route for viewing
   const [selectedRoute, setSelectedRoute] = useState<GPXRoute>(routes[0]);
+
+  // Keep selectedRoute valid and in sync when routes load or change
+  useEffect(() => {
+    if (routes.length > 0) {
+      if (!selectedRoute || !routes.some((r) => r.id === selectedRoute.id)) {
+        setSelectedRoute(routes[0]);
+      }
+    }
+  }, [routes, selectedRoute]);
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
 

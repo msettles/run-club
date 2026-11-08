@@ -167,9 +167,12 @@ function saveToStorage<T>(key: string, data: T): void {
 export function useClubStore() {
   // Legacy / existing state
   const [runs, setRuns] = useState<RunEvent[]>(() => loadFromStorage(STORAGE_KEYS.RUNS, INITIAL_RUNS));
-  const [routes, setRoutes] = useState<GPXRoute[]>(() => 
-    loadFromStorage<GPXRoute[]>(STORAGE_KEYS.ROUTES, INITIAL_ROUTES).map(hydrateRouteFromFirestore)
-  );
+  const [routes, setRoutes] = useState<GPXRoute[]>(() => {
+    const stored = loadFromStorage<GPXRoute[]>(STORAGE_KEYS.ROUTES, INITIAL_ROUTES).map(hydrateRouteFromFirestore);
+    const existingIds = new Set(stored.map((r) => r.id));
+    const missing = INITIAL_ROUTES.filter((r) => !existingIds.has(r.id)).map(hydrateRouteFromFirestore);
+    return [...stored, ...missing];
+  });
   const [members, setMembers] = useState<Member[]>(() => loadFromStorage(STORAGE_KEYS.MEMBERS, INITIAL_MEMBERS));
   const [currentMemberId, setCurrentMemberId] = useState<string>(() =>
     loadFromStorage(STORAGE_KEYS.CURRENT_USER_ID, INITIAL_MEMBERS[0].id)
@@ -276,7 +279,20 @@ export function useClubStore() {
         const routesSnap = await getDocs(collection(db, 'routes'));
         if (!routesSnap.empty) {
           const remoteRoutes = routesSnap.docs.map((d) => hydrateRouteFromFirestore(d.data()));
-          setRoutes(remoteRoutes);
+          const remoteIds = new Set(remoteRoutes.map((r) => r.id));
+          const missing = INITIAL_ROUTES.filter((r) => !remoteIds.has(r.id)).map(hydrateRouteFromFirestore);
+
+          // Seed any missing official club routes to Firestore
+          for (const m of missing) {
+            setDoc(doc(db, 'routes', m.id), formatRouteForFirestore(m)).catch(console.error);
+          }
+
+          setRoutes([...remoteRoutes, ...missing]);
+        } else {
+          for (const r of INITIAL_ROUTES) {
+            setDoc(doc(db, 'routes', r.id), formatRouteForFirestore(r)).catch(console.error);
+          }
+          setRoutes(INITIAL_ROUTES);
         }
 
         const membersSnap = await getDocs(collection(db, 'members'));
