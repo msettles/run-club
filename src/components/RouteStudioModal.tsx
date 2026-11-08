@@ -345,13 +345,33 @@ export const RouteStudioModal: React.FC<RouteStudioModalProps> = ({
       setIsSaving(true);
       setErrorMsg(null);
 
-      const extLinks: RouteExternalLinks = {
-        stravaUrl: stravaUrl.trim() || undefined,
-        garminUrl: garminUrl.trim() || undefined,
-        rungoUrl: rungoUrl.trim() || undefined,
-      };
+      const extLinks: RouteExternalLinks = {};
+      if (stravaUrl.trim()) extLinks.stravaUrl = stravaUrl.trim();
+      if (garminUrl.trim()) extLinks.garminUrl = garminUrl.trim();
+      if (rungoUrl.trim()) extLinks.rungoUrl = rungoUrl.trim();
 
-      const routeData: Omit<GPXRoute, 'id'> = {
+      const cleanedDirections = directions.map((d) => {
+        const stepObj: any = {
+          step: d.step,
+          cue: d.cue,
+          instruction: d.instruction,
+          instruction_concise: d.instruction_concise,
+          street: d.street,
+          distance_m: d.distance_m,
+          distance: d.distance,
+          at_km: d.at_km,
+          point: d.point,
+        };
+        if (d.street_concise) stepObj.street_concise = d.street_concise;
+        if (d.heading_cardinal) stepObj.heading_cardinal = d.heading_cardinal;
+        if (d.turn_degrees !== undefined && d.turn_degrees !== null) stepObj.turn_degrees = d.turn_degrees;
+        if (d.crosses && d.crosses.length > 0) stepObj.crosses = d.crosses;
+        if (d.crosses_concise && d.crosses_concise.length > 0) stepObj.crosses_concise = d.crosses_concise;
+        if (d.customNotes && d.customNotes.trim()) stepObj.customNotes = d.customNotes.trim();
+        return stepObj;
+      });
+
+      const routeData: any = {
         name: name.trim(),
         description: description.trim(),
         notes: notes.trim(),
@@ -360,14 +380,19 @@ export const RouteStudioModal: React.FC<RouteStudioModalProps> = ({
         distanceMiles: measuredMiles || 3.0,
         elevationGainFt: elevationGainFt || 0,
         targetDistanceTier: distanceTier,
-        customDistanceLabel: distanceTier === 'custom' ? customDistanceLabel.trim() : undefined,
         points,
-        directions,
-        geoJson,
+        directions: cleanedDirections,
+        geoJson: geoJson || null,
         externalLinks: extLinks,
-        gpxXml: gpxXml || undefined,
         createdAt: existingRoute?.createdAt || new Date().toISOString(),
       };
+
+      if (distanceTier === 'custom' && customDistanceLabel.trim()) {
+        routeData.customDistanceLabel = customDistanceLabel.trim();
+      }
+      if (gpxXml) {
+        routeData.gpxXml = gpxXml;
+      }
 
       await onSaveRoute(routeData, existingRoute?.id);
       setIsSaving(false);

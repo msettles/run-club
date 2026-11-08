@@ -45,6 +45,26 @@ import {
   showLocalNotification 
 } from './notifications';
 
+/**
+ * Recursively removes any keys with `undefined` values, which Firestore rejects.
+ */
+export function cleanFirestoreData<T>(obj: T): T {
+  if (obj === null || obj === undefined) return obj;
+  if (Array.isArray(obj)) {
+    return obj.map(cleanFirestoreData) as unknown as T;
+  }
+  if (typeof obj === 'object') {
+    const cleaned: any = {};
+    for (const [key, value] of Object.entries(obj)) {
+      if (value !== undefined) {
+        cleaned[key] = cleanFirestoreData(value);
+      }
+    }
+    return cleaned;
+  }
+  return obj;
+}
+
 const STORAGE_KEYS = {
   RUNS: 'woodchuckers_runs_v1',
   ROUTES: 'woodchuckers_routes_v1',
@@ -901,7 +921,9 @@ export function useClubStore() {
 
     setRoutes((prev) => [newRoute, ...prev]);
     if (isFirebaseConfigured && db) {
-      setDoc(doc(db, 'routes', id), newRoute).catch(console.error);
+      setDoc(doc(db, 'routes', id), cleanFirestoreData(newRoute)).catch((err) => {
+        console.error('Firebase save route error:', err);
+      });
     }
     return newRoute;
   };
@@ -923,7 +945,9 @@ export function useClubStore() {
       return next;
     });
     if (updatedObj && isFirebaseConfigured && db) {
-      setDoc(doc(db, 'routes', routeId), updatedObj, { merge: true }).catch(console.error);
+      setDoc(doc(db, 'routes', routeId), cleanFirestoreData(updatedObj), { merge: true }).catch((err) => {
+        console.error('Firebase update route error:', err);
+      });
     }
     return updatedObj || ({} as GPXRoute);
   };
