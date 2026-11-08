@@ -15,6 +15,7 @@ import {
 import { GPXRoute, SurfaceType, DifficultyType, RouteTurnStep, RouteExternalLinks } from '../types';
 import { generateRouteDirectionsFromGpx, offsetPolylineCoords } from '../utils/routeEngine';
 import { parseGPX } from '../utils/gpxParser';
+import { CARTO_VOYAGER_LABELS_URL, CARTO_VOYAGER_NOLABELS_URL, MAP_ATTRIBUTION } from '../utils/mapConfig';
 
 interface RouteStudioModalProps {
   isOpen: boolean;
@@ -145,9 +146,9 @@ export const RouteStudioModal: React.FC<RouteStudioModalProps> = ({
         scrollWheelZoom: false,
       });
 
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      L.tileLayer(CARTO_VOYAGER_NOLABELS_URL, {
         maxZoom: 19,
-        attribution: '&copy; OpenStreetMap contributors',
+        attribution: MAP_ATTRIBUTION,
       }).addTo(map);
 
       // Dedicated label pane on top of route line
@@ -158,7 +159,7 @@ export const RouteStudioModal: React.FC<RouteStudioModalProps> = ({
         labelsPane.style.pointerEvents = 'none';
       }
 
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}.png', {
+      L.tileLayer(CARTO_VOYAGER_LABELS_URL, {
         pane: 'streetLabelsPane',
         maxZoom: 19,
       }).addTo(map);

@@ -4,6 +4,13 @@ import { GPXRoute } from '../types';
 import { Download, Mountain, Navigation, Layers, Compass, Locate, Edit3 } from 'lucide-react';
 import { downloadGPXFile } from '../utils/gpxParser';
 import { offsetPolylineCoords } from '../utils/routeEngine/geometry';
+import {
+  CARTO_VOYAGER_NOLABELS_URL,
+  CARTO_VOYAGER_LABELS_URL,
+  OSM_URL,
+  TOPO_URL,
+  MAP_ATTRIBUTION,
+} from '../utils/mapConfig';
 
 interface MapViewerProps {
   route: GPXRoute;
@@ -29,7 +36,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
   const userAccuracyCircleRef = useRef<L.Circle | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  const [activeTileLayer, setActiveTileLayer] = useState<'osm' | 'topo'>('osm');
+  const [activeTileLayer, setActiveTileLayer] = useState<'voyager' | 'osm' | 'topo'>('voyager');
   const [selectedTurnIndex, setSelectedTurnIndex] = useState<number | null>(null);
   const [directionsMode, setDirectionsMode] = useState<'concise' | 'verbose'>('concise');
   const [isTrackingLocation, setIsTrackingLocation] = useState<boolean>(false);
@@ -54,14 +61,17 @@ export const MapViewer: React.FC<MapViewerProps> = ({
 
     mapInstanceRef.current = map;
 
-    // Tile layers (Free OpenStreetMap & OpenTopoMap)
-    const osmUrl = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
-    const topoUrl = 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png';
+    // Basemap tile layers
+    const basemapUrl =
+      activeTileLayer === 'voyager'
+        ? CARTO_VOYAGER_NOLABELS_URL
+        : activeTileLayer === 'topo'
+        ? TOPO_URL
+        : OSM_URL;
 
-    L.tileLayer(activeTileLayer === 'osm' ? osmUrl : topoUrl, {
+    L.tileLayer(basemapUrl, {
       maxZoom: 19,
-      attribution:
-        '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+      attribution: MAP_ATTRIBUTION,
     }).addTo(map);
 
     // Dedicated high-contrast label pane rendered above the polyline
@@ -73,7 +83,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
       labelsPane.style.pointerEvents = 'none';
     }
 
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}.png', {
+    L.tileLayer(CARTO_VOYAGER_LABELS_URL, {
       pane: 'streetLabelsPane',
       maxZoom: 19,
     }).addTo(map);
@@ -430,6 +440,16 @@ export const MapViewer: React.FC<MapViewerProps> = ({
 
         {/* Layer Toggle Floating Button */}
         <div className="absolute top-3 right-3 z-[400] flex gap-1 bg-white/95 backdrop-blur-xs rounded-xl shadow-md border border-stone-200 p-1">
+          <button
+            onClick={() => setActiveTileLayer('voyager')}
+            className={`px-2.5 py-1 text-xs rounded-lg font-bold flex items-center gap-1 ${
+              activeTileLayer === 'voyager'
+                ? 'bg-woodland-700 text-white shadow-xs'
+                : 'text-stone-600 hover:bg-stone-100'
+            }`}
+          >
+            <Compass className="w-3 h-3" /> Voyager
+          </button>
           <button
             onClick={() => setActiveTileLayer('osm')}
             className={`px-2.5 py-1 text-xs rounded-lg font-bold flex items-center gap-1 ${
