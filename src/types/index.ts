@@ -1,7 +1,7 @@
 export type SurfaceType = 'Trail' | 'Pavement' | 'Mixed' | 'Track';
 export type DifficultyType = 'Easy' | 'Moderate' | 'Challenging';
 export type ActivityType = 'running' | 'walking';
-export type DistanceTier = 1 | 3 | 5;
+export type DistanceTier = number | string; // e.g. 1 | 3 | 5 | 3.1 | '5K' | '10K'
 
 export interface PaceGroup {
   label: string;
@@ -71,6 +71,13 @@ export interface Attendee {
   rsvpDate: string;
 }
 
+/** One distance option on a scheduled run, pointing at a route in the library. */
+export interface RunRouteChoice {
+  routeId: string;
+  customLabel?: string;
+  tier?: string;
+}
+
 export interface RunEvent {
   id: string;
   title: string;
@@ -83,7 +90,8 @@ export interface RunEvent {
   surface: SurfaceType;
   elevationGainFt: number;
   description: string;
-  routeId?: string;
+  routeId?: string;              // Legacy single route (first choice is mirrored here)
+  routeChoices?: RunRouteChoice[]; // Distance options runners pick from at check-in
   paceGroups: PaceGroup[];
   attendees: Attendee[];
   organizerName: string;
@@ -182,12 +190,8 @@ export interface MeetupEvent {
   title: string;       // e.g. "Thanksgiving Warmup Run"
   codeWord: string;    // Case-insensitive, e.g. "TURKEY"
   specialEvent?: SpecialEventType; // "IS Special Event" dropdown (Turkey Trot, Halloween, Anniversary)
-  activeDistances: ('1' | '3' | '5')[]; // Which distances are active tonight
-  routes: {
-    '1'?: RouteOption;
-    '3'?: RouteOption;
-    '5'?: RouteOption;
-  };
+  activeDistances: string[]; // Which distances / route choice keys are active tonight
+  routes: Record<string, RouteOption>;
   notes?: string;
 }
 
@@ -228,7 +232,7 @@ export interface UserProfile {
   runCount: number;          // Total times ran
   walkCount: number;         // Total times walked
   petRunCount?: number;      // Total runs/walks with a pet
-  distanceCounts?: { '1'?: number; '3'?: number; '5'?: number }; // Route choices count
+  distanceCounts?: Record<string, number>; // Route choices count (e.g. { '1': 4, '3': 10, '5': 2 })
   firstRunDate?: string;     // Earliest recorded check-in date
   // Legacy Link
   linkedLegacyNames: string[]; // Claimed historical names (e.g. ["MATT SETTLES"])

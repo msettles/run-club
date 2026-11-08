@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import confetti from 'canvas-confetti';
 import { MeetupEvent, UserProfile, RouteOption, ActivityType, DistanceTier, LegacyMember, Badge } from '../types';
 import { CLUB_MILESTONES } from '../data/initialData';
 import { 
+  Check,
   CheckCircle, 
   X, 
   Sparkles, 
@@ -21,6 +22,7 @@ interface CheckInModalProps {
   isOpen: boolean;
   onClose: () => void;
   meetupEvents: MeetupEvent[];
+  eventDate?: string; // Date of the run being checked into; falls back to the latest event
   currentUser: UserProfile;
   users: UserProfile[];
   initialMode?: 'checkin' | 'register';
@@ -77,6 +79,7 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
   isOpen,
   onClose,
   meetupEvents,
+  eventDate,
   currentUser,
   users,
   initialMode = 'checkin',
@@ -87,7 +90,7 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
   onOpenAuthModal,
 }) => {
   // Current active meetup event (default to most recent or upcoming)
-  const activeEvent = meetupEvents[0] || {
+  const activeEvent = (eventDate && meetupEvents.find((e) => e.date === eventDate)) || meetupEvents[0] || {
     id: '2026-11-11',
     date: '2026-11-11',
     time: '06:00 PM',
@@ -100,13 +103,48 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
   const isGuest = currentUser.role === 'guest' || !currentUser.email;
   const isOrganizerOrAdmin = currentUser.role === 'admin' || currentUser.role === 'organizer' || currentUser.email === 'woodlandwoodchuckers@gmail.com';
 
+  // Build list of available route options for tonight's run
+  const availableOptions = useMemo(() => {
+    const list: { key: string; route: RouteOption }[] = [];
+    if (activeEvent && activeEvent.routes) {
+      const keys = (activeEvent.activeDistances && activeEvent.activeDistances.length > 0)
+        ? activeEvent.activeDistances
+        : Object.keys(activeEvent.routes);
+
+      const seen = new Set<string>();
+      for (const k of keys) {
+        const r = activeEvent.routes[k];
+        if (r && !seen.has(r.name + r.actualMiles)) {
+          seen.add(r.name + r.actualMiles);
+          list.push({ key: k, route: r });
+        }
+      }
+    }
+    if (list.length === 0) {
+      list.push(
+        { key: '1', route: { name: '1-Mile Club Route', actualMiles: 1.15 } },
+        { key: '3', route: { name: '3-Mile Club Route', actualMiles: 3.22 } },
+        { key: '5', route: { name: '5-Mile Club Route', actualMiles: 5.12 } }
+      );
+    }
+    return list;
+  }, [activeEvent]);
+
   // State
   const [viewMode, setViewMode] = useState<'checkin' | 'register' | 'switch'>(
     initialMode === 'register' || isGuest ? 'register' : 'checkin'
   );
   const [codeWordInput, setCodeWordInput] = useState<string>('');
   const [selectedActivity, setSelectedActivity] = useState<ActivityType>('running');
-  const [selectedDistance, setSelectedDistance] = useState<DistanceTier>(3);
+  const [selectedOptionKey, setSelectedOptionKey] = useState<string>(() => {
+    return availableOptions[0]?.key || '3';
+  });
+
+  const selectedOption = useMemo(() => {
+    return availableOptions.find((o) => o.key === selectedOptionKey) || availableOptions[0];
+  }, [availableOptions, selectedOptionKey]);
+
+  const selectedDistance = selectedOption.route.actualMiles;
   const [runningWithPet, setRunningWithPet] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
@@ -618,89 +656,101 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
                 </div>
               </div>
 
-              {/* Step 3: Distance Choice (1, 3, or 5) */}
-              <div className="space-y-1.5">
-                <label className="block text-xs font-bold text-stone-800 uppercase tracking-wider">
-                  3. Distance
-                </label>
-                <div className="grid grid-cols-3 gap-3">
-                  {[1, 3, 5].map((dist) => {
-                    const isAvailable = activeEvent.activeDistances.includes(String(dist) as any);
-                    const isSelected = selectedDistance === dist;
+              {/* Step 3: Distance / Route Choice */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold text-stone-800 uppercase tracking-wider">
+                    3. Choose Your Route Distance
+                  </label>
+                  <span className="text-[11px] text-stone-500 font-medium">
+                    {availableOptions.length} option{availableOptions.length === 1 ? '' : 's'} available
+                  </span>
+                </div>
 
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  {availableOptions.map((opt) => {
+                    const isSelected = selectedOptionKey === opt.key;
                     return (
-                      <button
-                        key={dist}
-                        type="button"
-                        disabled={!isAvailable}
-                        onClick={() => setSelectedDistance(dist as DistanceTier)}
-                        className={`py-3 rounded-xl border font-black text-center transition flex flex-col items-center justify-center ${
-                          !isAvailable
-                            ? 'opacity-40 bg-stone-100 border-stone-200 cursor-not-allowed text-stone-400'
-                            : isSelected
-                            ? 'bg-amber-500 text-stone-950 border-amber-500 shadow-md scale-102'
-                            : 'bg-white text-stone-700 border-stone-200 hover:bg-stone-50'
+                      <div
+                        key={opt.key}
+                        onClick={() => setSelectedOptionKey(opt.key)}
+                        className={`p-3 rounded-2xl border text-left cursor-pointer transition ${
+                          isSelected
+                            ? 'bg-amber-500/10 border-amber-500 ring-2 ring-amber-500/80 shadow-xs'
+                            : 'bg-white border-stone-200 hover:border-stone-300 hover:bg-stone-50'
                         }`}
                       >
-                        <span className="text-xl leading-none font-display">{dist}</span>
-                        <span className="text-[10px] uppercase font-bold tracking-wider mt-1">
-                          {dist === 1 ? 'Mile' : 'Miles'}
-                        </span>
-                      </button>
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="text-base font-black font-display text-stone-950">
+                                {opt.route.actualMiles} mi
+                              </span>
+                              {opt.route.targetTier && (
+                                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-stone-100 text-stone-600 border border-stone-200">
+                                  {opt.route.targetTier}
+                                </span>
+                              )}
+                            </div>
+                            <h5 className="font-extrabold text-xs text-stone-900 mt-0.5 truncate">
+                              {opt.route.name}
+                            </h5>
+                          </div>
+                          <div
+                            className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 mt-0.5 transition ${
+                              isSelected
+                                ? 'border-amber-600 bg-amber-500 text-stone-950'
+                                : 'border-stone-300'
+                            }`}
+                          >
+                            {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
+                          </div>
+                        </div>
+
+                        {/* External App Links */}
+                        {opt.route.externalLinks && (
+                          <div className="flex items-center gap-1.5 pt-2 flex-wrap">
+                            {opt.route.externalLinks.stravaUrl && (
+                              <a
+                                href={opt.route.externalLinks.stravaUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={(e) => e.stopPropagation()}
+                                className="px-2 py-0.5 bg-orange-100 text-orange-800 text-[10px] font-bold rounded hover:bg-orange-200 transition"
+                              >
+                                🟠 Strava
+                              </a>
+                            )}
+                            {opt.route.externalLinks.garminUrl && (
+                              <a
+                                href={opt.route.externalLinks.garminUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={(e) => e.stopPropagation()}
+                                className="px-2 py-0.5 bg-cyan-100 text-cyan-900 text-[10px] font-bold rounded hover:bg-cyan-200 transition"
+                              >
+                                🔵 Garmin
+                              </a>
+                            )}
+                            {opt.route.externalLinks.rungoUrl && (
+                              <a
+                                href={opt.route.externalLinks.rungoUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={(e) => e.stopPropagation()}
+                                className="px-2 py-0.5 bg-emerald-100 text-emerald-900 text-[10px] font-bold rounded hover:bg-emerald-200 transition"
+                              >
+                                🟢 RunGo
+                              </a>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     );
                   })}
                 </div>
 
-                {/* Route Preview Card under Distance */}
-                {activeEvent.routes[String(selectedDistance) as '1' | '3' | '5'] && (
-                  <div className="p-2.5 bg-woodland-50/80 border border-woodland-200 rounded-xl text-xs space-y-1 mt-2">
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-woodland-950">
-                        📍 {activeEvent.routes[String(selectedDistance) as '1' | '3' | '5']?.name}
-                      </span>
-                      <span className="font-mono text-woodland-800 font-bold text-[11px]">
-                        {activeEvent.routes[String(selectedDistance) as '1' | '3' | '5']?.actualMiles} mi
-                      </span>
-                    </div>
-                    {/* External App Links if present */}
-                    {activeEvent.routes[String(selectedDistance) as '1' | '3' | '5']?.externalLinks && (
-                      <div className="flex items-center gap-1.5 pt-1 flex-wrap">
-                        {activeEvent.routes[String(selectedDistance) as '1' | '3' | '5']?.externalLinks?.stravaUrl && (
-                          <a
-                            href={activeEvent.routes[String(selectedDistance) as '1' | '3' | '5']?.externalLinks?.stravaUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="px-2 py-0.5 bg-orange-100 text-orange-800 text-[10px] font-bold rounded"
-                          >
-                            🟠 Strava
-                          </a>
-                        )}
-                        {activeEvent.routes[String(selectedDistance) as '1' | '3' | '5']?.externalLinks?.garminUrl && (
-                          <a
-                            href={activeEvent.routes[String(selectedDistance) as '1' | '3' | '5']?.externalLinks?.garminUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="px-2 py-0.5 bg-cyan-100 text-cyan-900 text-[10px] font-bold rounded"
-                          >
-                            🔵 Garmin
-                          </a>
-                        )}
-                        {activeEvent.routes[String(selectedDistance) as '1' | '3' | '5']?.externalLinks?.rungoUrl && (
-                          <a
-                            href={activeEvent.routes[String(selectedDistance) as '1' | '3' | '5']?.externalLinks?.rungoUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="px-2 py-0.5 bg-emerald-100 text-emerald-900 text-[10px] font-bold rounded"
-                          >
-                            🟢 RunGo
-                          </a>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                <p className="text-[11px] text-stone-500">
+                <p className="text-[11px] text-stone-500 pt-0.5">
                   Select your target route distance. All runs start and finish at Blue Note Brewing.
                 </p>
               </div>
@@ -925,15 +975,17 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
                       </select>
                     </div>
                     <div>
-                      <label className="block text-[10px] font-bold text-stone-600 mb-1">Distance Choice</label>
+                      <label className="block text-[10px] font-bold text-stone-600 mb-1">Route &amp; Distance</label>
                       <select
-                        value={selectedDistance}
-                        onChange={(e) => setSelectedDistance(Number(e.target.value) as DistanceTier)}
-                        className="w-full px-2 py-1.5 rounded-lg border border-stone-300 bg-white font-medium"
+                        value={selectedOptionKey}
+                        onChange={(e) => setSelectedOptionKey(e.target.value)}
+                        className="w-full px-2 py-1.5 rounded-lg border border-stone-300 bg-white font-medium truncate"
                       >
-                        <option value={1}>1 Mile</option>
-                        <option value={3}>3 Miles</option>
-                        <option value={5}>5 Miles</option>
+                        {availableOptions.map((opt) => (
+                          <option key={opt.key} value={opt.key}>
+                            {opt.route.actualMiles} mi — {opt.route.name}
+                          </option>
+                        ))}
                       </select>
                     </div>
                   </div>

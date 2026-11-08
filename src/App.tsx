@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useClubStore } from './services/storage';
 import { RunEvent, GPXRoute } from './types';
+import { buildMeetupFromRun, getRunChoices, resolveChoices } from './utils/runChoices';
 import { Navbar } from './components/Navbar';
 import { RunCard } from './components/RunCard';
 import { MapViewer } from './components/MapViewer';
@@ -125,6 +126,23 @@ export function App() {
       }
     }
   }, [runs]);
+
+  // Scheduling or editing a run also updates that night's check-in event,
+  // so runners pick from the run's distance options when they check in.
+  const syncCheckInEvent = (run: Omit<RunEvent, 'id' | 'attendees'>, codeWord: string) => {
+    const existing = meetupEvents.find((e) => e.date === run.date);
+    saveMeetupEvent(buildMeetupFromRun(run, routes, codeWord, existing));
+  };
+
+  const handleAddRun = (run: Omit<RunEvent, 'id' | 'attendees'>, codeWord: string) => {
+    addRun(run);
+    syncCheckInEvent(run, codeWord);
+  };
+
+  const handleUpdateRun = (run: RunEvent, codeWord: string) => {
+    updateRun(run);
+    syncCheckInEvent(run, codeWord);
+  };
 
   const handleViewRouteFromRun = (route: GPXRoute) => {
     setSelectedRoute(route);
@@ -341,12 +359,14 @@ export function App() {
             ) : (
               <div className="space-y-4">
                 {runs.map((run) => {
-                  const attachedRoute = routes.find((r) => r.id === run.routeId);
+                  const choices = resolveChoices(getRunChoices(run, routes), routes);
+                  const attachedRoute = choices[0]?.route || routes.find((r) => r.id === run.routeId);
                   return (
                     <RunCard
                       key={run.id}
                       run={run}
                       route={attachedRoute}
+                      choices={choices}
                       currentMember={currentMember}
                       onToggleRSVP={toggleRSVP}
                       onOpenCheckIn={(r) => setSelectedRunForCheckIn(r)}
@@ -621,6 +641,7 @@ export function App() {
           isOpen={Boolean(selectedRunForCheckIn)}
           onClose={() => setSelectedRunForCheckIn(null)}
           meetupEvents={meetupEvents}
+          eventDate={selectedRunForCheckIn.date}
           currentUser={currentUser}
           users={users}
           initialMode={checkInInitialMode}
@@ -638,7 +659,7 @@ export function App() {
           onClose={() => setIsNewRunOpen(false)}
           routes={routes}
           organizerName={currentMember.name}
-          onAddRun={addRun}
+          onAddRun={handleAddRun}
           specialEvents={specialEvents}
         />
       )}
@@ -649,9 +670,10 @@ export function App() {
           routes={routes}
           isOpen={Boolean(editingRun)}
           onClose={() => setEditingRun(null)}
-          onSave={updateRun}
+          onSave={handleUpdateRun}
           onDelete={deleteRun}
           specialEvents={specialEvents}
+          currentCodeWord={meetupEvents.find((e) => e.date === editingRun.date)?.codeWord || ''}
         />
       )}
 

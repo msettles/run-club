@@ -1,16 +1,19 @@
 import React, { useState } from 'react';
-import { RunEvent, GPXRoute, SurfaceType, PaceGroup, SpecialEventType, SpecialEventDefinition } from '../types';
+import { RunEvent, GPXRoute, PaceGroup, SpecialEventType, SpecialEventDefinition, RunRouteChoice } from '../types';
+import { RouteChoicesEditor } from './RouteChoicesEditor';
+import { getRunChoices, resolveChoices, deriveRunStats } from '../utils/runChoices';
 import { INITIAL_SPECIAL_EVENTS } from '../data/initialData';
-import { X, Calendar, Clock, MapPin, Plus, Trash2, Sparkles } from 'lucide-react';
+import { X, Calendar, Clock, MapPin, Plus, Trash2, Sparkles, KeyRound } from 'lucide-react';
 
 interface EditRunModalProps {
   run: RunEvent;
   routes: GPXRoute[];
   isOpen: boolean;
   onClose: () => void;
-  onSave: (updatedRun: RunEvent) => void;
+  onSave: (updatedRun: RunEvent, codeWord: string) => void;
   onDelete?: (runId: string) => void;
   specialEvents?: SpecialEventDefinition[];
+  currentCodeWord?: string; // Code word of the check-in event for this run's date
 }
 
 export const EditRunModal: React.FC<EditRunModalProps> = ({
@@ -21,6 +24,7 @@ export const EditRunModal: React.FC<EditRunModalProps> = ({
   onSave,
   onDelete,
   specialEvents = INITIAL_SPECIAL_EVENTS,
+  currentCodeWord = '',
 }) => {
   const [title, setTitle] = useState(run.title);
   const [specialEvent, setSpecialEvent] = useState<SpecialEventType>(run.specialEvent || 'none');
@@ -28,25 +32,14 @@ export const EditRunModal: React.FC<EditRunModalProps> = ({
   const [time, setTime] = useState(run.time);
   const [locationName, setLocationName] = useState(run.locationName);
   const [address, setAddress] = useState(run.address || '');
-  const [surface, setSurface] = useState<SurfaceType>(run.surface);
-  const [distanceMiles, setDistanceMiles] = useState(run.distanceMiles);
-  const [elevationGainFt, setElevationGainFt] = useState(run.elevationGainFt);
-  const [selectedRouteId, setSelectedRouteId] = useState<string>(run.routeId || '');
+  const [routeChoices, setRouteChoices] = useState<RunRouteChoice[]>(() => getRunChoices(run, routes));
+  const [codeWord, setCodeWord] = useState(currentCodeWord);
+  const [formError, setFormError] = useState<string | null>(null);
   const [description, setDescription] = useState(run.description);
   const [paceGroups, setPaceGroups] = useState<PaceGroup[]>(run.paceGroups || []);
   const [completed, setCompleted] = useState<boolean>(run.completed || false);
 
   if (!isOpen) return null;
-
-  const handleRouteChange = (routeId: string) => {
-    setSelectedRouteId(routeId);
-    const r = routes.find((x) => x.id === routeId);
-    if (r) {
-      setDistanceMiles(r.distanceMiles);
-      setElevationGainFt(r.elevationGainFt);
-      setSurface(r.surface);
-    }
-  };
 
   const addPaceGroup = () => {
     setPaceGroups([...paceGroups, { label: `Pace ${paceGroups.length + 1}`, targetPace: '10:00 /mi' }]);
@@ -58,6 +51,11 @@ export const EditRunModal: React.FC<EditRunModalProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const resolved = resolveChoices(routeChoices, routes);
+    if (resolved.length === 0) {
+      setFormError('Add at least one distance option with a route.');
+      return;
+    }
     onSave({
       ...run,
       title,
@@ -65,15 +63,14 @@ export const EditRunModal: React.FC<EditRunModalProps> = ({
       time,
       locationName,
       address,
-      surface,
-      distanceMiles: Number(distanceMiles),
-      elevationGainFt: Number(elevationGainFt),
-      routeId: selectedRouteId || undefined,
+      ...deriveRunStats(resolved),
+      routeId: resolved[0].route.id,
+      routeChoices: resolved.map((c) => ({ routeId: c.route.id, customLabel: c.label, tier: c.tier })),
       description,
       paceGroups,
       completed,
       specialEvent: specialEvent !== 'none' ? specialEvent : undefined,
-    });
+    }, codeWord);
     onClose();
   };
 
@@ -154,77 +151,28 @@ export const EditRunModal: React.FC<EditRunModalProps> = ({
             </div>
           </div>
 
-          {/* Attach GPX Route */}
-          <div>
-            <label className="block text-xs font-semibold text-stone-700 mb-1">Attached GPX Route</label>
-            <select
-              value={selectedRouteId}
-              onChange={(e) => handleRouteChange(e.target.value)}
-              className="w-full text-sm px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-woodland-500 focus:outline-none bg-white"
-            >
-              <option value="">No specific GPX route attached</option>
-              {routes.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.name} ({r.distanceMiles} mi{r.directions?.length ? ` • ${r.directions.length} turns` : ''})
-                </option>
-              ))}
-            </select>
-            {selectedRouteId && routes.find((r) => r.id === selectedRouteId)?.externalLinks && (
-              <div className="flex items-center gap-1.5 mt-1.5 text-xs">
-                <span className="font-semibold text-[11px] text-stone-500">Linked Apps:</span>
-                {routes.find((r) => r.id === selectedRouteId)?.externalLinks?.stravaUrl && (
-                  <span className="text-[10px] bg-orange-100 text-orange-800 px-1.5 py-0.2 rounded font-bold">
-                    Strava
-                  </span>
-                )}
-                {routes.find((r) => r.id === selectedRouteId)?.externalLinks?.garminUrl && (
-                  <span className="text-[10px] bg-cyan-100 text-cyan-900 px-1.5 py-0.2 rounded font-bold">
-                    Garmin
-                  </span>
-                )}
-                {routes.find((r) => r.id === selectedRouteId)?.externalLinks?.rungoUrl && (
-                  <span className="text-[10px] bg-emerald-100 text-emerald-900 px-1.5 py-0.2 rounded font-bold">
-                    RunGo
-                  </span>
-                )}
-              </div>
-            )}
-          </div>
+          {/* Distance options: each is a library route; distance, elevation and surface come from the routes */}
+          <RouteChoicesEditor
+            routes={routes}
+            choices={routeChoices}
+            onChange={(c) => {
+              setRouteChoices(c);
+              setFormError(null);
+            }}
+          />
+          {formError && <p className="text-xs text-red-600 font-semibold">{formError}</p>}
 
-          <div className="grid grid-cols-3 gap-3">
-            <div>
-              <label className="block text-xs font-semibold text-stone-700 mb-1">Distance (mi)</label>
-              <input
-                type="number"
-                step="0.1"
-                required
-                value={distanceMiles}
-                onChange={(e) => setDistanceMiles(parseFloat(e.target.value) || 0)}
-                className="w-full text-sm px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-woodland-500 focus:outline-none"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-stone-700 mb-1">Elevation Gain (ft)</label>
-              <input
-                type="number"
-                value={elevationGainFt}
-                onChange={(e) => setElevationGainFt(parseInt(e.target.value, 10) || 0)}
-                className="w-full text-sm px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-woodland-500 focus:outline-none"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-stone-700 mb-1">Surface</label>
-              <select
-                value={surface}
-                onChange={(e) => setSurface(e.target.value as SurfaceType)}
-                className="w-full text-sm px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-woodland-500 focus:outline-none bg-white"
-              >
-                <option value="Trail">Trail</option>
-                <option value="Pavement">Pavement</option>
-                <option value="Mixed">Mixed</option>
-                <option value="Track">Track</option>
-              </select>
-            </div>
+          <div>
+            <label className="block text-xs font-semibold text-stone-700 mb-1 flex items-center gap-1">
+              <KeyRound className="w-3.5 h-3.5 text-stone-400" /> Check-in Code Word
+            </label>
+            <input
+              type="text"
+              value={codeWord}
+              onChange={(e) => setCodeWord(e.target.value)}
+              placeholder="Announced at the run, e.g. TURKEY"
+              className="w-full text-sm px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-woodland-500 focus:outline-none uppercase"
+            />
           </div>
 
           <div>

@@ -37,7 +37,6 @@ export const RouteStudioModal: React.FC<RouteStudioModalProps> = ({
   const [notes, setNotes] = useState<string>('');
   const [surface, setSurface] = useState<SurfaceType>('Pavement');
   const [difficulty, setDifficulty] = useState<DifficultyType>('Easy');
-  const [distanceTier, setDistanceTier] = useState<'1' | '3' | '5' | 'custom'>('3');
   const [customDistanceLabel, setCustomDistanceLabel] = useState<string>('');
 
   // External URLs
@@ -101,19 +100,7 @@ export const RouteStudioModal: React.FC<RouteStudioModalProps> = ({
         }
       }
       setGeoJson(initGeoJson);
-
-      if (['1', '3', '5'].includes(existingRoute.targetDistanceTier as string)) {
-        setDistanceTier(existingRoute.targetDistanceTier as '1' | '3' | '5');
-      } else if (existingRoute.targetDistanceTier === 'custom' || existingRoute.customDistanceLabel) {
-        setDistanceTier('custom');
-        setCustomDistanceLabel(existingRoute.customDistanceLabel || '');
-      } else {
-        // Infer default tier from miles
-        const m = existingRoute.distanceMiles || 3;
-        if (m <= 2.0) setDistanceTier('1');
-        else if (m <= 4.0) setDistanceTier('3');
-        else setDistanceTier('5');
-      }
+      setCustomDistanceLabel(existingRoute.customDistanceLabel || existingRoute.targetDistanceTier || '');
 
       setStravaUrl(existingRoute.externalLinks?.stravaUrl || '');
       setGarminUrl(existingRoute.externalLinks?.garminUrl || '');
@@ -125,7 +112,6 @@ export const RouteStudioModal: React.FC<RouteStudioModalProps> = ({
       setNotes('Start & finish at Blue Note Brewing. Obey traffic signals and pedestrian crossings.');
       setSurface('Pavement');
       setDifficulty('Easy');
-      setDistanceTier('3');
       setCustomDistanceLabel('');
       setStravaUrl('');
       setGarminUrl('');
@@ -269,11 +255,6 @@ export const RouteStudioModal: React.FC<RouteStudioModalProps> = ({
         setName(parsed.name || file.name.replace(/\.gpx$/i, ''));
       }
 
-      // Infer Distance Tier from measured distance
-      if (mMiles <= 2.0) setDistanceTier('1');
-      else if (mMiles <= 4.0) setDistanceTier('3');
-      else setDistanceTier('5');
-
       // Run In-Browser Directions Engine!
       const result = await generateRouteDirectionsFromGpx(text, file.name, {
         onProgress: (status) => setProcessingStatus(status),
@@ -397,7 +378,6 @@ export const RouteStudioModal: React.FC<RouteStudioModalProps> = ({
         difficulty,
         distanceMiles: measuredMiles || 3.0,
         elevationGainFt: elevationGainFt || 0,
-        targetDistanceTier: distanceTier,
         points,
         directions: cleanedDirections,
         geoJson: geoJson || null,
@@ -405,8 +385,9 @@ export const RouteStudioModal: React.FC<RouteStudioModalProps> = ({
         createdAt: existingRoute?.createdAt || new Date().toISOString(),
       };
 
-      if (distanceTier === 'custom' && customDistanceLabel.trim()) {
+      if (customDistanceLabel.trim()) {
         routeData.customDistanceLabel = customDistanceLabel.trim();
+        routeData.targetDistanceTier = customDistanceLabel.trim();
       }
       if (gpxXml) {
         routeData.gpxXml = gpxXml;
@@ -567,44 +548,19 @@ export const RouteStudioModal: React.FC<RouteStudioModalProps> = ({
               />
             </div>
 
-            {/* Distance Tier Selector (1, 3, 5, or Custom) */}
+            {/* Optional Distance Tag or Nickname */}
             <div>
               <label className="block text-xs font-bold text-stone-700 mb-1">
-                Club Distance Tier *
+                Course Distance Tag / Nickname (Optional)
               </label>
-              <div className="grid grid-cols-4 gap-1.5">
-                {(['1', '3', '5', 'custom'] as const).map((tier) => (
-                  <button
-                    key={tier}
-                    type="button"
-                    onClick={() => setDistanceTier(tier)}
-                    className={`py-2 text-xs font-bold rounded-xl border transition ${
-                      distanceTier === tier
-                        ? 'bg-woodland-800 text-white border-woodland-900 shadow-xs'
-                        : 'bg-white text-stone-700 border-stone-200 hover:bg-stone-50'
-                    }`}
-                  >
-                    {tier === 'custom' ? 'Special Event' : `${tier} Mile`}
-                  </button>
-                ))}
-              </div>
+              <input
+                type="text"
+                value={customDistanceLabel}
+                onChange={(e) => setCustomDistanceLabel(e.target.value)}
+                placeholder="e.g. 5K Dash, 10K Course, 1-Mile Stroll"
+                className="w-full px-3 py-2 text-xs border rounded-xl outline-none focus:border-woodland-600 focus:ring-1 focus:ring-woodland-600 bg-white"
+              />
             </div>
-
-            {/* If Custom selected */}
-            {distanceTier === 'custom' && (
-              <div className="col-span-1 md:col-span-2 bg-amber-50 border border-amber-200 rounded-xl p-3">
-                <label className="block text-xs font-bold text-amber-950 mb-1">
-                  Custom Event Distance / Label (e.g. 10K, Half Marathon, 6-Mile Run)
-                </label>
-                <input
-                  type="text"
-                  value={customDistanceLabel}
-                  onChange={(e) => setCustomDistanceLabel(e.target.value)}
-                  placeholder="e.g. 10K Championship Course"
-                  className="w-full px-3 py-2 text-xs border border-amber-300 rounded-xl outline-none bg-white"
-                />
-              </div>
-            )}
 
             {/* Surface */}
             <div>

@@ -1,10 +1,12 @@
 import React from 'react';
 import { RunEvent, Member, GPXRoute } from '../types';
+import { ResolvedChoice } from '../utils/runChoices';
 import { Clock, MapPin, Mountain, Check, CalendarPlus, Map } from 'lucide-react';
 
 interface RunCardProps {
   run: RunEvent;
   route?: GPXRoute;
+  choices?: ResolvedChoice[]; // Distance options for this run (1 / 3 / 5)
   currentMember: Member;
   onToggleRSVP: (runId: string) => void;
   onOpenCheckIn: (run: RunEvent) => void;
@@ -14,6 +16,7 @@ interface RunCardProps {
 export const RunCard: React.FC<RunCardProps> = ({
   run,
   route,
+  choices = [],
   currentMember,
   onToggleRSVP,
   onOpenCheckIn,
@@ -37,7 +40,7 @@ export const RunCard: React.FC<RunCardProps> = ({
       'PRODID:-//Woodland Woodchuckers Run Club//NONSGML v1.0//EN',
       'BEGIN:VEVENT',
       `SUMMARY:🦫 Woodchuckers: ${run.title}`,
-      `DESCRIPTION:${run.description}\\nDistance: ${run.distanceMiles} miles\\nSurface: ${run.surface}`,
+      `DESCRIPTION:${run.description}\\nDistance: ${choices.length ? choices.map((c) => `${c.miles} mi (${c.route.name})`).join(', ') : `${run.distanceMiles} miles`}\\nSurface: ${run.surface}`,
       `LOCATION:${run.locationName}, ${run.address}`,
       `DTSTART:${startIso}`,
       `DTEND:${startIso}`,
@@ -91,9 +94,21 @@ export const RunCard: React.FC<RunCardProps> = ({
                 {run.surface} Special
               </span>
             )}
-            <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-stone-100 text-stone-700">
-              {run.distanceMiles} mi
-            </span>
+            {choices.length > 0 ? (
+              choices.map((c, idx) => (
+                <span
+                  key={c.id || idx}
+                  className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-stone-100 text-stone-700"
+                  title={`${c.route.name} • ${c.route.distanceMiles} mi`}
+                >
+                  {c.miles} mi
+                </span>
+              ))
+            ) : (
+              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-stone-100 text-stone-700">
+                {run.distanceMiles} mi
+              </span>
+            )}
             {run.elevationGainFt > 0 && (
               <span className="text-[11px] font-medium text-stone-500 flex items-center gap-0.5">
                 <Mountain className="w-3 h-3 text-stone-400" />

@@ -283,9 +283,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
           <div className="flex items-center gap-2">
             <h3 className="font-extrabold text-base text-stone-900 font-display">{route.name}</h3>
             <span className="px-2 py-0.5 bg-stone-200 text-stone-800 rounded-full text-[10px] font-bold">
-              {route.targetDistanceTier === 'custom' && route.customDistanceLabel
-                ? route.customDistanceLabel
-                : `${route.targetDistanceTier || Math.round(route.distanceMiles)} Mi Tier`}
+              {route.customDistanceLabel || `${route.distanceMiles} mi`}
             </span>
             <span className="px-2 py-0.5 bg-amber-100 text-amber-900 rounded-full text-[10px] font-bold">
               {route.surface}

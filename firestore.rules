@@ -116,7 +116,8 @@ service cloud.firestore {
       return data.keys().hasOnly([
                'id', 'title', 'date', 'time', 'locationName', 'meetingCoordinates',
                'address', 'distanceMiles', 'surface', 'elevationGainFt', 'description',
-               'routeId', 'paceGroups', 'attendees', 'organizerName', 'completed'
+               'routeId', 'routeChoices', 'paceGroups', 'attendees', 'organizerName',
+               'completed', 'specialEvent'
              ]) &&
              data.keys().hasAll([
                'id', 'title', 'date', 'time', 'locationName', 'address',
@@ -138,6 +139,8 @@ service cloud.firestore {
              data.organizerName is string && data.organizerName.size() >= 1 && data.organizerName.size() <= 100 &&
              (!('routeId' in data) || (data.routeId is string && data.routeId.size() >= 1 && data.routeId.size() <= 128)) &&
              (!('completed' in data) || (data.completed is bool)) &&
+             (!('routeChoices' in data) || (data.routeChoices is list && data.routeChoices.size() <= 10)) &&
+             (!('specialEvent' in data) || (data.specialEvent is string && data.specialEvent.size() <= 64)) &&
              (!('meetingCoordinates' in data) || isValidCoordinates(data.meetingCoordinates));
     }
 

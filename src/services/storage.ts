@@ -451,12 +451,24 @@ export function useClubStore() {
     }
 
     // 3. Locate route option and actual measured miles
-    const distKey = String(distanceChoice) as '1' | '3' | '5';
-    const routeOption = event.routes[distKey] || {
-      name: `${distanceChoice}-Mile Club Route`,
-      actualMiles: distanceChoice === 1 ? 1.15 : distanceChoice === 3 ? 3.22 : 5.12,
-      directions: 'Follow group leader from Blue Note Brewing.',
-    };
+    let routeOption: RouteOption | undefined = event.routes[String(distanceChoice)];
+    if (!routeOption) {
+      const allRoutes = Object.values(event.routes || {});
+      const numDist = typeof distanceChoice === 'number' ? distanceChoice : parseFloat(String(distanceChoice)) || 0;
+      routeOption = allRoutes.find(
+        (r) => r.routeId === String(distanceChoice) ||
+               (numDist > 0 && Math.abs(r.actualMiles - numDist) < 0.25) ||
+               r.name.toLowerCase() === String(distanceChoice).toLowerCase()
+      );
+    }
+    if (!routeOption) {
+      const numDist = typeof distanceChoice === 'number' ? distanceChoice : parseFloat(String(distanceChoice)) || 3.0;
+      routeOption = {
+        name: `${distanceChoice}-Mile Club Route`,
+        actualMiles: numDist,
+        directions: 'Follow group leader from Blue Note Brewing.',
+      };
+    }
 
     // 4. Ensure runner doesn't double-checkin on the same date
     const checkinId = `${eventDate}_${cleanEmail}`;
@@ -506,10 +518,11 @@ export function useClubStore() {
         const newWalkCount = activity === 'walking' ? u.walkCount + 1 : u.walkCount;
         const newPetRunCount = withPet ? (u.petRunCount || 0) + 1 : (u.petRunCount || 0);
 
-        const newDistanceCounts = {
-          '1': (u.distanceCounts?.['1'] || 0) + (distanceChoice === 1 ? 1 : 0),
-          '3': (u.distanceCounts?.['3'] || 0) + (distanceChoice === 3 ? 1 : 0),
-          '5': (u.distanceCounts?.['5'] || 0) + (distanceChoice === 5 ? 1 : 0),
+        const numMiles = routeOption.actualMiles;
+        const legacyBucket = numMiles <= 2.0 ? '1' : numMiles <= 4.0 ? '3' : '5';
+        const newDistanceCounts: Record<string, number> = {
+          ...(u.distanceCounts || {}),
+          [legacyBucket]: ((u.distanceCounts?.[legacyBucket] || 0) + 1),
         };
 
         const unlocked = [...(u.unlockedBadgeIds || [])];
@@ -576,7 +589,7 @@ export function useClubStore() {
               break;
             }
             case 'distance': {
-              const tierKey = (cfg.distanceTier || 3).toString() as '1' | '3' | '5';
+              const tierKey = (cfg.distanceTier || 3).toString();
               const count = newDistanceCounts[tierKey] || 0;
               const threshold = cfg.distanceCount || 1;
               if (count >= threshold) {

@@ -179,7 +179,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   // Handle saving the Meetup Event
   const handleSaveMeetup = (e: React.FormEvent) => {
     e.preventDefault();
-    const activeDists: ('1' | '3' | '5')[] = [];
+    const activeDists: string[] = [];
     if (has1Mi) activeDists.push('1');
     if (has3Mi) activeDists.push('3');
     if (has5Mi) activeDists.push('5');
@@ -794,14 +794,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <span className="text-[10px] text-stone-400">Distances:</span>
-                    {evt.activeDistances.map((d) => (
-                      <span
-                        key={d}
-                        className="px-2 py-0.5 bg-stone-200 text-stone-800 font-bold text-[10px] rounded-full"
-                      >
-                        {d} Mi ({evt.routes[d]?.actualMiles || d} mi)
-                      </span>
-                    ))}
+                    {evt.activeDistances.map((d) => {
+                      const r = evt.routes[d];
+                      return (
+                        <span
+                          key={d}
+                          className="px-2 py-0.5 bg-stone-200 text-stone-800 font-bold text-[10px] rounded-full"
+                        >
+                          {r ? `${r.actualMiles} mi • ${r.name}` : `${d} Mi`}
+                        </span>
+                      );
+                    })}
                   </div>
                 </div>
               ))}
