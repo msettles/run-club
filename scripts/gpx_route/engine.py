@@ -132,50 +132,64 @@ def build_directions(
             runs = merged
             changed = True
 
-    # 4. split a run where the route turns sharply but stays on the same "street"
+    def local_turn_angle(i, win_m=20.0):
+        d0 = samples[i][1]
+        j_back = i
+        while j_back > 0 and d0 - samples[j_back][1] < win_m:
+            j_back -= 1
+        j_fwd = i
+        while j_fwd < len(samples) - 1 and samples[j_fwd][1] - d0 < win_m:
+            j_fwd += 1
+        p_back, p_cur, p_fwd = samples[j_back][0], samples[i][0], samples[j_fwd][0]
+        return angle_diff(bearing(p_back, p_cur), bearing(p_cur, p_fwd))
+
+    # 4. split a run where the route turns (stays on same street or off-street / unmapped)
     final = []
     for lab, s, e in runs:
         cut = s
         i = s + 1
+        is_generic = not lab or lab == "off-street" or lab.startswith("unnamed")
+        need = 35.0 if is_generic else 45.0
+
         while i < e:
-            hb = heading_at(samples, i, 50, False)
-            ha = heading_at(samples, i, 50, True)
-            need = 60 if lab.startswith("unnamed") or lab == "off-street" else 120
+            ang = local_turn_angle(i, 20.0)
             if (
-                hb is not None
-                and ha is not None
-                and abs(angle_diff(hb, ha)) >= need
+                abs(ang) >= need
                 and samples[i][1] - samples[cut][1] >= min_leg
                 and samples[e][1] - samples[i][1] >= min_leg
             ):
-                final.append([lab, cut, i])
-                cut = i
-                i += int(20 / step)
-            i += 1
+                best_i = i
+                search_end = min(e, i + int(25.0 / step))
+                check_i = i
+                while check_i <= search_end:
+                    if abs(local_turn_angle(check_i, 20.0)) > abs(local_turn_angle(best_i, 20.0)):
+                        best_i = check_i
+                    check_i += 1
+
+                final.append([lab, cut, best_i])
+                cut = best_i
+                i = best_i + int(min_leg / step)
+            else:
+                i += 1
         final.append([lab, cut, e])
     runs = final
 
     def turn_at(k):
         s = runs[k][1]
         win = min(
-            40,
+            35,
             max(10, (samples[runs[k][2]][1] - samples[s][1]) / 2),
             max(10, (samples[s][1] - samples[runs[k - 1][1]][1]) / 2),
         )
         hi, ho = heading_at(samples, s, win, False), heading_at(samples, s, win, True)
         return angle_diff(hi, ho) if hi is not None and ho is not None else 0
 
-    # undo same-street splits that turn out not to be real turns
+    # undo same-street splits that turn out not to be real turns (< 35 deg)
     k = 1
     while k < len(runs):
-        short = (
-            min(
-                samples[runs[k][2]][1] - samples[runs[k][1]][1],
-                samples[runs[k - 1][2]][1] - samples[runs[k - 1][1]][1],
-            )
-            < 2 * min_leg
-        )
-        if runs[k][0] == runs[k - 1][0] and (short or abs(turn_at(k)) < 120):
+        same_label = runs[k][0] == runs[k - 1][0]
+        t_ang = abs(turn_at(k))
+        if same_label and t_ang < 35.0:
             runs[k - 1][2] = runs[k][2]
             runs.pop(k)
         else:

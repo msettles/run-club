@@ -55,6 +55,26 @@ export function headingAt(
   }
 }
 
+function localTurnAngle(
+  samples: [[number, number], number][],
+  i: number,
+  winM: number = 20.0
+): number {
+  const d0 = samples[i][1];
+  let jBack = i;
+  while (jBack > 0 && d0 - samples[jBack][1] < winM) {
+    jBack--;
+  }
+  let jFwd = i;
+  while (jFwd < samples.length - 1 && samples[jFwd][1] - d0 < winM) {
+    jFwd++;
+  }
+  const pBack = samples[jBack][0];
+  const pCur = samples[i][0];
+  const pFwd = samples[jFwd][0];
+  return angleDiff(bearing(pBack, pCur), bearing(pCur, pFwd));
+}
+
 export interface BuildDirectionsOptions {
   name?: string;
   units?: 'mi' | 'km';
@@ -228,27 +248,39 @@ export async function buildDirections(
     }
   }
 
-  // 4. Split a run where the route turns sharply but stays on same street
+  // 4. Split a run where the route turns (stays on same street or off-street / unmapped)
   const finalRuns: [string, number, number][] = [];
   for (const [lab, s, e] of runs) {
     let cut = s;
     let i = s + 1;
+    const isGeneric = !lab || lab === 'off-street' || lab.startsWith('unnamed');
+    const need = isGeneric ? 35.0 : 45.0;
+
     while (i < e) {
-      const hb = headingAt(samples, i, 50, false);
-      const ha = headingAt(samples, i, 50, true);
-      const need = lab.startsWith('unnamed') || lab === 'off-street' ? 60 : 120;
+      const ang = localTurnAngle(samples, i, 20.0);
       if (
-        hb !== null &&
-        ha !== null &&
-        Math.abs(angleDiff(hb, ha)) >= need &&
+        Math.abs(ang) >= need &&
         samples[i][1] - samples[cut][1] >= minLeg &&
         samples[e][1] - samples[i][1] >= minLeg
       ) {
-        finalRuns.push([lab, cut, i]);
-        cut = i;
-        i += Math.floor(20 / step);
+        // Find peak apex in the local neighborhood (within ~25m)
+        let bestI = i;
+        const searchEnd = Math.min(e, i + Math.floor(25.0 / step));
+        for (let checkI = i; checkI <= searchEnd; checkI++) {
+          if (
+            Math.abs(localTurnAngle(samples, checkI, 20.0)) >
+            Math.abs(localTurnAngle(samples, bestI, 20.0))
+          ) {
+            bestI = checkI;
+          }
+        }
+
+        finalRuns.push([lab, cut, bestI]);
+        cut = bestI;
+        i = bestI + Math.floor(minLeg / step);
+      } else {
+        i++;
       }
-      i++;
     }
     finalRuns.push([lab, cut, e]);
   }
@@ -257,7 +289,7 @@ export async function buildDirections(
   const turnAt = (k: number): number => {
     const s = runs[k][1];
     const win = Math.min(
-      40,
+      35,
       Math.max(10, (samples[runs[k][2]][1] - samples[s][1]) / 2),
       Math.max(10, (samples[s][1] - samples[runs[k - 1][1]][1]) / 2)
     );
@@ -266,19 +298,13 @@ export async function buildDirections(
     return hi !== null && ho !== null ? angleDiff(hi, ho) : 0;
   };
 
-  // Undo same-street splits that turn out not to be real turns
+  // 4b. Undo same-street splits that turn out NOT to be real turns (< 35 deg)
   let kMerge = 1;
   while (kMerge < runs.length) {
-    const short =
-      Math.min(
-        samples[runs[kMerge][2]][1] - samples[runs[kMerge][1]][1],
-        samples[runs[kMerge - 1][2]][1] - samples[runs[kMerge - 1][1]][1]
-      ) <
-      2 * minLeg;
-    if (
-      runs[kMerge][0] === runs[kMerge - 1][0] &&
-      (short || Math.abs(turnAt(kMerge)) < 120)
-    ) {
+    const sameLabel = runs[kMerge][0] === runs[kMerge - 1][0];
+    const tAng = Math.abs(turnAt(kMerge));
+    // Only merge if both runs have the exact same label AND it is NOT a real turn (< 35 deg)
+    if (sameLabel && tAng < 35.0) {
       runs[kMerge - 1][2] = runs[kMerge][2];
       runs.splice(kMerge, 1);
     } else {
@@ -326,19 +352,29 @@ export async function buildDirections(
       const delta = turnAt(k);
       let phrase = turnPhrase(delta);
       cue = turnCue(delta);
-      const roadName = lab === 'off-street' ? 'course path' : lab;
+      const isOffStreet = !lab || lab === 'off-street' || lab === 'course path';
+      const roadName = isOffStreet ? '' : lab;
       const shortRoad = abbreviateStreet(roadName);
-      if (lab === runs[k - 1][0] && Math.abs(delta) >= 20) {
+
+      if (lab === runs[k - 1][0] && Math.abs(delta) >= 35 && !isOffStreet) {
         phrase = phrase.replace(' onto', ' to stay on');
         conciseText = `${cue} to stay on ${shortRoad}`;
+        text = `${phrase} ${roadName}, heading ${cardDir}`;
+      } else if (isOffStreet) {
+        // Clean geometric cue when street name is not yet identified
+        const baseAction = phrase.replace(' onto', '');
+        text = `${baseAction}, heading ${cardDir}`;
+        conciseText = `${cue} [${cardShort}]`;
       } else {
         conciseText = `${cue} on ${shortRoad}`;
+        text = `${phrase} ${roadName}, heading ${cardDir}`;
       }
-      text = `${phrase} ${roadName}, heading ${cardDir}`;
       turn = Math.round(delta);
     }
 
-    const stepStreet = (k === 0 && (lab === 'off-street' || !lab)) ? 'Dead Cat Alley' : (lab === 'off-street' ? 'course path' : lab);
+    const stepStreet = (k === 0 && (!lab || lab === 'off-street'))
+      ? 'Dead Cat Alley'
+      : (!lab || lab === 'off-street' ? 'course path' : lab);
     const stepStreetConcise = abbreviateStreet(stepStreet);
 
     const item: DirectionStep = {
@@ -377,38 +413,55 @@ export async function buildDirections(
   // If Overpass was unavailable, use fast OpenStreetMap Nominatim reverse-geocoding for the turn points
   if ((!osmData || !osmData.elements || osmData.elements.length === 0) && steps.length > 1) {
     onProgress?.('Looking up turn street names from OpenStreetMap...');
+    const geoCache = new Map<string, string>();
+
     for (let i = 1; i < steps.length; i++) {
       const s = steps[i];
       if (s.street === 'course path' || s.street === 'off-street') {
         try {
-          const [lon, lat] = s.point;
-          const controller = new AbortController();
-          const timeout = setTimeout(() => controller.abort(), 2000);
-          const res = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`,
-            {
-              signal: controller.signal,
-              headers: { Accept: 'application/json' },
+          // Look ~15 meters into the new leg coordinates rather than the exact intersection point
+          // to reliably identify the road being turned onto!
+          const targetPt = (s.coordinates && s.coordinates.length > 2)
+            ? s.coordinates[Math.min(3, s.coordinates.length - 1)]
+            : s.point;
+          const [lon, lat] = targetPt;
+          const cacheKey = `${lat.toFixed(4)},${lon.toFixed(4)}`;
+
+          let road = geoCache.get(cacheKey);
+          if (!road) {
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 2000);
+            const res = await fetch(
+              `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`,
+              {
+                signal: controller.signal,
+                headers: { Accept: 'application/json' },
+              }
+            );
+            clearTimeout(timeout);
+            if (res.ok) {
+              const data = await res.json();
+              road =
+                data.address?.road ||
+                data.address?.pedestrian ||
+                data.address?.footway ||
+                data.address?.path ||
+                data.name;
+              if (road) {
+                geoCache.set(cacheKey, road);
+              }
             }
-          );
-          clearTimeout(timeout);
-          if (res.ok) {
-            const data = await res.json();
-            const road =
-              data.address?.road ||
-              data.address?.pedestrian ||
-              data.address?.footway ||
-              data.address?.path ||
-              data.name;
-            if (road) {
-              const shortRoad = abbreviateStreet(road);
-              s.street = road;
-              s.street_concise = shortRoad;
-              s.instruction = s.instruction.replace('course path', road).replace('off-street', road);
-              s.instruction_concise = s.instruction_concise
-                .replace('course path', shortRoad)
-                .replace('off-street', shortRoad);
-            }
+          }
+
+          if (road) {
+            const shortRoad = abbreviateStreet(road);
+            s.street = road;
+            s.street_concise = shortRoad;
+            const delta = s.turn_degrees || 0;
+            const phrase = turnPhrase(delta);
+            const cardDir = s.heading_cardinal ? s.heading_cardinal : '';
+            s.instruction = `${phrase} ${road}${cardDir ? `, heading ${cardDir}` : ''}`;
+            s.instruction_concise = `${s.cue} on ${shortRoad}`;
           }
         } catch {
           // If Nominatim fails or times out, keep clean geometric cue

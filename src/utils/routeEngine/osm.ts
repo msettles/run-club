@@ -7,8 +7,8 @@ import { Projector, bearing, pointSegDist, segsIntersect } from './geometry';
 
 export const OVERPASS_URLS = [
   'https://overpass-api.de/api/interpreter',
-  'https://overpass.private.coffee/api/interpreter',
-  'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
+  'https://lz4.overpass-api.de/api/interpreter',
+  'https://z.overpass-api.de/api/interpreter',
   'https://overpass.kumi.systems/api/interpreter',
 ];
 
@@ -47,15 +47,11 @@ export interface OsmResponse {
  */
 export async function fetchOsm(bbox: [number, number, number, number]): Promise<OsmResponse> {
   const [s, w, n, e] = bbox;
-  const query = `[out:json][timeout:25];
+  // Streamlined query focusing on walkable/runnable highways and key landmark amenities
+  const query = `[out:json][timeout:15];
 (
-  way["highway"]["highway"!~"proposed|construction|abandoned|platform|elevator"](${s},${w},${n},${e});
-  nwr["name"]["amenity"](${s},${w},${n},${e});
-  nwr["name"]["shop"](${s},${w},${n},${e});
-  nwr["name"]["tourism"](${s},${w},${n},${e});
-  nwr["name"]["leisure"](${s},${w},${n},${e});
-  nwr["name"]["historic"](${s},${w},${n},${e});
-  nwr["name"]["craft"](${s},${w},${n},${e});
+  way["highway"]["highway"!~"proposed|construction|abandoned|platform|elevator|motorway|motorway_link"](${s},${w},${n},${e});
+  nwr["amenity"~"brewery|pub|bar|post_office|townhall"](${s},${w},${n},${e});
 );
 out tags geom;`;
 
@@ -64,8 +60,8 @@ out tags geom;`;
   for (const url of OVERPASS_URLS) {
     try {
       const controller = new AbortController();
-      // Fast 8-second timeout per mirror to prevent browser hanging
-      const timeoutId = setTimeout(() => controller.abort(new Error(`Timeout connecting to ${url}`)), 8000);
+      // 10-second timeout per mirror
+      const timeoutId = setTimeout(() => controller.abort(new Error(`Timeout connecting to ${url}`)), 10000);
 
       const response = await fetch(url, {
         method: 'POST',
