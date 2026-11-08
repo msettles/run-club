@@ -233,7 +233,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   // Export CSV functions
   const exportCheckinsCSV = () => {
-    const headers = ['Date', 'Time', 'User Email', 'Runner Name', 'Activity', 'With Pet', 'Distance Choice', 'Actual GPS Miles', 'Route Name', 'Source'];
+    const headers = ['Date', 'Time', 'User Email', 'Runner Name', 'Activity', 'With Pet', 'Loops', 'Distance Choice', 'Actual GPS Miles', 'Route Name', 'Source'];
     const rows = checkins.map((c) => [
       c.date,
       c.time,
@@ -241,6 +241,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       `"${c.runnerName || ''}"`,
       c.activity,
       c.withPet ? 'Yes' : 'No',
+      c.loops || 1,
       `${c.distanceChoice} mi`,
       c.actualMiles,
       `"${c.routeName || ''}"`,
@@ -1644,6 +1645,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           {c.withPet && (
                             <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300" title="Ran with a pet">
                               🐕 Pet
+                            </span>
+                          )}
+                          {c.loops && c.loops > 1 && (
+                            <span className="px-1.5 py-0.5 rounded-full text-[10px] font-black bg-purple-100 text-purple-900 border border-purple-200" title={`${c.loops} loops completed`}>
+                              🔄 {c.loops} Loops
                             </span>
                           )}
                         </div>

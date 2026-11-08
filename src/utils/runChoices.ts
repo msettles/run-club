@@ -63,7 +63,10 @@ export function routeOptionFromRoute(route: GPXRoute): RouteOption {
   return {
     name: route.name,
     actualMiles: route.distanceMiles,
+    baseMiles: route.distanceMiles,
     routeId: route.id,
+    isLoop: Boolean(route.isLoop),
+    maxLoops: route.maxLoops || 4,
     externalLinks: route.externalLinks,
     directionsList: route.directions,
     geoJson: route.geoJson,

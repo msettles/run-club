@@ -53,6 +53,8 @@ export interface GPXRoute {
   surface: SurfaceType;
   difficulty: DifficultyType;
   customDistanceLabel?: string; // Optional label (e.g. "10K", "6-Mile Run")
+  isLoop?: boolean;           // Whether route can be repeated for multiple laps/loops (e.g. The 1, 2, 3)
+  maxLoops?: number;          // Default max loop options to offer at check-in (e.g. 4)
   directions?: RouteTurnStep[];
   geoJson?: any;              // GeoJSON FeatureCollection with line track and turn points
   externalLinks?: RouteExternalLinks;
@@ -173,6 +175,9 @@ export interface Badge {
 export interface RouteOption {
   name: string;
   actualMiles: number; // Measured GPS/map distance (e.g. 1.15, 3.22, 5.12)
+  baseMiles?: number;  // Base single-loop distance if isLoop is true
+  isLoop?: boolean;    // Whether this option supports multi-lap / loop multiplier
+  maxLoops?: number;   // Preset loop count options to render (default: 4)
   routeUrl?: string;   // Strava / Garmin / Apple Watch link
   imageUrl?: string;   // Route preview image / map screenshot
   directions?: string; // Legacy string / summary
@@ -201,9 +206,10 @@ export interface CheckInRecord {
   userEmail: string;         // Foreign key to UserProfile.email
   runnerName?: string;       // Display cache
   activity: ActivityType;    // 'running' | 'walking'
-  distanceChoice: DistanceTier; // 1 | 3 | 5
-  actualMiles: number;       // Actual route distance (e.g. 3.22)
-  routeName?: string;        // Name of route (e.g. "Heritage Park Loop")
+  distanceChoice: DistanceTier; // 1 | 3 | 5 or route key
+  actualMiles: number;       // Actual route distance credited (e.g. 3.22, or 1.22 * 4 loops)
+  routeName?: string;        // Name of route (e.g. "The 123 (4 Loops)")
+  loops?: number;            // Number of loops chosen if loop route (e.g. 1, 2, 3, 4+)
   withPet?: boolean;         // Checked if runner/walker brought a pet
   source: 'pwa' | 'admin' | 'legacy_import';
   createdAt: string;         // ISO timestamp

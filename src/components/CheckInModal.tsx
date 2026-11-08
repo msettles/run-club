@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import confetti from 'canvas-confetti';
-import { MeetupEvent, UserProfile, RouteOption, ActivityType, DistanceTier, LegacyMember, Badge } from '../types';
+import { MeetupEvent, UserProfile, RouteOption, ActivityType, DistanceChoice, CheckInRecord, LegacyMember, Badge } from '../types';
 import { CLUB_MILESTONES } from '../data/initialData';
 import { 
   Check,
@@ -31,12 +31,14 @@ interface CheckInModalProps {
     userEmail: string;
     codeWordEntered: string;
     activity: ActivityType;
-    distanceChoice: DistanceTier;
+    distanceChoice: DistanceChoice;
+    loops?: number;
     withPet?: boolean;
   }) => Promise<{
     success: boolean;
     message: string;
     route?: RouteOption;
+    checkIn?: CheckInRecord;
     user?: UserProfile;
     newBadges?: Badge[];
     milestoneAlert?: any;
@@ -139,12 +141,17 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
   const [selectedOptionKey, setSelectedOptionKey] = useState<string>(() => {
     return availableOptions[0]?.key || '3';
   });
+  const [loopSelections, setLoopSelections] = useState<Record<string, number>>({});
 
   const selectedOption = useMemo(() => {
     return availableOptions.find((o) => o.key === selectedOptionKey) || availableOptions[0];
   }, [availableOptions, selectedOptionKey]);
 
-  const selectedDistance = selectedOption.route.actualMiles;
+  const currentLoops = selectedOption?.route?.isLoop ? (loopSelections[selectedOptionKey] || 1) : 1;
+  const baseMiles = selectedOption?.route?.baseMiles || selectedOption?.route?.actualMiles || 0;
+  const creditedMiles = selectedOption?.route?.isLoop
+    ? Math.round(baseMiles * currentLoops * 100) / 100
+    : (selectedOption?.route?.actualMiles || 0);
   const [runningWithPet, setRunningWithPet] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
@@ -154,6 +161,7 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
   const [successResult, setSuccessResult] = useState<{
     message: string;
     route?: RouteOption;
+    checkIn?: CheckInRecord;
     user?: UserProfile;
     newBadges?: Badge[];
   } | null>(null);
@@ -217,7 +225,8 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
           userEmail: newUser.email,
           codeWordEntered: codeWordInput,
           activity: selectedActivity,
-          distanceChoice: selectedDistance,
+          distanceChoice: selectedOptionKey,
+          loops: currentLoops,
           withPet: runningWithPet,
         });
 
@@ -265,7 +274,8 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
         userEmail: currentUser.email,
         codeWordEntered: codeWordInput,
         activity: selectedActivity,
-        distanceChoice: selectedDistance,
+        distanceChoice: selectedOptionKey,
+        loops: currentLoops,
         withPet: runningWithPet,
       });
 
@@ -358,7 +368,7 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
                   Boom, {currentUser.firstName}! 🎉
                 </h3>
                 <p className="text-sm text-stone-600 mt-1">
-                  You're all set for the <strong className="text-stone-900">{selectedDistance}-Mile {selectedActivity}</strong>.
+                  You're all set for <strong className="text-stone-900">{successResult.checkIn?.routeName || successResult.route?.name || selectedOption.route.name}</strong> ({successResult.checkIn?.actualMiles || creditedMiles} mi {selectedActivity}).
                 </p>
               </div>
 
@@ -670,6 +680,12 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                   {availableOptions.map((opt) => {
                     const isSelected = selectedOptionKey === opt.key;
+                    const optLoops = opt.route.isLoop ? (loopSelections[opt.key] || 1) : 1;
+                    const optBaseMiles = opt.route.baseMiles || opt.route.actualMiles;
+                    const optTotalMiles = opt.route.isLoop ? (optBaseMiles * optLoops) : opt.route.actualMiles;
+                    const optFormattedMiles = (Math.round(optTotalMiles * 10) / 10).toFixed(1);
+                    const maxPresets = Math.max(opt.route.maxLoops || 4, 4);
+
                     return (
                       <div
                         key={opt.key}
@@ -684,8 +700,13 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-2">
                               <span className="text-base font-black font-display text-stone-950">
-                                {(Math.round(opt.route.actualMiles * 10) / 10).toFixed(1)} mi
+                                {optFormattedMiles} mi
                               </span>
+                              {opt.route.isLoop && (
+                                <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-amber-200 text-amber-950">
+                                  🔄 {optLoops} {optLoops === 1 ? 'Loop' : 'Loops'}
+                                </span>
+                              )}
                             </div>
                             <h5 className="font-extrabold text-xs text-stone-900 mt-0.5 truncate">
                               {opt.route.name}
@@ -701,6 +722,82 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
                             {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
                           </div>
                         </div>
+
+                        {/* Interactive Loop Selector if this is a multi-lap loop course */}
+                        {opt.route.isLoop && (
+                          <div
+                            className="mt-2.5 pt-2 border-t border-stone-200/80 space-y-1.5"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <div className="flex items-center justify-between text-[11px]">
+                              <span className="font-bold text-stone-800 flex items-center gap-1">
+                                <span>🔄 Loops tonight:</span>
+                                <span className="font-mono font-black text-woodland-900">{optLoops}x</span>
+                              </span>
+                              <span className="text-stone-500 font-medium text-[10px]">
+                                ~{(Math.round(optBaseMiles * 10) / 10).toFixed(1)} mi/loop
+                              </span>
+                            </div>
+
+                            {/* Quick presets (1, 2, 3, 4) + Stepper for 5, 6, etc. */}
+                            <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                              {Array.from({ length: maxPresets }, (_, i) => i + 1).map((n) => {
+                                const loopMiles = (Math.round(optBaseMiles * n * 10) / 10).toFixed(1);
+                                const isActive = optLoops === n;
+                                return (
+                                  <button
+                                    key={n}
+                                    type="button"
+                                    onClick={() => {
+                                      setLoopSelections((prev) => ({ ...prev, [opt.key]: n }));
+                                      setSelectedOptionKey(opt.key);
+                                    }}
+                                    className={`px-2 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1 ${
+                                      isActive
+                                        ? 'bg-woodland-900 text-white shadow-xs'
+                                        : 'bg-stone-100 text-stone-700 hover:bg-stone-200 border border-stone-200'
+                                    }`}
+                                  >
+                                    <span>{n}</span>
+                                    <span className={`text-[10px] font-mono ${isActive ? 'text-amber-300' : 'text-stone-500'}`}>
+                                      ({loopMiles}m)
+                                    </span>
+                                  </button>
+                                );
+                              })}
+
+                              {/* Stepper for ambitious runners (5, 6, etc.) */}
+                              <div className="flex items-center border border-stone-300 rounded-lg overflow-hidden bg-white ml-auto">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const next = Math.max(1, optLoops - 1);
+                                    setLoopSelections((prev) => ({ ...prev, [opt.key]: next }));
+                                    setSelectedOptionKey(opt.key);
+                                  }}
+                                  disabled={optLoops <= 1}
+                                  className="px-2 py-0.5 text-xs font-bold text-stone-600 hover:bg-stone-100 disabled:opacity-30"
+                                  title="Fewer loops"
+                                >
+                                  −
+                                </button>
+                                <span className="px-1.5 text-xs font-mono font-black text-stone-900">{optLoops}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const next = Math.min(10, optLoops + 1);
+                                    setLoopSelections((prev) => ({ ...prev, [opt.key]: next }));
+                                    setSelectedOptionKey(opt.key);
+                                  }}
+                                  className="px-2 py-0.5 text-xs font-bold text-stone-600 hover:bg-stone-100"
+                                  title="More loops"
+                                >
+                                  +
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        )}
 
                         {/* External App Links */}
                         {opt.route.externalLinks && (
@@ -793,7 +890,13 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
                 className="w-full mt-4 py-3.5 bg-amber-500 hover:bg-amber-600 active:scale-98 text-stone-950 font-black text-base rounded-2xl transition shadow-lg flex items-center justify-center gap-2 font-display uppercase tracking-wide cursor-pointer disabled:opacity-50"
               >
                 <Sparkles className="w-5 h-5 text-stone-950" />
-                <span>{isSubmitting ? 'Checking In...' : 'Check In & Get Route 🦫'}</span>
+                <span>
+                  {isSubmitting
+                    ? 'Checking In...'
+                    : selectedOption?.route?.isLoop
+                    ? `Check In for ${currentLoops} ${currentLoops === 1 ? 'Loop' : 'Loops'} (${creditedMiles.toFixed(1)} mi) 🦫`
+                    : `Check In for ${creditedMiles.toFixed(1)} mi 🦫`}
+                </span>
               </button>
             </div>
             )

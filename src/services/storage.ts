@@ -121,6 +121,8 @@ export function hydrateRouteFromFirestore(data: any): GPXRoute {
   }
   return {
     ...data,
+    isLoop: data.isLoop !== undefined ? Boolean(data.isLoop) : (data.id === 'route-the-123' || (data.name && (data.name.includes('123') || data.name.includes('1, 2, 3')))),
+    maxLoops: data.maxLoops || 4,
     directions: Array.isArray(directions) ? directions : [],
     geoJson: geoJson || null,
   } as GPXRoute;
@@ -423,6 +425,7 @@ export function useClubStore() {
     codeWordEntered: string;
     activity: ActivityType;
     distanceChoice: DistanceChoice;
+    loops?: number;
     withPet?: boolean;
   }): Promise<{
     success: boolean;
@@ -433,7 +436,7 @@ export function useClubStore() {
     newBadges?: Badge[];
     milestoneAlert?: MilestoneAlert;
   }> => {
-    const { eventDate, userEmail, codeWordEntered, activity, distanceChoice, withPet } = params;
+    const { eventDate, userEmail, codeWordEntered, activity, distanceChoice, loops, withPet } = params;
     const cleanEmail = userEmail.trim().toLowerCase();
 
     // 1. Locate event
@@ -466,9 +469,26 @@ export function useClubStore() {
       routeOption = {
         name: `${distanceChoice}-Mile Club Route`,
         actualMiles: numDist,
+        baseMiles: numDist,
         directions: 'Follow group leader from Blue Note Brewing.',
       };
     }
+
+    // 3b. Compute effective loops and actual credited mileage
+    const effectiveLoops = (loops && loops > 0) ? loops : 1;
+    const baseLoopMiles = routeOption.baseMiles || routeOption.actualMiles;
+    const computedActualMiles = effectiveLoops > 1
+      ? Math.round(baseLoopMiles * effectiveLoops * 100) / 100
+      : routeOption.actualMiles;
+    const computedRouteName = effectiveLoops > 1
+      ? `${routeOption.name} (${effectiveLoops} Loops)`
+      : routeOption.name;
+
+    const creditedRoute: RouteOption = {
+      ...routeOption,
+      name: computedRouteName,
+      actualMiles: computedActualMiles,
+    };
 
     // 4. Ensure runner doesn't double-checkin on the same date
     const checkinId = `${eventDate}_${cleanEmail}`;
@@ -477,7 +497,7 @@ export function useClubStore() {
       return {
         success: false,
         message: `You're already checked in for today's run! Enjoy your ${activity}!`,
-        route: routeOption,
+        route: creditedRoute,
       };
     }
 
@@ -494,8 +514,9 @@ export function useClubStore() {
       runnerName: user.displayName,
       activity,
       distanceChoice,
-      actualMiles: routeOption.actualMiles,
-      routeName: routeOption.name,
+      actualMiles: computedActualMiles,
+      routeName: computedRouteName,
+      loops: effectiveLoops,
       withPet: Boolean(withPet),
       source: 'pwa',
       createdAt: now.toISOString(),
@@ -513,12 +534,12 @@ export function useClubStore() {
 
         const newTotalRuns = u.totalRuns + 1;
         const newLoggedRuns = u.loggedRuns + 1;
-        const newTotalMiles = Math.round((u.totalMiles + routeOption.actualMiles) * 100) / 100;
+        const newTotalMiles = Math.round((u.totalMiles + computedActualMiles) * 100) / 100;
         const newRunCount = activity === 'running' ? u.runCount + 1 : u.runCount;
         const newWalkCount = activity === 'walking' ? u.walkCount + 1 : u.walkCount;
         const newPetRunCount = withPet ? (u.petRunCount || 0) + 1 : (u.petRunCount || 0);
 
-        const numMiles = routeOption.actualMiles;
+        const numMiles = computedActualMiles;
         const roundedDistKey = (Math.round(numMiles * 10) / 10).toFixed(1);
         const legacyBucket = numMiles <= 2.0 ? '1' : numMiles <= 4.0 ? '3' : '5';
         const newDistanceCounts: Record<string, number> = {
@@ -715,7 +736,7 @@ export function useClubStore() {
     return {
       success: true,
       message: `Checked in successfully! That's Run #${updatedUser.totalRuns} for you!`,
-      route: routeOption,
+      route: creditedRoute,
       checkIn: newCheckIn,
       user: updatedUser,
       newBadges: earnedBadges,

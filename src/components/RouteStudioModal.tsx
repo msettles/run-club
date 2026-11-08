@@ -38,6 +38,8 @@ export const RouteStudioModal: React.FC<RouteStudioModalProps> = ({
   const [surface, setSurface] = useState<SurfaceType>('Pavement');
   const [difficulty, setDifficulty] = useState<DifficultyType>('Easy');
   const [customDistanceLabel, setCustomDistanceLabel] = useState<string>('');
+  const [isLoop, setIsLoop] = useState<boolean>(false);
+  const [maxLoops, setMaxLoops] = useState<number>(4);
 
   // External URLs
   const [stravaUrl, setStravaUrl] = useState<string>('');
@@ -101,6 +103,8 @@ export const RouteStudioModal: React.FC<RouteStudioModalProps> = ({
       }
       setGeoJson(initGeoJson);
       setCustomDistanceLabel(existingRoute.customDistanceLabel || (existingRoute as any).targetDistanceTier || '');
+      setIsLoop(Boolean(existingRoute.isLoop));
+      setMaxLoops(existingRoute.maxLoops || 4);
 
       setStravaUrl(existingRoute.externalLinks?.stravaUrl || '');
       setGarminUrl(existingRoute.externalLinks?.garminUrl || '');
@@ -113,6 +117,8 @@ export const RouteStudioModal: React.FC<RouteStudioModalProps> = ({
       setSurface('Pavement');
       setDifficulty('Easy');
       setCustomDistanceLabel('');
+      setIsLoop(false);
+      setMaxLoops(4);
       setStravaUrl('');
       setGarminUrl('');
       setRungoUrl('');
@@ -376,6 +382,8 @@ export const RouteStudioModal: React.FC<RouteStudioModalProps> = ({
         notes: notes.trim(),
         surface,
         difficulty,
+        isLoop: Boolean(isLoop),
+        maxLoops: isLoop ? (maxLoops || 4) : 4,
         distanceMiles: measuredMiles || 3.0,
         elevationGainFt: elevationGainFt || 0,
         points,
@@ -592,6 +600,47 @@ export const RouteStudioModal: React.FC<RouteStudioModalProps> = ({
                 <option value="Moderate">Moderate</option>
                 <option value="Challenging">Challenging (Hills or High Mileage)</option>
               </select>
+            </div>
+
+            {/* Multi-Lap / Loop Route Settings */}
+            <div className="col-span-1 md:col-span-2 p-3.5 bg-amber-500/10 border border-amber-300 rounded-xl space-y-2">
+              <label className="flex items-start gap-2.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={isLoop}
+                  onChange={(e) => setIsLoop(e.target.checked)}
+                  className="mt-0.5 w-4 h-4 text-woodland-700 rounded border-stone-300 focus:ring-woodland-600"
+                />
+                <div className="flex-1">
+                  <div className="text-xs font-bold text-stone-900 flex items-center gap-1.5">
+                    <span>🔄 Multi-Lap / Loop Route</span>
+                    <span className="text-[10px] bg-amber-200/90 text-amber-950 px-1.5 py-0.2 rounded font-black">
+                      e.g. The 1, 2, 3
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-stone-600 leading-relaxed mt-0.5">
+                    Runners can choose to run 1, 2, 3, 4+ loops of this course. The check-in screen will offer an interactive loop selector and automatically multiply their credited mileage.
+                  </p>
+                </div>
+              </label>
+
+              {isLoop && (
+                <div className="pl-6.5 pt-1 flex items-center gap-3 flex-wrap">
+                  <label className="text-xs font-semibold text-stone-700">
+                    Preset loop options at check-in:
+                  </label>
+                  <select
+                    value={maxLoops}
+                    onChange={(e) => setMaxLoops(Number(e.target.value))}
+                    className="px-2.5 py-1 text-xs border rounded-lg bg-white font-bold text-stone-800"
+                  >
+                    <option value={3}>1 to 3 Loops</option>
+                    <option value={4}>1 to 4 Loops (Recommended: 1, 2, 3, 4)</option>
+                    <option value={5}>1 to 5 Loops</option>
+                    <option value={6}>1 to 6 Loops</option>
+                  </select>
+                </div>
+              )}
             </div>
 
             {/* Route Description */}

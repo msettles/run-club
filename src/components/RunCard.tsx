@@ -101,7 +101,9 @@ export const RunCard: React.FC<RunCardProps> = ({
                   className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-stone-100 text-stone-700"
                   title={`${c.route.name} • ${c.route.distanceMiles} mi`}
                 >
-                  {c.miles.toFixed(1)} mi
+                  {c.route.isLoop
+                    ? `${c.miles.toFixed(1)} mi (1–${c.route.maxLoops || 4} loops)`
+                    : `${c.miles.toFixed(1)} mi`}
                 </span>
               ))
             ) : (
