@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { UserProfile } from '../types';
 import { User as FirebaseUser } from 'firebase/auth';
+import { VERSION_LABEL, FULL_VERSION } from '../utils/version';
 import { 
   Calendar, 
   Map, 
@@ -36,6 +37,7 @@ interface NavbarProps {
   onToggleNotifications?: () => void;
   onOpenAuthModal: () => void;
   onOpenRegister?: () => void;
+  onOpenVersionModal?: () => void;
   onLogout: () => void;
 }
 
@@ -54,6 +56,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onToggleNotifications,
   onOpenAuthModal,
   onOpenRegister,
+  onOpenVersionModal,
   onLogout,
 }) => {
   const [showProfileMenu, setShowProfileMenu] = useState<boolean>(false);
@@ -77,13 +80,24 @@ export const Navbar: React.FC<NavbarProps> = ({
               />
             </div>
             <div>
-              <div className="flex items-center gap-1.5">
-                <span className="font-display font-bold text-stone-900 tracking-wide text-base sm:text-lg uppercase">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="font-display font-bold text-stone-900 tracking-wide text-sm sm:text-lg uppercase">
                   Woodland Woodchuckers
                 </span>
                 <span className="hidden sm:inline-block text-[10px] font-bold uppercase tracking-wider bg-woodland-100 text-woodland-900 px-1.5 py-0.5 rounded border border-woodland-200">
                   Run Club
                 </span>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onOpenVersionModal?.();
+                  }}
+                  title={`Version ${FULL_VERSION} - Tap to check for updates`}
+                  className="text-[10px] font-mono font-bold text-woodland-800 bg-woodland-50 hover:bg-woodland-100 active:scale-95 border border-woodland-200/90 px-1.5 py-0.5 rounded transition shadow-2xs cursor-pointer select-none"
+                >
+                  {VERSION_LABEL}
+                </button>
               </div>
               <p className="hidden sm:block text-[11px] text-stone-500 font-medium">
                 Blue Note Brewing Co. • Pounding trails &amp; pavement!
@@ -306,6 +320,19 @@ export const Navbar: React.FC<NavbarProps> = ({
                         <LogOut className="w-4 h-4 text-red-600" />
                         <span>Sign Out</span>
                       </button>
+
+                      <div className="border-t border-stone-100 pt-2 text-[10px] text-stone-400 flex items-center justify-between px-2">
+                        <span>App Version</span>
+                        <button
+                          onClick={() => {
+                            setShowProfileMenu(false);
+                            onOpenVersionModal?.();
+                          }}
+                          className="font-mono font-bold text-woodland-700 hover:underline cursor-pointer"
+                        >
+                          {VERSION_LABEL}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 )}

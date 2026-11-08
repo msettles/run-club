@@ -18,6 +18,8 @@ import { MobileBottomNav } from './components/MobileBottomNav';
 import { BrandAssetsModal } from './components/BrandAssetsModal';
 import { AuthModal } from './components/AuthModal';
 import { MilestonesPage } from './components/MilestonesPage';
+import { VersionModal } from './components/VersionModal';
+import { FULL_VERSION } from './utils/version';
 import { onAuthChange, logoutUser, checkAndCompleteEmailLinkSignIn } from './services/authService';
 import { User as FirebaseUser } from 'firebase/auth';
 import { downloadGPXFile } from './utils/gpxParser';
@@ -88,6 +90,7 @@ export function App() {
   const [editingRoute, setEditingRoute] = useState<GPXRoute | null>(null);
   const [isSetupGuideOpen, setIsSetupGuideOpen] = useState<boolean>(false);
   const [isBrandAssetsOpen, setIsBrandAssetsOpen] = useState<boolean>(false);
+  const [isVersionModalOpen, setIsVersionModalOpen] = useState<boolean>(false);
   const [showNotificationsDrawer, setShowNotificationsDrawer] = useState<boolean>(false);
 
   // Selected route for viewing
@@ -226,6 +229,7 @@ export function App() {
         onToggleNotifications={() => setShowNotificationsDrawer(!showNotificationsDrawer)}
         onOpenAuthModal={() => setIsAuthModalOpen(true)}
         onOpenRegister={handleOpenRegister}
+        onOpenVersionModal={() => setIsVersionModalOpen(true)}
         onLogout={async () => {
           await logoutUser();
           setFirebaseUser(null);
@@ -560,39 +564,53 @@ export function App() {
         onQuickCheckIn={handleQuickCheckIn}
       />
 
-      {/* Footer (Desktop) */}
-      <footer className="hidden sm:block bg-white border-t border-stone-200 py-6 mt-12">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-stone-500">
-          <div className="flex items-center gap-2">
+      {/* Footer (Mobile & Desktop with bottom navigation spacing) */}
+      <footer className="bg-white border-t border-stone-200 py-6 mt-12 pb-24 sm:pb-6">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-stone-500 text-center sm:text-left">
+          <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
             <img src="/Woodchucker2026.png" alt="2026 Mascot" className="w-5 h-5 object-contain" />
             <span className="font-semibold text-stone-800">Woodland Woodchuckers Run Club</span>
-            <span>• Blue Note Brewing Co. • #1A607C Teal Brand</span>
+            <span>• Blue Note Brewing Co.</span>
+            <button
+              type="button"
+              onClick={() => setIsVersionModalOpen(true)}
+              title="Click to view build details & check for updates"
+              className="font-mono text-[11px] font-bold text-woodland-800 bg-stone-100 hover:bg-stone-200 border border-stone-200 px-2 py-0.5 rounded transition shadow-2xs cursor-pointer select-none"
+            >
+              {FULL_VERSION}
+            </button>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4">
             <button
               onClick={() => setIsBrandAssetsOpen(true)}
-              className="text-woodland-700 hover:text-woodland-900 hover:underline font-bold flex items-center gap-1"
+              className="text-woodland-700 hover:text-woodland-900 hover:underline font-bold flex items-center gap-1 cursor-pointer"
             >
               <Palette className="w-3.5 h-3.5" />
-              <span>Logos &amp; Brand Assets</span>
+              <span>Logos &amp; Brand</span>
             </button>
             {isAdmin && (
               <button
                 onClick={() => setActiveTab('admin')}
-                className="text-woodland-800 hover:underline font-bold"
+                className="text-woodland-800 hover:underline font-bold cursor-pointer"
               >
                 Admin Dashboard
               </button>
             )}
             <button
               onClick={() => setIsSetupGuideOpen(true)}
-              className="text-woodland-700 hover:underline font-semibold"
+              className="text-woodland-700 hover:underline font-semibold cursor-pointer"
             >
-              Zero-Credit-Card Setup Guide
+              Setup Guide
             </button>
             <span>•</span>
-            <span className="text-stone-400">PWA Ready • Offline Enabled</span>
+            <button
+              type="button"
+              onClick={() => setIsVersionModalOpen(true)}
+              className="text-stone-400 hover:text-woodland-700 transition cursor-pointer"
+            >
+              PWA Ready • Offline Enabled
+            </button>
           </div>
         </div>
       </footer>
@@ -719,6 +737,11 @@ export function App() {
       <BrandAssetsModal
         isOpen={isBrandAssetsOpen}
         onClose={() => setIsBrandAssetsOpen(false)}
+      />
+
+      <VersionModal
+        isOpen={isVersionModalOpen}
+        onClose={() => setIsVersionModalOpen(false)}
       />
 
       {/* Passwordless & Google Auth Modal */}
