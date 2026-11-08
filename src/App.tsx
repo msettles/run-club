@@ -512,6 +512,7 @@ export function App() {
         {activeTab === 'milestones' && (
           <MilestonesPage
             currentUser={currentUser}
+            badges={badges}
             onOpenCheckIn={handleQuickCheckIn}
           />
         )}
