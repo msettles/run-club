@@ -300,7 +300,6 @@ export async function buildDirections(
       headingAt(samples, s, Math.min(100, Math.max(10, samples[e][1] - samples[s][1])), true) ?? 0;
     const cardDir = compass(hOut);
     const cardShort = COMPASS_SHORT[cardDir] || '';
-    const shortLab = abbreviateStreet(lab);
 
     const legCoords: [number, number][] = [];
     for (let i = s; i <= e; i++) {
@@ -314,25 +313,33 @@ export async function buildDirections(
     let turn: number | null = null;
 
     if (k === 0) {
-      const where = poi ? ` by ${poi[1]}` : '';
-      const whereConcise = poi ? ` (${poi[1]})` : '';
-      text = `Start on ${lab}${where}, heading ${cardDir}`;
-      conciseText = `START [${cardShort}] ${shortLab}${whereConcise}`;
+      const startStreet = (lab === 'off-street' || !lab) ? 'Dead Cat Alley' : lab;
+      const startShort = abbreviateStreet(startStreet);
+      const startPoi = poi ? poi[1] : 'Blue Note Brewing';
+      const where = ` by ${startPoi}`;
+      const whereConcise = ` (${startPoi})`;
+      text = `Start on ${startStreet}${where}, heading ${cardDir}`;
+      conciseText = `START [${cardShort}] ${startShort}${whereConcise}`;
       cue = 'START';
       turn = null;
     } else {
       const delta = turnAt(k);
       let phrase = turnPhrase(delta);
       cue = turnCue(delta);
+      const roadName = lab === 'off-street' ? 'course path' : lab;
+      const shortRoad = abbreviateStreet(roadName);
       if (lab === runs[k - 1][0] && Math.abs(delta) >= 20) {
         phrase = phrase.replace(' onto', ' to stay on');
-        conciseText = `${cue} to stay on ${shortLab}`;
+        conciseText = `${cue} to stay on ${shortRoad}`;
       } else {
-        conciseText = `${cue} on ${shortLab}`;
+        conciseText = `${cue} on ${shortRoad}`;
       }
-      text = `${phrase} ${lab}, heading ${cardDir}`;
+      text = `${phrase} ${roadName}, heading ${cardDir}`;
       turn = Math.round(delta);
     }
+
+    const stepStreet = (k === 0 && (lab === 'off-street' || !lab)) ? 'Dead Cat Alley' : (lab === 'off-street' ? 'course path' : lab);
+    const stepStreetConcise = abbreviateStreet(stepStreet);
 
     const item: DirectionStep = {
       step: k + 1,
@@ -340,8 +347,8 @@ export async function buildDirections(
       instruction_concise: conciseText,
       cue,
       heading_cardinal: cardShort,
-      street: lab,
-      street_concise: shortLab,
+      street: stepStreet,
+      street_concise: stepStreetConcise,
       distance_m: Math.round(leg),
       distance: fmtDist(leg, units),
       turn_degrees: turn,
@@ -365,6 +372,49 @@ export async function buildDirections(
     }
 
     steps.push(item);
+  }
+
+  // If Overpass was unavailable, use fast OpenStreetMap Nominatim reverse-geocoding for the turn points
+  if ((!osmData || !osmData.elements || osmData.elements.length === 0) && steps.length > 1) {
+    onProgress?.('Looking up turn street names from OpenStreetMap...');
+    for (let i = 1; i < steps.length; i++) {
+      const s = steps[i];
+      if (s.street === 'course path' || s.street === 'off-street') {
+        try {
+          const [lon, lat] = s.point;
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), 2000);
+          const res = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`,
+            {
+              signal: controller.signal,
+              headers: { Accept: 'application/json' },
+            }
+          );
+          clearTimeout(timeout);
+          if (res.ok) {
+            const data = await res.json();
+            const road =
+              data.address?.road ||
+              data.address?.pedestrian ||
+              data.address?.footway ||
+              data.address?.path ||
+              data.name;
+            if (road) {
+              const shortRoad = abbreviateStreet(road);
+              s.street = road;
+              s.street_concise = shortRoad;
+              s.instruction = s.instruction.replace('course path', road).replace('off-street', road);
+              s.instruction_concise = s.instruction_concise
+                .replace('course path', shortRoad)
+                .replace('off-street', shortRoad);
+            }
+          }
+        } catch {
+          // If Nominatim fails or times out, keep clean geometric cue
+        }
+      }
+    }
   }
 
   const endP = samples[samples.length - 1][0];

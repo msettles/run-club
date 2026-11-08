@@ -7,8 +7,9 @@ import { Projector, bearing, pointSegDist, segsIntersect } from './geometry';
 
 export const OVERPASS_URLS = [
   'https://overpass-api.de/api/interpreter',
-  'https://overpass.kumi.systems/api/interpreter',
   'https://overpass.private.coffee/api/interpreter',
+  'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter',
 ];
 
 export const GENERIC_HIGHWAY_NAMES: Record<string, string> = {
@@ -46,7 +47,7 @@ export interface OsmResponse {
  */
 export async function fetchOsm(bbox: [number, number, number, number]): Promise<OsmResponse> {
   const [s, w, n, e] = bbox;
-  const query = `[out:json][timeout:60];
+  const query = `[out:json][timeout:25];
 (
   way["highway"]["highway"!~"proposed|construction|abandoned|platform|elevator"](${s},${w},${n},${e});
   nwr["name"]["amenity"](${s},${w},${n},${e});
@@ -63,7 +64,8 @@ out tags geom;`;
   for (const url of OVERPASS_URLS) {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout
+      // Fast 8-second timeout per mirror to prevent browser hanging
+      const timeoutId = setTimeout(() => controller.abort(new Error(`Timeout connecting to ${url}`)), 8000);
 
       const response = await fetch(url, {
         method: 'POST',
@@ -81,14 +83,20 @@ out tags geom;`;
       }
 
       const data: OsmResponse = await response.json();
-      return data;
+      if (data && Array.isArray(data.elements) && data.elements.length > 0) {
+        return data;
+      }
     } catch (err: any) {
       lastError = err;
-      console.warn(`Overpass mirror ${url} failed:`, err.message || err);
+      console.warn(`Overpass mirror ${url} failed:`, err?.message || err);
     }
   }
 
-  throw new Error(`Unable to fetch street data from OpenStreetMap Overpass servers (${lastError?.message || 'timeout'})`);
+  // Non-fatal fallback: When public Overpass servers are down, rate limited, or slow,
+  // return an empty elements array so the route engine can generate geometric turn cues
+  // without crashing the upload process.
+  console.warn(`All Overpass mirrors timed out or unavailable (${lastError?.message || 'timeout'}). Falling back to geometric cues.`);
+  return { elements: [] };
 }
 
 export function wayLabel(tags: Record<string, string>): string | null {
