@@ -613,3 +613,19 @@ test('creating a run with a code word already used that day saves nothing', asyn
   });
   await assertSucceeds(create('run-ok', 'WALNUT'));
 });
+
+test('a run with no code word can get its first one after check-in opened; changing it stays locked', async () => {
+  const org = ctx(ORGANIZER);
+  await env.withSecurityRulesDisabled(async (c) => {
+    await setDoc(doc(c.firestore(), 'meetup_events', 'run-draft'), {
+      id: 'run-draft', runId: 'run-draft', date: DATE, title: 'Draft', activeDistances: [], routes: {}, codeWordSet: false,
+      checkInOpensAt: Timestamp.fromMillis(Date.now() - 3600e3), checkInClosesAt: Timestamp.fromMillis(Date.now() + 7200e3),
+    });
+  });
+  // First word, check-in already open: allowed
+  await assertSucceeds(setDoc(doc(org, 'meetup_codes', codeKey(DATE, 'HOME')), { runId: 'run-draft', date: DATE }));
+  await assertSucceeds(setDoc(doc(org, 'meetup_secrets', 'run-draft'), { codeWord: 'HOME' }));
+  // Now it has a word: changing it is locked
+  await assertFails(setDoc(doc(org, 'meetup_codes', codeKey(DATE, 'AWAY')), { runId: 'run-draft', date: DATE }));
+  await assertFails(setDoc(doc(org, 'meetup_secrets', 'run-draft'), { codeWord: 'AWAY' }));
+});

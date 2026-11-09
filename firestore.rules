@@ -648,11 +648,12 @@ service cloud.firestore {
     }
 
     // 9b. MEETUP SECRETS — tonight's code word, staff only.
-    // Set when the run is created; staff can change it until check-in opens,
-    // then it's locked (re-saving the same word is fine).
+    // A run's FIRST code word can be set at any time (a run isn't live without one);
+    // once set, it can change until check-in opens, then it's locked
+    // (re-saving the same word is fine).
     match /meetup_secrets/{eventId} {
       allow read: if isStaff();
-      allow create: if isStaff() && !checkInHasOpened(eventId);
+      allow create: if isStaff();
       allow update: if isStaff() &&
                        (request.resource.data.codeWord == resource.data.codeWord ||
                         !checkInHasOpened(eventId));
@@ -669,7 +670,8 @@ service cloud.firestore {
                        request.resource.data.keys().hasOnly(['runId', 'date']) &&
                        request.resource.data.runId is string &&
                        request.resource.data.date is string &&
-                       !checkInHasOpened(request.resource.data.runId);
+                       (!checkInHasOpened(request.resource.data.runId) ||
+                        !exists(/databases/$(database)/documents/meetup_secrets/$(request.resource.data.runId)));
       allow update: if false;
       // Admins may also remove it later, e.g. when deleting a run that already happened.
       allow delete: if isAdmin() || (isStaff() && !checkInHasOpened(resource.data.runId));
