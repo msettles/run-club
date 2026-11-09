@@ -17,6 +17,7 @@ import {
   BadgeTriggerConfig
 } from '../types';
 import { calculateAge } from '../utils/dateUtils';
+import { computeCheckInWindow, eventStart } from '../utils/checkInWindow';
 import {
   buildLegacyImport,
   datedEventsFrom,
@@ -226,25 +227,13 @@ function memberFromPublicDoc(data: any): Member {
 }
 
 /** Parse "YYYY-MM-DD" + "06:00 PM" into a local Date. */
-function eventStart(date: string, time?: string): Date {
-  const [y, m, d] = date.split('-').map(Number);
-  let hour = 18;
-  let minute = 0;
-  const match = (time || '').match(/(\d+):(\d+)\s*(AM|PM)?/i);
-  if (match) {
-    hour = parseInt(match[1], 10);
-    minute = parseInt(match[2], 10);
-    const ampm = match[3]?.toUpperCase();
-    if (ampm === 'PM' && hour < 12) hour += 12;
-    if (ampm === 'AM' && hour === 12) hour = 0;
-  }
-  return new Date(y, m - 1, d, hour, minute);
-}
 
 /** Strip Firestore-only fields from a public meetup doc. The code word is never public. */
 function meetupFromPublicDoc(data: any): MeetupEvent {
-  const { checkInOpensAt: _o, checkInClosesAt: _c, ...rest } = data || {};
-  return { ...rest, codeWord: '' } as MeetupEvent;
+  const { checkInOpensAt, checkInClosesAt, ...rest } = data || {};
+  const iso = (t: any): string | undefined =>
+    t && typeof t.toDate === 'function' ? t.toDate().toISOString() : typeof t === 'string' ? t : undefined;
+  return { ...rest, codeWord: '', checkInOpensAt: iso(checkInOpensAt), checkInClosesAt: iso(checkInClosesAt) } as MeetupEvent;
 }
 
 const PRIVATE_STORAGE_KEYS = ['USERS', 'CHECKINS', 'MILESTONE_ALERTS'] as const;
@@ -313,7 +302,8 @@ if (typeof window !== 'undefined' && !localStorage.getItem(PURGE_KEY)) {
 
 export function useClubStore() {
   // Legacy / existing state
-  const [runs, setRuns] = useState<RunEvent[]>(() => loadFromStorage(STORAGE_KEYS.RUNS, INITIAL_RUNS));
+  // With Firebase the schedule comes only from Firestore (sample runs are for local mode).
+  const [runs, setRuns] = useState<RunEvent[]>(() => (isFirebaseConfigured ? [] : loadFromStorage(STORAGE_KEYS.RUNS, INITIAL_RUNS)));
   const [routes, setRoutes] = useState<GPXRoute[]>(() => {
     const stored = loadFromStorage<GPXRoute[]>(STORAGE_KEYS.ROUTES, INITIAL_ROUTES).map(hydrateRouteFromFirestore);
     const existingIds = new Set(stored.map((r) => r.id));
@@ -371,7 +361,13 @@ export function useClubStore() {
     });
     return [...updated, ...missing];
   });
-  const [meetupEvents, setMeetupEvents] = useState<MeetupEvent[]>(() => loadFromStorage(STORAGE_KEYS.MEETUP_EVENTS, INITIAL_MEETUP_EVENTS));
+  // Same for check-in events: never mix in sample/cached events, or the table QR code
+  // could open a run that doesn't exist on the server.
+  const [meetupEvents, setMeetupEvents] = useState<MeetupEvent[]>(() =>
+    isFirebaseConfigured ? [] : loadFromStorage(STORAGE_KEYS.MEETUP_EVENTS, INITIAL_MEETUP_EVENTS)
+  );
+  // True once the schedule and check-in events have loaded (immediately in local mode).
+  const [scheduleLoaded, setScheduleLoaded] = useState<boolean>(!isFirebaseConfigured);
   const [checkins, setCheckins] = useState<CheckInRecord[]>(() => {
     const stored = loadFromStorage<CheckInRecord[]>(STORAGE_KEYS.CHECKINS, INITIAL_CHECKINS)
       .filter((c) => !REMOVED_TEST_EMAILS.has(c.userEmail.toLowerCase()));
@@ -516,10 +512,7 @@ export function useClubStore() {
       setIsSyncing(true);
       try {
         const runsSnap = await getDocs(collection(currentDb, 'runs'));
-        if (!runsSnap.empty) {
-          const remoteRuns = runsSnap.docs.map((d) => d.data() as RunEvent);
-          setRuns(remoteRuns);
-        }
+        setRuns(runsSnap.docs.map((d) => d.data() as RunEvent));
 
         const routesSnap = await getDocs(collection(currentDb, 'routes'));
         if (!routesSnap.empty) {
@@ -574,18 +567,17 @@ export function useClubStore() {
 
         // Sync meetup events (public part only; code words live in meetup_secrets)
         const meetupsSnap = await getDocs(collection(currentDb, 'meetup_events'));
-        if (!meetupsSnap.empty) {
-          const remoteMeetups = meetupsSnap.docs.map((d) => meetupFromPublicDoc(d.data()));
-          const remoteDates = new Set(remoteMeetups.map((m) => m.date));
-          setMeetupEvents((prev) => {
-            const localOnly = prev.filter((m) => !remoteDates.has(m.date));
-            return [...remoteMeetups, ...localOnly];
-          });
-        }
+        const remoteMeetups = meetupsSnap.docs.map((d) => meetupFromPublicDoc(d.data()));
+        // Keep code words already loaded for staff (they come from meetup_secrets).
+        setMeetupEvents((prev) =>
+          remoteMeetups.map((m) => ({ ...m, codeWord: prev.find((p) => p.date === m.date)?.codeWord || '' }))
+        );
+        setScheduleLoaded(true);
       } catch (err) {
         console.warn('Firestore initial fetch skipped or failed:', err);
       } finally {
         setIsSyncing(false);
+        setScheduleLoaded(true);
       }
     }
 
@@ -1504,6 +1496,8 @@ export function useClubStore() {
    * Save / update a meetup event (Admin)
    */
   const saveMeetupEvent = async (event: MeetupEvent) => {
+    const win = computeCheckInWindow(event.date, event.time);
+    event = { ...event, checkInOpensAt: win.opensAt.toISOString(), checkInClosesAt: win.closesAt.toISOString() };
     setMeetupEvents((prev) => {
       const exists = prev.some((e) => e.date === event.date);
       if (exists) {
@@ -1514,10 +1508,8 @@ export function useClubStore() {
     if (isFirebaseConfigured && db) {
       // Public doc: everything except the code word, plus the check-in window the rules enforce
       // (opens 2 hours before the start, closes at midnight).
-      const { codeWord, ...publicEvent } = event;
-      const start = eventStart(event.date, event.time);
-      const opensAt = new Date(start.getTime() - 2 * 60 * 60 * 1000);
-      const closesAt = new Date(start.getFullYear(), start.getMonth(), start.getDate(), 23, 59, 59);
+      const { codeWord, checkInOpensAt: _o, checkInClosesAt: _c, ...publicEvent } = event;
+      const { opensAt, closesAt } = win;
       try {
         await setDoc(
           doc(db, 'meetup_events', event.date),
@@ -1535,6 +1527,7 @@ export function useClubStore() {
         }
       } catch (err) {
         console.error('Failed to save meetup event:', err);
+        throw err;
       }
     }
   };
@@ -1974,6 +1967,7 @@ export function useClubStore() {
     deleteRoute,
     resetToDefaults,
     isSyncing,
+    scheduleLoaded,
     isFirebaseConfigured,
   };
 }

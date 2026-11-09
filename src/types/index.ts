@@ -197,6 +197,8 @@ export interface MeetupEvent {
   activeDistances: string[]; // Which distances / route choice keys are active tonight
   routes: Record<string, RouteOption>;
   notes?: string;
+  checkInOpensAt?: string;  // ISO; 2 hours before start (enforced by the rules)
+  checkInClosesAt?: string; // ISO; 11:59:59 PM on the event date
 }
 
 export interface CheckInRecord {

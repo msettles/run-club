@@ -16,6 +16,7 @@ import { db } from './services/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import { downloadGPXFile } from './utils/gpxParser';
 import { isAdminProfile, isStaffProfile } from './utils/roles';
+import { formatOpening, nextCheckInEvent, openCheckInEvents, checkInWindow, upcomingRuns, priorRuns } from './utils/checkInWindow';
 
 // Lazy-loaded heavy components & modals (saves >60% initial mobile bundle size)
 const AdminDashboard = lazy(() => import('./components/AdminDashboard').then((m) => ({ default: m.AdminDashboard })));
@@ -77,6 +78,7 @@ export function App() {
     registerUser,
     checkInRunner,
     saveMeetupEvent,
+    scheduleLoaded,
     searchLegacyMatches,
     switchCurrentUser,
     milestoneAlerts,
@@ -89,7 +91,10 @@ export function App() {
   const [activeTab, setActiveTab] = useState<'runs' | 'routes' | 'milestones' | 'leaderboard' | 'admin'>('runs');
   
   // Modals state
-  const [selectedRunForCheckIn, setSelectedRunForCheckIn] = useState<RunEvent | null>(null);
+  // Check-in is keyed by event date; a run card or tonight's open event opens it.
+  const [selectedRunForCheckIn, setSelectedRunForCheckIn] = useState<Pick<RunEvent, 'date'> | null>(null);
+  const [checkInNotice, setCheckInNotice] = useState<string | null>(null);
+  const [showPriorRuns, setShowPriorRuns] = useState<boolean>(false);
   const [isNewRunOpen, setIsNewRunOpen] = useState<boolean>(false);
   const [editingRun, setEditingRun] = useState<RunEvent | null>(null);
   const [isRouteStudioOpen, setIsRouteStudioOpen] = useState<boolean>(false);
@@ -115,7 +120,7 @@ export function App() {
   const [isOnboardingOpen, setIsOnboardingOpen] = useState<boolean>(false);
   const [onboardingEmail, setOnboardingEmail] = useState<string>('');
   const [onboardingDisplayName, setOnboardingDisplayName] = useState<string>('');
-  const [pendingCheckInRun, setPendingCheckInRun] = useState<RunEvent | null>(null);
+  const [pendingCheckInRun, setPendingCheckInRun] = useState<Pick<RunEvent, 'date'> | null>(null);
 
   // With Firebase, only a real signed-in account counts — never a profile cached in localStorage.
   const isUserLoggedIn = isFirebaseConfigured
@@ -193,7 +198,7 @@ export function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleOpenCheckIn = (run: RunEvent) => {
+  const handleOpenCheckIn = (run: Pick<RunEvent, 'date'>) => {
     if (!isUserLoggedIn) {
       setPendingCheckInRun(run);
       setIsAuthModalOpen(true);
@@ -210,27 +215,48 @@ export function App() {
     }
   };
 
+  // Quick Check-in and the table QR code: open the event whose check-in window
+  // is open right now (2 hours before start until midnight). Never guess another night's run.
   const handleQuickCheckIn = () => {
-    if (runs.length > 0) {
-      handleOpenCheckIn(runs[0]);
+    const open = openCheckInEvents(meetupEvents);
+    if (open.length > 0) {
+      setCheckInNotice(null);
+      handleOpenCheckIn({ date: open[0].date });
+      return;
     }
+    const next = nextCheckInEvent(meetupEvents);
+    setCheckInNotice(
+      next
+        ? `No run right now. Check-in for the next run opens ${formatOpening(checkInWindow(next).opensAt)}.`
+        : 'No run right now, and no upcoming runs are scheduled yet.'
+    );
   };
 
-  // Auto-open check-in modal if scanned from table QR code (e.g. ?checkin=true or #checkin)
+  // Auto-open check-in if scanned from the table QR code (?checkin=true or #checkin),
+  // once the events have loaded.
+  const qrHandledRef = useRef(false);
   useEffect(() => {
+    if (qrHandledRef.current || !scheduleLoaded) return;
     const params = new URLSearchParams(window.location.search);
     if (params.get('checkin') === 'true' || window.location.hash === '#checkin') {
-      if (runs.length > 0) {
-        handleOpenCheckIn(runs[0]);
-      }
+      qrHandledRef.current = true;
+      handleQuickCheckIn();
     }
-  }, [runs, isUserLoggedIn]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scheduleLoaded, meetupEvents]);
 
   // Scheduling or editing a run also updates that night's check-in event,
   // so runners pick from the run's distance options when they check in.
   const syncCheckInEvent = (run: Omit<RunEvent, 'id' | 'attendees'>, codeWord: string) => {
     const existing = meetupEvents.find((e) => e.date === run.date);
-    saveMeetupEvent(buildMeetupFromRun(run, routes, codeWord, existing));
+    saveMeetupEvent(buildMeetupFromRun(run, routes, codeWord, existing)).catch((err) => {
+      console.error('Saving check-in event failed:', err);
+      alert(
+        err?.code === 'permission-denied'
+          ? "The run was saved, but its check-in details weren't: the code word is locked once check-in opens."
+          : "The run was saved, but its check-in details couldn't be saved. Please try again."
+      );
+    });
   };
 
   const handleAddRun = (run: Omit<RunEvent, 'id' | 'attendees'>, codeWord: string) => {
@@ -388,32 +414,58 @@ export function App() {
               </p>
             </div>
 
-            {/* Run Cards List */}
-            {runs.length === 0 ? (
-              <div className="text-center py-12 bg-white rounded-2xl border border-stone-200 p-6 space-y-3">
-                <AlertCircle className="w-8 h-8 text-stone-400 mx-auto" />
-                <p className="text-stone-600 font-medium text-sm">No group runs currently scheduled.</p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {runs.map((run) => {
-                  const choices = resolveChoices(getRunChoices(run, routes), routes);
-                  const attachedRoute = choices[0]?.route || routes.find((r) => r.id === run.routeId);
-                  return (
-                    <RunCard
-                      key={run.id}
-                      run={run}
-                      route={attachedRoute}
-                      choices={choices}
-                      currentMember={currentMember}
-                      onToggleRSVP={toggleRSVP}
-                      onOpenCheckIn={handleOpenCheckIn}
-                      onViewRoute={handleViewRouteFromRun}
-                    />
-                  );
-                })}
-              </div>
-            )}
+            {/* Run Cards List: upcoming soonest first; prior runs on request, newest first */}
+            {(() => {
+              const renderRun = (run: RunEvent) => {
+                const choices = resolveChoices(getRunChoices(run, routes), routes);
+                const attachedRoute = choices[0]?.route || routes.find((r) => r.id === run.routeId);
+                return (
+                  <RunCard
+                    key={run.id}
+                    run={run}
+                    route={attachedRoute}
+                    choices={choices}
+                    currentMember={currentMember}
+                    onToggleRSVP={toggleRSVP}
+                    onOpenCheckIn={handleOpenCheckIn}
+                    onViewRoute={handleViewRouteFromRun}
+                  />
+                );
+              };
+              const upcoming = upcomingRuns(runs);
+              const prior = priorRuns(runs);
+              return (
+                <div className="space-y-4">
+                  {upcoming.length === 0 ? (
+                    <div className="text-center py-12 bg-white rounded-2xl border border-stone-200 p-6 space-y-3">
+                      <AlertCircle className="w-8 h-8 text-stone-400 mx-auto" />
+                      <p className="text-stone-600 font-medium text-sm">No upcoming runs scheduled.</p>
+                    </div>
+                  ) : (
+                    upcoming.map(renderRun)
+                  )}
+
+                  {prior.length > 0 && (
+                    <div className="pt-2 space-y-4">
+                      <button
+                        type="button"
+                        onClick={() => setShowPriorRuns((v) => !v)}
+                        aria-expanded={showPriorRuns}
+                        className="w-full py-2.5 text-xs font-bold text-stone-600 hover:text-stone-900 bg-white border border-stone-200 rounded-xl transition"
+                      >
+                        {showPriorRuns ? 'Hide prior runs' : `Show prior runs (${prior.length})`}
+                      </button>
+                      {showPriorRuns && (
+                        <>
+                          <h4 className="text-sm font-bold text-stone-500 uppercase tracking-wider">Prior Runs</h4>
+                          {prior.map(renderRun)}
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </div>
         )}
 
@@ -698,6 +750,30 @@ export function App() {
 
       {/* Lazy-Loaded Modals & Drawers */}
       <Suspense fallback={null}>
+        {checkInNotice && (
+          <div
+            className="fixed inset-0 z-[1000] flex items-center justify-center bg-stone-950/70 backdrop-blur-sm p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="checkin-notice-title"
+          >
+            <div className="w-full max-w-sm bg-white rounded-3xl shadow-2xl border border-stone-200 p-6 text-center space-y-4">
+              <div className="text-4xl" aria-hidden="true">🦫</div>
+              <h3 id="checkin-notice-title" className="text-lg font-display font-black uppercase tracking-wide text-stone-900">
+                Check-in
+              </h3>
+              <p className="text-sm text-stone-700">{checkInNotice}</p>
+              <button
+                type="button"
+                onClick={() => setCheckInNotice(null)}
+                className="w-full py-2.5 bg-woodland-700 hover:bg-woodland-800 text-white font-bold text-sm rounded-xl transition"
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Check In Modal (New Relational Check-in Experience) */}
         {selectedRunForCheckIn && (
           <CheckInModal
@@ -736,6 +812,12 @@ export function App() {
             onDelete={deleteRun}
             specialEvents={specialEvents}
             currentCodeWord={meetupEvents.find((e) => e.date === editingRun.date)?.codeWord || ''}
+            codeWordLockedSince={(() => {
+              const ev = meetupEvents.find((e) => e.date === editingRun.date);
+              if (!ev) return undefined;
+              const { opensAt } = checkInWindow(ev);
+              return opensAt <= new Date() ? formatOpening(opensAt) : undefined;
+            })()}
           />
         )}
 

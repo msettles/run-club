@@ -4,6 +4,7 @@ import { MeetupEvent, UserProfile, RouteOption, ActivityType, DistanceChoice, Ch
 import { CLUB_MILESTONES } from '../data/initialData';
 import { calculateAge } from '../utils/dateUtils';
 import { isStaffProfile } from '../utils/roles';
+import { checkInStatus, checkInWindow, formatOpening } from '../utils/checkInWindow';
 import { MapViewer } from './MapViewer';
 import { downloadGPXFile } from '../utils/gpxParser';
 import { 
@@ -28,7 +29,7 @@ interface CheckInModalProps {
   isOpen: boolean;
   onClose: () => void;
   meetupEvents: MeetupEvent[];
-  eventDate?: string; // Date of the run being checked into; falls back to the latest event
+  eventDate?: string; // Date of the run being checked into (never falls back to another night)
   currentUser: UserProfile;
   routes?: GPXRoute[];
   checkins?: CheckInRecord[];
@@ -98,16 +99,18 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
   onSearchLegacy,
   onOpenAuthModal,
 }) => {
-  // Current active meetup event (default to most recent or upcoming)
-  const activeEvent = (eventDate && meetupEvents.find((e) => e.date === eventDate)) || meetupEvents[0] || {
-    id: '2026-11-11',
-    date: '2026-11-11',
-    time: '06:00 PM',
-    title: 'Wednesday Woodchucker Meetup',
-    codeWord: 'TURKEY',
-    activeDistances: ['1', '3', '5'],
+  // The check-in event for exactly this run's date. Never fall back to another
+  // night's event: that showed the wrong routes and the server rejected the check-in.
+  const matchedEvent = eventDate ? meetupEvents.find((e) => e.date === eventDate) : undefined;
+  const activeEvent: MeetupEvent = matchedEvent || {
+    id: eventDate || '',
+    date: eventDate || '',
+    title: 'Check-in',
+    codeWord: '',
+    activeDistances: [],
     routes: {},
   };
+  const eventStatus = matchedEvent ? checkInStatus(matchedEvent) : null;
 
   const isGuest = currentUser.role === 'guest' || !currentUser.email;
   const isOrganizerOrAdmin = isStaffProfile(currentUser);
@@ -278,6 +281,33 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
   const autoCheckInAfterRegister = true;
 
   if (!isOpen) return null;
+
+  // Check-in only while this run's window is open (2 hours before start until midnight).
+  if (viewMode === 'checkin' && eventStatus !== 'open') {
+    const message = !matchedEvent
+      ? "Check-in isn't set up for this run yet."
+      : eventStatus === 'not_open'
+        ? `Check-in for this run opens ${formatOpening(checkInWindow(matchedEvent).opensAt)}.`
+        : 'Check-in for this run closed at midnight on the day of the run.';
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/80 backdrop-blur-sm p-4" role="dialog" aria-modal="true" aria-labelledby="checkin-closed-title">
+        <div className="relative w-full max-w-sm bg-white rounded-3xl shadow-2xl border border-stone-200 p-6 text-center space-y-4">
+          <div className="text-4xl" aria-hidden="true">🦫</div>
+          <h3 id="checkin-closed-title" className="text-lg font-display font-black uppercase tracking-wide text-stone-900">
+            {matchedEvent ? matchedEvent.title : 'Check-in'}
+          </h3>
+          <p className="text-sm text-stone-700">{message}</p>
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-full py-2.5 bg-woodland-700 hover:bg-woodland-800 text-white font-bold text-sm rounded-xl transition"
+          >
+            OK
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (isGuest) {
     return (

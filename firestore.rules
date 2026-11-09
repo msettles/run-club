@@ -140,6 +140,14 @@ service cloud.firestore {
         request.time <= get(ev).data.checkInClosesAt;
     }
 
+    // The event's check-in window has started (code word is locked from here on).
+    function checkInHasOpened(date) {
+      let ev = /databases/$(database)/documents/meetup_events/$(date);
+      return exists(ev) &&
+        get(ev).data.get('checkInOpensAt', null) is timestamp &&
+        request.time >= get(ev).data.checkInOpensAt;
+    }
+
     // A check-in doc is being created by this batch.
     function isCheckInCreatedInBatch(p) {
       return !exists(p) && existsAfter(p);
@@ -620,8 +628,15 @@ service cloud.firestore {
     }
 
     // 9b. MEETUP SECRETS — tonight's code word, staff only.
+    // Set when the run is created; staff can change it until check-in opens,
+    // then it's locked (re-saving the same word is fine).
     match /meetup_secrets/{eventId} {
-      allow read, write: if isStaff();
+      allow read: if isStaff();
+      allow create: if isStaff() && !checkInHasOpened(eventId);
+      allow update: if isStaff() &&
+                       (request.resource.data.codeWord == resource.data.codeWord ||
+                        !checkInHasOpened(eventId));
+      allow delete: if isAdmin();
     }
 
     // 10. CLUB SETTINGS — public read, admin write.

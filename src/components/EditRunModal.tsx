@@ -14,6 +14,7 @@ interface EditRunModalProps {
   onDelete?: (runId: string) => void;
   specialEvents?: SpecialEventDefinition[];
   currentCodeWord?: string; // Code word of the check-in event for this run's date
+  codeWordLockedSince?: string; // Set once check-in has opened: the code word can no longer change
 }
 
 export const EditRunModal: React.FC<EditRunModalProps> = ({
@@ -25,6 +26,7 @@ export const EditRunModal: React.FC<EditRunModalProps> = ({
   onDelete,
   specialEvents = INITIAL_SPECIAL_EVENTS,
   currentCodeWord = '',
+  codeWordLockedSince,
 }) => {
   const [title, setTitle] = useState(run.title);
   const [specialEvent, setSpecialEvent] = useState<SpecialEventType>(run.specialEvent || 'none');
@@ -54,6 +56,10 @@ export const EditRunModal: React.FC<EditRunModalProps> = ({
     const resolved = resolveChoices(routeChoices, routes);
     if (resolved.length === 0) {
       setFormError('Add at least one distance option with a route.');
+      return;
+    }
+    if (!codeWord.trim()) {
+      setFormError('Enter the check-in code word.');
       return;
     }
     onSave({
@@ -170,9 +176,16 @@ export const EditRunModal: React.FC<EditRunModalProps> = ({
               type="text"
               value={codeWord}
               onChange={(e) => setCodeWord(e.target.value)}
+              readOnly={Boolean(codeWordLockedSince)}
+              aria-describedby={codeWordLockedSince ? 'codeword-locked-note' : undefined}
               placeholder="Announced at the run, e.g. TURKEY"
-              className="w-full text-sm px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-woodland-500 focus:outline-none uppercase"
+              className={`w-full text-sm px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-woodland-500 focus:outline-none uppercase ${codeWordLockedSince ? 'bg-stone-100 text-stone-500 cursor-not-allowed' : ''}`}
             />
+            {codeWordLockedSince && (
+              <p id="codeword-locked-note" className="mt-1 text-[11px] text-stone-500">
+                Locked: check-in opened {codeWordLockedSince}.
+              </p>
+            )}
           </div>
 
           <div>
