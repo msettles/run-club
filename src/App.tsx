@@ -78,6 +78,7 @@ export function App() {
     registerUser,
     checkInRunner,
     saveMeetupEvent,
+    resolveRunByCodeWord,
     scheduleLoaded,
     searchLegacyMatches,
     switchCurrentUser,
@@ -91,8 +92,10 @@ export function App() {
   const [activeTab, setActiveTab] = useState<'runs' | 'routes' | 'milestones' | 'leaderboard' | 'admin'>('runs');
   
   // Modals state
-  // Check-in is keyed by event date; a run card or tonight's open event opens it.
-  const [selectedRunForCheckIn, setSelectedRunForCheckIn] = useState<Pick<RunEvent, 'date'> | null>(null);
+  // Which run a check-in is for: one run, or (when several are open at once) the
+  // candidates, in which case the runner's code word picks the run.
+  type CheckInTarget = { runId?: string; candidateIds?: string[] };
+  const [selectedRunForCheckIn, setSelectedRunForCheckIn] = useState<CheckInTarget | null>(null);
   const [checkInNotice, setCheckInNotice] = useState<string | null>(null);
   const [showPriorRuns, setShowPriorRuns] = useState<boolean>(false);
   const [isNewRunOpen, setIsNewRunOpen] = useState<boolean>(false);
@@ -120,7 +123,7 @@ export function App() {
   const [isOnboardingOpen, setIsOnboardingOpen] = useState<boolean>(false);
   const [onboardingEmail, setOnboardingEmail] = useState<string>('');
   const [onboardingDisplayName, setOnboardingDisplayName] = useState<string>('');
-  const [pendingCheckInRun, setPendingCheckInRun] = useState<Pick<RunEvent, 'date'> | null>(null);
+  const [pendingCheckInRun, setPendingCheckInRun] = useState<CheckInTarget | null>(null);
 
   // With Firebase, only a real signed-in account counts — never a profile cached in localStorage.
   const isUserLoggedIn = isFirebaseConfigured
@@ -198,14 +201,15 @@ export function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleOpenCheckIn = (run: Pick<RunEvent, 'date'>) => {
+  const openCheckInFor = (target: CheckInTarget) => {
     if (!isUserLoggedIn) {
-      setPendingCheckInRun(run);
+      setPendingCheckInRun(target);
       setIsAuthModalOpen(true);
     } else {
-      setSelectedRunForCheckIn(run);
+      setSelectedRunForCheckIn(target);
     }
   };
+  const handleOpenCheckIn = (run: Pick<RunEvent, 'id'>) => openCheckInFor({ runId: run.id });
 
   const handleOpenRegister = () => {
     if (isUserLoggedIn) {
@@ -221,7 +225,7 @@ export function App() {
     const open = openCheckInEvents(meetupEvents);
     if (open.length > 0) {
       setCheckInNotice(null);
-      handleOpenCheckIn({ date: open[0].date });
+      openCheckInFor(open.length === 1 ? { runId: open[0].id } : { candidateIds: open.map((e) => e.id) });
       return;
     }
     const next = nextCheckInEvent(meetupEvents);
@@ -247,21 +251,28 @@ export function App() {
 
   // Scheduling or editing a run also updates that night's check-in event,
   // so runners pick from the run's distance options when they check in.
-  const syncCheckInEvent = (run: Omit<RunEvent, 'id' | 'attendees'>, codeWord: string) => {
-    const existing = meetupEvents.find((e) => e.date === run.date);
+  const syncCheckInEvent = (run: RunEvent, codeWord: string) => {
+    const existing = meetupEvents.find((e) => e.id === run.id);
     saveMeetupEvent(buildMeetupFromRun(run, routes, codeWord, existing)).catch((err) => {
       console.error('Saving check-in event failed:', err);
       alert(
-        err?.code === 'permission-denied'
-          ? "The run was saved, but its check-in details weren't: the code word is locked once check-in opens."
-          : "The run was saved, but its check-in details couldn't be saved. Please try again."
+        err?.code === 'duplicate-code-word'
+          ? `The run was saved, but not its code word: ${err.message} Edit the run to set a new one.`
+          : err?.code === 'permission-denied'
+            ? "The run was saved, but its check-in details weren't: the code word is locked once check-in opens."
+            : "The run was saved, but its check-in details couldn't be saved. Please try again."
       );
     });
   };
 
-  const handleAddRun = (run: Omit<RunEvent, 'id' | 'attendees'>, codeWord: string) => {
-    addRun(run);
-    syncCheckInEvent(run, codeWord);
+  const handleAddRun = async (run: Omit<RunEvent, 'id' | 'attendees'>, codeWord: string) => {
+    try {
+      const created = await addRun(run);
+      syncCheckInEvent(created, codeWord);
+    } catch (err) {
+      console.error('Creating run failed:', err);
+      alert("The run couldn't be saved. Please check your connection and try again.");
+    }
   };
 
   const handleUpdateRun = (run: RunEvent, codeWord: string) => {
@@ -629,7 +640,6 @@ export function App() {
               specialEvents={specialEvents}
               onCreateBadge={createBadge}
               onDeleteBadge={deleteBadge}
-              onSaveMeetupEvent={saveMeetupEvent}
               onOpenNewRun={() => setIsNewRunOpen(true)}
               onSendBroadcast={sendPushAnnouncement}
               onSetUserRole={setUserRole}
@@ -780,7 +790,10 @@ export function App() {
             isOpen={Boolean(selectedRunForCheckIn)}
             onClose={() => setSelectedRunForCheckIn(null)}
             meetupEvents={meetupEvents}
-            eventDate={selectedRunForCheckIn.date}
+            eventId={selectedRunForCheckIn.runId}
+            candidateEventIds={selectedRunForCheckIn.candidateIds}
+            runs={runs}
+            onResolveCodeWord={resolveRunByCodeWord}
             currentUser={currentUser}
             routes={routes}
             checkins={checkins}
@@ -811,9 +824,9 @@ export function App() {
             onSave={handleUpdateRun}
             onDelete={deleteRun}
             specialEvents={specialEvents}
-            currentCodeWord={meetupEvents.find((e) => e.date === editingRun.date)?.codeWord || ''}
+            currentCodeWord={meetupEvents.find((e) => e.id === editingRun.id)?.codeWord || ''}
             codeWordLockedSince={(() => {
-              const ev = meetupEvents.find((e) => e.date === editingRun.date);
+              const ev = meetupEvents.find((e) => e.id === editingRun.id);
               if (!ev) return undefined;
               const { opensAt } = checkInWindow(ev);
               return opensAt <= new Date() ? formatOpening(opensAt) : undefined;

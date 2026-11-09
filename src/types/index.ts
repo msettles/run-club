@@ -188,7 +188,8 @@ export interface RouteOption {
 }
 
 export interface MeetupEvent {
-  id: string;          // Usually date "YYYY-MM-DD"
+  id: string;          // The run's ID (one check-in event per run)
+  runId?: string;      // Same as id; stored explicitly on Firestore docs
   date: string;        // "2026-11-11"
   time?: string;       // "06:00 PM"
   title: string;       // e.g. "Thanksgiving Warmup Run"
@@ -202,7 +203,8 @@ export interface MeetupEvent {
 }
 
 export interface CheckInRecord {
-  id: string;                // e.g. "2026-11-11_matt.settles@example.com"
+  id: string;                // `${runId}_${email}`: one check-in per runner per run
+  runId?: string;            // The run checked into (missing only on old local sample data)
   date: string;              // YYYY-MM-DD
   time: string;              // HH:MM:SS
   userEmail: string;         // Foreign key to UserProfile.email
@@ -246,6 +248,7 @@ export interface UserProfile {
   distanceCounts?: Record<string, number>; // Route choices count (e.g. { '1': 4, '3': 10, '5': 2 })
   firstRunDate?: string;     // Earliest recorded check-in date
   lastCheckInDate?: string;  // Date of the check-in that last changed these stats
+  lastCheckInRunId?: string; // Run of that check-in (the rules use it to verify the stats change)
   currentStreakWeeks?: number; // Consecutive weeks with a run, ending this or last week
   longestStreakWeeks?: number; // Longest run of consecutive weeks (legacy + app)
   // Legacy Link
@@ -299,6 +302,7 @@ export interface MilestoneAlert {
   perks: string;
   date: string;
   time: string;
+  runId?: string;     // The run whose check-in reached the milestone
   fulfilled: boolean; // Has organizer handed them their shirt/hat/mug/bottle?
   fulfilledAt?: string;
   fulfilledBy?: string;

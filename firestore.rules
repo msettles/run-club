@@ -12,12 +12,12 @@ service cloud.firestore {
     //   members/{memberKey}       Leaderboard projection. NO email / PII.
     //                             memberKey = sha256("woodchuckers:" + lowercase email) hex.
     //   badges, special_events    Badge catalog.
-    //   meetup_events/{date}      Check-in event (routes, window). NO code word.
+    //   meetup_events/{runId}     Check-in event for a run (date, routes, window). NO code word.
     //   settings/{id}             Club announcements.
     //
     // PRIVATE (owner + staff only):
     //   users/{email}             Full profile (birthday, city, zip, emergency contact...).
-    //   checkins/{date_email}     Check-in audit log.
+    //   checkins/{runId_email}    Check-in audit log: one per runner per run.
     //   milestone_alerts/{id}     Gear pickup queue (shirt size, email).
     //   legacy_history/{id}       Old-app sign-in dates per legacy name (claimer + staff).
     //
@@ -25,12 +25,15 @@ service cloud.firestore {
     //   legacy_index/pool, legacy_profiles/{id}  Old-app names + counts, claim lock.
     //
     // STAFF ONLY:
-    //   meetup_secrets/{date}     { codeWord } for that night's check-in.
+    //   meetup_secrets/{runId}    { codeWord } for that run's check-in.
+    //
+    // SIGNED-IN GET ONLY (no listing):
+    //   meetup_codes/{sha256(date:WORD)}  { runId, date }: code word -> run, unique per day.
     //
     // Trust model (Spark plan, no Cloud Functions):
-    //   - A runner check-in is only accepted when the code word matches
-    //     meetup_secrets/{date} and request.time is inside the event's
-    //     checkInOpensAt..checkInClosesAt window.
+    //   - A runner check-in is only accepted when its code word's lookup key
+    //     (meetup_codes) points at that run and request.time is inside the
+    //     run's checkInOpensAt..checkInClosesAt window.
     //   - A runner may only bump their own run counters in the SAME batch that
     //     creates (or edits) a valid check-in, and the public leaderboard row
     //     must mirror the user doc written in that batch.
@@ -63,8 +66,13 @@ service cloud.firestore {
       return /databases/$(database)/documents/legacy_profiles/$(id);
     }
 
-    function checkinPath(date, email) {
-      return /databases/$(database)/documents/checkins/$(date + '_' + email);
+    // One check-in per runner per run.
+    function checkinPath(runId, email) {
+      return /databases/$(database)/documents/checkins/$(runId + '_' + email);
+    }
+
+    function eventPath(runId) {
+      return /databases/$(database)/documents/meetup_events/$(runId);
     }
 
     // The club owner account: always an admin, can't be demoted.
@@ -124,25 +132,33 @@ service cloud.firestore {
 
     // ---- Check-in gating ----
 
-    function codeWordMatches(date, codeWord) {
-      let secret = /databases/$(database)/documents/meetup_secrets/$(date);
-      return codeWord is string &&
-        exists(secret) &&
-        get(secret).data.codeWord == codeWord.trim().upper();
+    // Code word lookup key: sha256("<date>:<CODEWORD>"). meetup_codes/{key} = { runId, date }.
+    // One key per word per day, so a code word is unique within a day and
+    // identifies which run the runner is checking into.
+    function codeKeyFor(date, codeWord) {
+      return hashing.sha256(date + ':' + codeWord.trim().upper()).toHexString().lower();
     }
 
-    function isInsideCheckInWindow(date) {
-      let ev = /databases/$(database)/documents/meetup_events/$(date);
+    function codeWordMatches(runId, date, codeWord) {
+      let key = /databases/$(database)/documents/meetup_codes/$(codeKeyFor(date, codeWord));
+      return codeWord is string && codeWord.size() >= 1 &&
+        exists(key) &&
+        get(key).data.runId == runId;
+    }
+
+    function isInsideCheckInWindow(runId, date) {
+      let ev = eventPath(runId);
       return exists(ev) &&
+        get(ev).data.get('date', '') == date &&
         get(ev).data.get('checkInOpensAt', null) is timestamp &&
         get(ev).data.get('checkInClosesAt', null) is timestamp &&
         request.time >= get(ev).data.checkInOpensAt &&
         request.time <= get(ev).data.checkInClosesAt;
     }
 
-    // The event's check-in window has started (code word is locked from here on).
-    function checkInHasOpened(date) {
-      let ev = /databases/$(database)/documents/meetup_events/$(date);
+    // The run's check-in window has started (code word is locked from here on).
+    function checkInHasOpened(runId) {
+      let ev = eventPath(runId);
       return exists(ev) &&
         get(ev).data.get('checkInOpensAt', null) is timestamp &&
         request.time >= get(ev).data.checkInOpensAt;
@@ -302,14 +318,15 @@ service cloud.firestore {
 
     function isValidCheckIn(data) {
       return data.keys().hasOnly([
-               'id', 'date', 'time', 'userEmail', 'activity', 'distanceChoice',
+               'id', 'runId', 'date', 'time', 'userEmail', 'activity', 'distanceChoice',
                'actualMiles', 'createdAt', 'updatedAt', 'runnerName', 'routeName',
                'loops', 'withPet', 'source', 'codeWord'
              ]) &&
              data.keys().hasAll([
-               'id', 'date', 'time', 'userEmail', 'activity', 'distanceChoice',
+               'id', 'runId', 'date', 'time', 'userEmail', 'activity', 'distanceChoice',
                'actualMiles', 'createdAt', 'updatedAt'
              ]) &&
+             data.runId is string && data.runId.size() >= 1 && data.runId.size() <= 128 &&
              data.id is string && data.id.size() >= 1 && data.id.size() <= 180 &&
              data.date is string && data.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$') &&
              data.time is string && data.time.size() >= 1 && data.time.size() <= 30 &&
@@ -337,7 +354,7 @@ service cloud.firestore {
                'walkCount', 'linkedLegacyNames', 'unlockedBadgeIds', 'role',
                'createdAt', 'age', 'birthday', 'city', 'zipCode', 'preferredPace',
                'petRunCount', 'distanceCounts', 'firstRunDate', 'badgeCounts',
-               'emergencyContact', 'lastCheckInDate', 'linkedLegacyIds',
+               'emergencyContact', 'lastCheckInDate', 'lastCheckInRunId', 'linkedLegacyIds',
                'legacyEventRuns', 'currentStreakWeeks', 'longestStreakWeeks'
              ]) &&
              data.keys().hasAll([
@@ -369,6 +386,7 @@ service cloud.firestore {
              (!('petRunCount' in data) || (data.petRunCount is number && data.petRunCount >= 0 && data.petRunCount <= 100000)) &&
              (!('firstRunDate' in data) || (data.firstRunDate is string && data.firstRunDate.size() <= 30)) &&
              (!('lastCheckInDate' in data) || (data.lastCheckInDate is string && data.lastCheckInDate.size() <= 30)) &&
+             (!('lastCheckInRunId' in data) || (data.lastCheckInRunId is string && data.lastCheckInRunId.size() <= 128)) &&
              (!('linkedLegacyIds' in data) || (data.linkedLegacyIds is list && data.linkedLegacyIds.size() <= 50)) &&
              (!('legacyEventRuns' in data) || (data.legacyEventRuns is int && data.legacyEventRuns >= 0)) &&
              (!('currentStreakWeeks' in data) || (data.currentStreakWeeks is int && data.currentStreakWeeks >= 0)) &&
@@ -446,15 +464,15 @@ service cloud.firestore {
       return !request.resource.data.diff(resource.data).affectedKeys().hasAny([
         'totalRuns', 'loggedRuns', 'totalMiles', 'runCount', 'walkCount',
         'petRunCount', 'distanceCounts', 'unlockedBadgeIds', 'badgeCounts',
-        'lastCheckInDate', 'firstRunDate', 'currentStreakWeeks', 'longestStreakWeeks'
+        'lastCheckInDate', 'lastCheckInRunId', 'firstRunDate', 'currentStreakWeeks', 'longestStreakWeeks'
       ]);
     }
 
     function isStatsChangeBackedByCheckIn(email) {
       let d = request.resource.data;
       let o = resource.data;
-      let p = checkinPath(d.get('lastCheckInDate', ''), email);
-      return d.get('lastCheckInDate', null) is string &&
+      let p = checkinPath(d.get('lastCheckInRunId', ''), email);
+      return d.get('lastCheckInRunId', null) is string &&
         (
           (isCheckInCreatedInBatch(p) &&
            d.totalRuns == o.totalRuns + 1 &&
@@ -522,31 +540,31 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    // 4. CHECKINS — private audit log. Doc ID is `${date}_${email}`.
+    // 4. CHECKINS — private audit log. One per runner per run: doc ID is `${runId}_${email}`.
     match /checkins/{checkinId} {
       allow read: if isStaff() ||
                      (hasVerifiedEmail() && resource.data.userEmail == tokenEmail());
 
       allow create: if isValidCheckIn(request.resource.data) &&
-                       checkinId == request.resource.data.date + '_' + request.resource.data.userEmail &&
+                       checkinId == request.resource.data.runId + '_' + request.resource.data.userEmail &&
                        request.resource.data.id == checkinId &&
                        (
                          isStaff() ||
                          (isUserEmailOwner(request.resource.data.userEmail) &&
                           request.resource.data.get('source', 'pwa') == 'pwa' &&
-                          codeWordMatches(request.resource.data.date, request.resource.data.get('codeWord', null)) &&
-                          isInsideCheckInWindow(request.resource.data.date))
+                          codeWordMatches(request.resource.data.runId, request.resource.data.date, request.resource.data.get('codeWord', '')) &&
+                          isInsideCheckInWindow(request.resource.data.runId, request.resource.data.date))
                        );
 
       allow update: if isValidCheckIn(request.resource.data) &&
                        !request.resource.data.diff(resource.data).affectedKeys()
-                         .hasAny(['id', 'date', 'userEmail', 'createdAt']) &&
+                         .hasAny(['id', 'runId', 'date', 'userEmail', 'createdAt']) &&
                        (
                          isStaff() ||
                          (isUserEmailOwner(resource.data.userEmail) &&
                           request.resource.data.get('source', 'pwa') == 'pwa' &&
-                          codeWordMatches(request.resource.data.date, request.resource.data.get('codeWord', null)) &&
-                          isInsideCheckInWindow(request.resource.data.date))
+                          codeWordMatches(request.resource.data.runId, request.resource.data.date, request.resource.data.get('codeWord', '')) &&
+                          isInsideCheckInWindow(request.resource.data.runId, request.resource.data.date))
                        );
 
       allow delete: if isStaff();
@@ -606,7 +624,7 @@ service cloud.firestore {
                        (hasVerifiedEmail() &&
                         request.resource.data.keys().hasOnly([
                           'id', 'userEmail', 'runnerName', 'shirtSize', 'milestoneRuns',
-                          'milestoneName', 'reward', 'perks', 'date', 'time', 'fulfilled'
+                          'milestoneName', 'reward', 'perks', 'date', 'time', 'fulfilled', 'runId'
                         ]) &&
                         request.resource.data.id == alertId &&
                         request.resource.data.userEmail == tokenEmail() &&
@@ -614,13 +632,15 @@ service cloud.firestore {
                         request.resource.data.milestoneRuns >= 1 &&
                         alertId == 'm' + string(request.resource.data.milestoneRuns) + '_' + tokenEmail() &&
                         request.resource.data.fulfilled == false &&
-                        isCheckInCreatedInBatch(checkinPath(request.resource.data.date, tokenEmail())) &&
+                        request.resource.data.runId is string &&
+                        isCheckInCreatedInBatch(checkinPath(request.resource.data.runId, tokenEmail())) &&
                         getAfter(userPath(tokenEmail())).data.totalRuns == request.resource.data.milestoneRuns);
 
       allow update, delete: if isStaff();
     }
 
-    // 9. MEETUP EVENTS — public check-in event info. The code word lives in meetup_secrets.
+    // 9. MEETUP EVENTS — public check-in info for one run. Doc ID is the run ID.
+    // The code word lives in meetup_secrets (staff) and meetup_codes (lookup key).
     match /meetup_events/{eventId} {
       allow read: if true;
       allow create, update: if isStaff() && !('codeWord' in request.resource.data);
@@ -637,6 +657,21 @@ service cloud.firestore {
                        (request.resource.data.codeWord == resource.data.codeWord ||
                         !checkInHasOpened(eventId));
       allow delete: if isAdmin();
+    }
+
+    // 9c. MEETUP CODES — lookup key sha256("<date>:<CODEWORD>") -> { runId, date }.
+    // Signed-in runners may get a key (to find which run a code word belongs to)
+    // but never list them. Creating fails if the word is already used that day.
+    match /meetup_codes/{codeKey} {
+      allow get: if hasVerifiedEmail();
+      allow list: if false;
+      allow create: if isStaff() &&
+                       request.resource.data.keys().hasOnly(['runId', 'date']) &&
+                       request.resource.data.runId is string &&
+                       request.resource.data.date is string &&
+                       !checkInHasOpened(request.resource.data.runId);
+      allow update: if false;
+      allow delete: if isStaff() && !checkInHasOpened(resource.data.runId);
     }
 
     // 10. CLUB SETTINGS — public read, admin write.
