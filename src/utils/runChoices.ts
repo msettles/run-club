@@ -69,7 +69,8 @@ export function routeOptionFromRoute(route: GPXRoute): RouteOption {
     maxLoops: route.maxLoops || 4,
     externalLinks: route.externalLinks,
     directionsList: route.directions,
-    geoJson: route.geoJson,
+    // No geoJson here: its coordinates are nested arrays, which Firestore refuses,
+    // and nothing reads it from the check-in event (maps use the route library).
     directions: route.description || undefined,
     routeUrl: route.externalLinks?.stravaUrl || route.externalLinks?.garminUrl || route.externalLinks?.rungoUrl,
   };
