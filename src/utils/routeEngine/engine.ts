@@ -140,7 +140,13 @@ export async function buildDirections(
   let osmData = prefetchedOsm;
   if (!osmData) {
     onProgress?.('Fetching street and landmark data from OpenStreetMap...');
-    osmData = await fetchOsm(bbox);
+    try {
+      osmData = await fetchOsm(bbox);
+    } catch (err) {
+      console.warn('OSM Overpass query failed or timed out, falling back to geometric route cues:', err);
+      onProgress?.('Street database offline — using course route pathway cues...');
+      osmData = { elements: [] };
+    }
   }
 
   onProgress?.('Matching track to street network...');

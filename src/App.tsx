@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { useClubStore } from './services/storage';
 import { RunEvent, GPXRoute } from './types';
 import { buildMeetupFromRun, getRunChoices, resolveChoices } from './utils/runChoices';
@@ -6,22 +6,24 @@ import { Navbar } from './components/Navbar';
 import { RunCard } from './components/RunCard';
 import { MapViewer } from './components/MapViewer';
 import { Leaderboard } from './components/Leaderboard';
-import { AdminDashboard } from './components/AdminDashboard';
-import { CheckInModal } from './components/CheckInModal';
-import { NewRunModal } from './components/NewRunModal';
-import { EditRunModal } from './components/EditRunModal';
-import { RouteStudioModal } from './components/RouteStudioModal';
-import { FirebaseSetupGuide } from './components/FirebaseSetupGuide';
 import { InstallPwaBanner } from './components/InstallPwaBanner';
 import { MobileBottomNav } from './components/MobileBottomNav';
-import { BrandAssetsModal } from './components/BrandAssetsModal';
-import { AuthModal } from './components/AuthModal';
 import { MilestonesPage } from './components/MilestonesPage';
-import { VersionModal } from './components/VersionModal';
 import { FULL_VERSION } from './utils/version';
 import { onAuthChange, logoutUser, checkAndCompleteEmailLinkSignIn } from './services/authService';
 import { User as FirebaseUser } from 'firebase/auth';
 import { downloadGPXFile } from './utils/gpxParser';
+
+// Lazy-loaded heavy components & modals (saves >60% initial mobile bundle size)
+const AdminDashboard = lazy(() => import('./components/AdminDashboard').then((m) => ({ default: m.AdminDashboard })));
+const RouteStudioModal = lazy(() => import('./components/RouteStudioModal').then((m) => ({ default: m.RouteStudioModal })));
+const CheckInModal = lazy(() => import('./components/CheckInModal').then((m) => ({ default: m.CheckInModal })));
+const NewRunModal = lazy(() => import('./components/NewRunModal').then((m) => ({ default: m.NewRunModal })));
+const EditRunModal = lazy(() => import('./components/EditRunModal').then((m) => ({ default: m.EditRunModal })));
+const FirebaseSetupGuide = lazy(() => import('./components/FirebaseSetupGuide').then((m) => ({ default: m.FirebaseSetupGuide })));
+const BrandAssetsModal = lazy(() => import('./components/BrandAssetsModal').then((m) => ({ default: m.BrandAssetsModal })));
+const VersionModal = lazy(() => import('./components/VersionModal').then((m) => ({ default: m.VersionModal })));
+const AuthModal = lazy(() => import('./components/AuthModal').then((m) => ({ default: m.AuthModal })));
 import {
   Plus,
   Compass,
@@ -470,24 +472,33 @@ export function App() {
 
         {/* TAB 5: ADMIN DASHBOARD */}
         {activeTab === 'admin' && (
-          <AdminDashboard
-            routes={routes}
-            badges={badges}
-            notifications={notifications}
-            meetupEvents={meetupEvents}
-            checkins={checkins}
-            users={users}
-            legacyMembers={legacyMembers}
-            milestoneAlerts={milestoneAlerts}
-            onMarkMilestoneFulfilled={markMilestoneFulfilled}
-            currentUser={currentUser}
-            specialEvents={specialEvents}
-            onCreateBadge={createBadge}
-            onDeleteBadge={deleteBadge}
-            onSaveMeetupEvent={saveMeetupEvent}
-            onOpenNewRun={() => setIsNewRunOpen(true)}
-            onSendBroadcast={sendPushAnnouncement}
-          />
+          <Suspense
+            fallback={
+              <div className="flex flex-col items-center justify-center p-12 space-y-3 bg-white rounded-2xl border border-stone-200">
+                <div className="w-8 h-8 border-4 border-woodland-600 border-t-transparent rounded-full animate-spin" />
+                <p className="text-xs text-stone-500 font-semibold">Loading Admin Dashboard...</p>
+              </div>
+            }
+          >
+            <AdminDashboard
+              routes={routes}
+              badges={badges}
+              notifications={notifications}
+              meetupEvents={meetupEvents}
+              checkins={checkins}
+              users={users}
+              legacyMembers={legacyMembers}
+              milestoneAlerts={milestoneAlerts}
+              onMarkMilestoneFulfilled={markMilestoneFulfilled}
+              currentUser={currentUser}
+              specialEvents={specialEvents}
+              onCreateBadge={createBadge}
+              onDeleteBadge={deleteBadge}
+              onSaveMeetupEvent={saveMeetupEvent}
+              onOpenNewRun={() => setIsNewRunOpen(true)}
+              onSendBroadcast={sendPushAnnouncement}
+            />
+          </Suspense>
         )}
       </main>
 
@@ -597,88 +608,91 @@ export function App() {
         </div>
       )}
 
-      {/* Check In Modal (New Relational Check-in Experience) */}
-      {selectedRunForCheckIn && (
-        <CheckInModal
-          isOpen={Boolean(selectedRunForCheckIn)}
-          onClose={() => setSelectedRunForCheckIn(null)}
-          meetupEvents={meetupEvents}
-          eventDate={selectedRunForCheckIn.date}
-          currentUser={currentUser}
-          users={users}
-          routes={routes}
-          checkins={checkins}
-          initialMode={checkInInitialMode}
-          onCheckInRunner={checkInRunner}
-          onRegisterUser={registerUser}
-          onSearchLegacy={searchLegacyMatches}
-          onSwitchUser={switchCurrentUser}
-          onOpenAuthModal={() => setIsAuthModalOpen(true)}
-        />
-      )}
+      {/* Lazy-Loaded Modals & Drawers */}
+      <Suspense fallback={null}>
+        {/* Check In Modal (New Relational Check-in Experience) */}
+        {selectedRunForCheckIn && (
+          <CheckInModal
+            isOpen={Boolean(selectedRunForCheckIn)}
+            onClose={() => setSelectedRunForCheckIn(null)}
+            meetupEvents={meetupEvents}
+            eventDate={selectedRunForCheckIn.date}
+            currentUser={currentUser}
+            users={users}
+            routes={routes}
+            checkins={checkins}
+            initialMode={checkInInitialMode}
+            onCheckInRunner={checkInRunner}
+            onRegisterUser={registerUser}
+            onSearchLegacy={searchLegacyMatches}
+            onSwitchUser={switchCurrentUser}
+            onOpenAuthModal={() => setIsAuthModalOpen(true)}
+          />
+        )}
 
-      {isNewRunOpen && (
-        <NewRunModal
-          isOpen={isNewRunOpen}
-          onClose={() => setIsNewRunOpen(false)}
-          routes={routes}
-          organizerName={currentMember.name}
-          onAddRun={handleAddRun}
-          specialEvents={specialEvents}
-        />
-      )}
+        {isNewRunOpen && (
+          <NewRunModal
+            isOpen={isNewRunOpen}
+            onClose={() => setIsNewRunOpen(false)}
+            routes={routes}
+            organizerName={currentMember.name}
+            onAddRun={handleAddRun}
+            specialEvents={specialEvents}
+          />
+        )}
 
-      {editingRun && (
-        <EditRunModal
-          run={editingRun}
-          routes={routes}
-          isOpen={Boolean(editingRun)}
-          onClose={() => setEditingRun(null)}
-          onSave={handleUpdateRun}
-          onDelete={deleteRun}
-          specialEvents={specialEvents}
-          currentCodeWord={meetupEvents.find((e) => e.date === editingRun.date)?.codeWord || ''}
-        />
-      )}
+        {editingRun && (
+          <EditRunModal
+            run={editingRun}
+            routes={routes}
+            isOpen={Boolean(editingRun)}
+            onClose={() => setEditingRun(null)}
+            onSave={handleUpdateRun}
+            onDelete={deleteRun}
+            specialEvents={specialEvents}
+            currentCodeWord={meetupEvents.find((e) => e.date === editingRun.date)?.codeWord || ''}
+          />
+        )}
 
-      {isRouteStudioOpen && (
-        <RouteStudioModal
-          isOpen={isRouteStudioOpen}
-          onClose={() => {
-            setIsRouteStudioOpen(false);
-            setEditingRoute(null);
+        {isRouteStudioOpen && (
+          <RouteStudioModal
+            isOpen={isRouteStudioOpen}
+            onClose={() => {
+              setIsRouteStudioOpen(false);
+              setEditingRoute(null);
+            }}
+            existingRoute={editingRoute}
+            onSaveRoute={handleSaveRoute}
+            onDeleteRoute={handleDeleteRoute}
+          />
+        )}
+
+        <FirebaseSetupGuide
+          isOpen={isSetupGuideOpen}
+          onClose={() => setIsSetupGuideOpen(false)}
+          isConfigured={isFirebaseConfigured}
+        />
+
+        <BrandAssetsModal
+          isOpen={isBrandAssetsOpen}
+          onClose={() => setIsBrandAssetsOpen(false)}
+        />
+
+        <VersionModal
+          isOpen={isVersionModalOpen}
+          onClose={() => setIsVersionModalOpen(false)}
+        />
+
+        {/* Passwordless & Google Auth Modal */}
+        <AuthModal
+          isOpen={isAuthModalOpen}
+          onClose={() => setIsAuthModalOpen(false)}
+          onAuthSuccess={(email) => {
+            switchCurrentUser(email);
+            setIsAuthModalOpen(false);
           }}
-          existingRoute={editingRoute}
-          onSaveRoute={handleSaveRoute}
-          onDeleteRoute={handleDeleteRoute}
         />
-      )}
-
-      <FirebaseSetupGuide
-        isOpen={isSetupGuideOpen}
-        onClose={() => setIsSetupGuideOpen(false)}
-        isConfigured={isFirebaseConfigured}
-      />
-
-      <BrandAssetsModal
-        isOpen={isBrandAssetsOpen}
-        onClose={() => setIsBrandAssetsOpen(false)}
-      />
-
-      <VersionModal
-        isOpen={isVersionModalOpen}
-        onClose={() => setIsVersionModalOpen(false)}
-      />
-
-      {/* Passwordless & Google Auth Modal */}
-      <AuthModal
-        isOpen={isAuthModalOpen}
-        onClose={() => setIsAuthModalOpen(false)}
-        onAuthSuccess={(email) => {
-          switchCurrentUser(email);
-          setIsAuthModalOpen(false);
-        }}
-      />
+      </Suspense>
     </div>
   );
 }

@@ -35,8 +35,9 @@ import {
   collection, 
   getDocs, 
   setDoc, 
-  deleteDoc,
-  doc 
+  deleteDoc, 
+  doc,
+  onSnapshot 
 } from 'firebase/firestore';
 import { 
   ClubNotification, 
@@ -406,6 +407,29 @@ export function useClubStore() {
     }
 
     syncFromFirestore();
+
+    // Listen for real-time club broadcasts from organizers / admins
+    let unsubscribeAnnouncements: (() => void) | undefined;
+    try {
+      unsubscribeAnnouncements = onSnapshot(doc(db, 'settings', 'latest_announcement'), (snap) => {
+        if (!snap.exists()) return;
+        const announcement = snap.data() as ClubNotification;
+        if (!announcement || !announcement.id) return;
+
+        setNotifications((prev) => {
+          if (prev.some((n) => n.id === announcement.id)) return prev;
+          storeNotification(announcement);
+          showLocalNotification(announcement.title, announcement.body);
+          return [announcement, ...prev];
+        });
+      });
+    } catch (e) {
+      console.warn('Real-time announcement listener error:', e);
+    }
+
+    return () => {
+      unsubscribeAnnouncements?.();
+    };
   }, []);
 
   /**
