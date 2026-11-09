@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { 
   RunEvent, 
   GPXRoute, 
@@ -17,6 +17,15 @@ import {
   BadgeTriggerConfig
 } from '../types';
 import { calculateAge } from '../utils/dateUtils';
+import {
+  buildLegacyImport,
+  datedEventsFrom,
+  matchLegacyNames,
+  recomputeBadges,
+  computeStreaks,
+  isLegacyClaimed,
+  type LegacyEvent,
+} from '../utils/legacy';
 import { 
   INITIAL_RUNS, 
   INITIAL_ROUTES, 
@@ -35,6 +44,7 @@ import { isFirebaseConfigured, db } from './firebase';
 import {
   collection,
   getDocs,
+  getDoc,
   setDoc,
   updateDoc,
   deleteDoc,
@@ -181,7 +191,7 @@ export function toPublicMember(user: UserProfile, memberKey: string): Record<str
     runCount: user.runCount,
     walkCount: user.walkCount,
     petRunCount: user.petRunCount,
-    streak: 1,
+    streak: user.currentStreakWeeks || 0,
     favoritePace: user.preferredPace || '9:00 min/mi',
     unlockedBadgeIds: user.unlockedBadgeIds,
     badgeCounts: user.badgeCounts,
@@ -195,7 +205,7 @@ function memberFromUser(user: UserProfile, memberKey: string): Member {
     ...user,
     id: memberKey,
     name: user.displayName,
-    streak: 1,
+    streak: user.currentStreakWeeks || 0,
     favoritePace: user.preferredPace || '9:00 min/mi',
     joinedDate: user.firstRunDate || user.createdAt.split('T')[0],
   };
@@ -369,7 +379,10 @@ export function useClubStore() {
     const missing = INITIAL_CHECKINS.filter((c) => !existingIds.has(c.id) && !REMOVED_TEST_EMAILS.has(c.userEmail.toLowerCase()));
     return [...stored, ...missing];
   });
-  const [legacyMembers, setLegacyMembers] = useState<LegacyMember[]>(() => {
+  const [legacyPool, setLegacyMembers] = useState<LegacyMember[]>(() => {
+    // With Firebase the pool comes from Firestore (loadLegacyPool); the local
+    // sample pool is only for offline/local mode.
+    if (isFirebaseConfigured) return [];
     const stored = loadFromStorage<LegacyMember[]>(STORAGE_KEYS.LEGACY_MEMBERS, INITIAL_LEGACY_MEMBERS);
     const existingNames = new Set(stored.map((m) => m.name.toUpperCase()));
     const missing = INITIAL_LEGACY_MEMBERS.filter((m) => !existingNames.has(m.name.toUpperCase()));
@@ -388,6 +401,24 @@ export function useClubStore() {
       return m;
     });
   });
+  // Profiles are the source of truth for who claimed what (linkedLegacyIds /
+  // linkedLegacyNames); claimedBy on the legacy doc is the server-side lock.
+  const legacyMembers = useMemo<LegacyMember[]>(() => {
+    const byId = new Map<string, string>();
+    const byName = new Map<string, string>();
+    for (const u of users) {
+      for (const id of u.linkedLegacyIds || []) byId.set(id, u.email);
+      for (const name of u.linkedLegacyNames || []) byName.set(name.toUpperCase(), u.email);
+    }
+    return legacyPool.map((m) => {
+      const email = byId.get(m.id) || byName.get(m.name.toUpperCase()) || null;
+      return email ? { ...m, claimedByEmail: email } : m;
+    });
+  }, [legacyPool, users]);
+
+  // Dated old-app sign-ins for the signed-in runner's claimed names (streaks/badges).
+  const [ownLegacyEvents, setOwnLegacyEvents] = useState<LegacyEvent[]>([]);
+
   const [currentUserEmail, setCurrentUserEmail] = useState<string>(() => {
     const stored = loadFromStorage<string>(STORAGE_KEYS.CURRENT_USER_EMAIL, '');
     if (stored && REMOVED_TEST_EMAILS.has(stored.toLowerCase())) {
@@ -431,8 +462,8 @@ export function useClubStore() {
   }, [checkins]);
 
   useEffect(() => {
-    saveToStorage(STORAGE_KEYS.LEGACY_MEMBERS, legacyMembers);
-  }, [legacyMembers]);
+    if (!isFirebaseConfigured) saveToStorage(STORAGE_KEYS.LEGACY_MEMBERS, legacyPool);
+  }, [legacyPool]);
 
   useEffect(() => {
     saveToStorage(STORAGE_KEYS.CURRENT_USER_EMAIL, currentUserEmail);
@@ -594,6 +625,12 @@ export function useClubStore() {
     const cleanEmail = email.trim().toLowerCase();
 
     try {
+      // Own claimed legacy history feeds streaks and badges at check-in.
+      const ownSnap = await getDoc(doc(currentDb, 'users', cleanEmail));
+      const ownIds = (ownSnap.exists() && (ownSnap.data().linkedLegacyIds as string[])) || [];
+      fetchLegacyEvents(ownIds).then(setOwnLegacyEvents).catch((err) => console.warn('Legacy history load failed:', err));
+      if (isStaff) loadLegacyPool().catch((err) => console.warn('Legacy pool load failed:', err));
+
       if (!isStaff) {
         const own = await getDocs(query(collection(currentDb, 'checkins'), where('userEmail', '==', cleanEmail)));
         const ownCheckins = own.docs.map((d) => d.data() as CheckInRecord);
@@ -685,25 +722,226 @@ export function useClubStore() {
     }
   };
 
-  /**
-   * Search unclaimed legacy members by first and/or last name (flexible multi-word tokens)
-   */
-  const searchLegacyMatches = (nameQuery: string): LegacyMember[] => {
-    if (!nameQuery || nameQuery.trim().length < 2) return [];
-    const q = nameQuery.trim().toUpperCase();
-    const tokens = q.split(/\s+/).filter(Boolean);
+  /** Unclaimed legacy names that fuzzily match what the runner typed (e.g. MATT SETTLED). */
+  const searchLegacyMatches = (nameQuery: string): LegacyMember[] =>
+    matchLegacyNames(nameQuery, legacyMembers.filter((m) => !isLegacyClaimed(m)));
 
-    return legacyMembers.filter((m) => {
-      if (m.claimedByEmail !== null) return false;
-      const memName = m.name.toUpperCase();
-      // Substring match
-      if (memName.includes(q)) return true;
-      // All tokens present in the name
-      if (tokens.length > 1 && tokens.every((t) => memName.includes(t))) return true;
-      // Any token with >= 3 chars present in the name
-      if (tokens.some((t) => t.length >= 3 && memName.includes(t))) return true;
-      return false;
+  /**
+   * Load the legacy name pool: one index doc (names + counts) plus the claimed
+   * profiles, so claim status is current. Signed-in users only.
+   */
+  const loadLegacyPool = async (): Promise<LegacyMember[]> => {
+    if (!isFirebaseConfigured || !db) return legacyPool;
+    const [indexSnap, claimedSnap] = await Promise.all([
+      getDoc(doc(db, 'legacy_index', 'pool')),
+      getDocs(query(collection(db, 'legacy_profiles'), where('claimedBy', '!=', null))),
+    ]);
+    const claimed = new Map(claimedSnap.docs.map((d) => [d.id, d.data()]));
+    const entries: { id: string; name: string; oldCount: number; newCount: number }[] =
+      (indexSnap.exists() && indexSnap.data().entries) || [];
+    const pool: LegacyMember[] = entries.map((e) => ({
+      id: e.id,
+      name: e.name,
+      oldCount: e.oldCount,
+      newCount: e.newCount,
+      totalRuns: e.oldCount + e.newCount,
+      claimedBy: (claimed.get(e.id)?.claimedBy as string) || null,
+      claimedByEmail: null,
+      claimedAt: (claimed.get(e.id)?.claimedAt as string) || null,
+    }));
+    setLegacyMembers(pool);
+    return pool;
+  };
+
+  /** Dated sign-ins for legacy names (readable by their claimer and staff). */
+  const fetchLegacyEvents = async (ids: string[]): Promise<LegacyEvent[]> => {
+    if (!ids.length || !isFirebaseConfigured || !db) return [];
+    const currentDb = db;
+    const snaps = await Promise.all(ids.map((id) => getDoc(doc(currentDb, 'legacy_history', id))));
+    return snaps.flatMap((sn) => (sn.exists() ? ((sn.data().events as LegacyEvent[]) || []) : []));
+  };
+
+  /** Recalculate badges + streaks for a profile from all its dated history and save them. */
+  const refreshDerivedStats = async (user: UserProfile, legacyEvents?: LegacyEvent[]): Promise<UserProfile> => {
+    const events = legacyEvents ?? (await fetchLegacyEvents(user.linkedLegacyIds || []));
+    const own = checkins.filter((c) => c.userEmail.toLowerCase() === user.email.toLowerCase());
+    const derived = recomputeBadges(user, badges, datedEventsFrom(events, own, meetupEvents));
+    const updated: UserProfile = { ...user, ...derived };
+    const key = await memberKeyFor(user.email);
+    if (isFirebaseConfigured && db) {
+      const batch = writeBatch(db);
+      batch.update(doc(db, 'users', user.email), cleanFirestoreData({ ...derived }));
+      batch.set(doc(db, 'members', key), toPublicMember(updated, key));
+      await batch.commit();
+    }
+    setUsers((prev) => prev.map((u) => (u.email.toLowerCase() === user.email.toLowerCase() ? updated : u)));
+    setMembers((prev) => [memberFromUser(updated, key), ...prev.filter((m) => m.id !== key)]);
+    if (user.email.toLowerCase() === currentUserEmail.toLowerCase()) setOwnLegacyEvents(events);
+    return updated;
+  };
+
+  /**
+   * Runner claims one legacy name. The rules only accept it if the name is
+   * still unclaimed and the totals grow by exactly that name's counts.
+   */
+  const claimLegacyProfile = async (user: UserProfile, legacyId: string): Promise<UserProfile> => {
+    const email = user.email.toLowerCase();
+    const key = await memberKeyFor(email);
+    if ((user.linkedLegacyIds || []).includes(legacyId)) return user;
+    let lp = legacyPool.find((m) => m.id === legacyId);
+    if (isFirebaseConfigured && db) {
+      const snap = await getDoc(doc(db, 'legacy_profiles', legacyId));
+      if (!snap.exists()) throw new Error('That old profile no longer exists.');
+      lp = { ...(snap.data() as LegacyMember), claimedByEmail: null };
+    }
+    if (!lp) throw new Error('That old profile no longer exists.');
+    if (isLegacyClaimed(lp)) throw new Error(`${lp.name} has already been claimed.`);
+
+    const updated: UserProfile = {
+      ...user,
+      linkedLegacyIds: [...(user.linkedLegacyIds || []), legacyId],
+      linkedLegacyNames: [...(user.linkedLegacyNames || []), lp.name],
+      pre2021Runs: user.pre2021Runs + lp.oldCount,
+      legacyEventRuns: (user.legacyEventRuns || 0) + lp.newCount,
+      totalRuns: user.totalRuns + lp.oldCount + lp.newCount,
+    };
+    const claimedAt = new Date().toISOString();
+    if (isFirebaseConfigured && db) {
+      const batch = writeBatch(db);
+      batch.update(doc(db, 'legacy_profiles', legacyId), { claimedBy: key, claimedAt });
+      batch.set(doc(db, 'users', email), cleanFirestoreData(updated));
+      batch.set(doc(db, 'members', key), toPublicMember(updated, key));
+      await batch.commit();
+    }
+    setLegacyMembers((prev) => prev.map((m) => (m.id === legacyId ? { ...m, claimedBy: key, claimedAt } : m)));
+    setUsers((prev) => [updated, ...prev.filter((u) => u.email.toLowerCase() !== email)]);
+    return updated;
+  };
+
+  /**
+   * Admin: assign a legacy name to a runner (toEmail) or unclaim it (null).
+   * Moves its counts off the previous claimer and onto the new one in one batch.
+   */
+  const adminSetLegacyClaim = async (legacyId: string, toEmail: string | null): Promise<void> => {
+    const lp = legacyMembers.find((m) => m.id === legacyId);
+    if (!lp) throw new Error('Unknown legacy profile.');
+    const target = toEmail ? users.find((u) => u.email.toLowerCase() === toEmail.toLowerCase()) : undefined;
+    if (toEmail && !target) throw new Error('Runner not found.');
+
+    const previous = users.find(
+      (u) =>
+        (u.linkedLegacyIds || []).includes(legacyId) ||
+        (u.linkedLegacyNames || []).some((n) => n.toUpperCase() === lp.name.toUpperCase())
+    );
+    if (previous && target && previous.email === target.email) return;
+
+    const withoutClaim = (u: UserProfile): UserProfile => ({
+      ...u,
+      linkedLegacyIds: (u.linkedLegacyIds || []).filter((id) => id !== legacyId),
+      linkedLegacyNames: (u.linkedLegacyNames || []).filter((n) => n.toUpperCase() !== lp.name.toUpperCase()),
+      pre2021Runs: Math.max(0, u.pre2021Runs - lp.oldCount),
+      legacyEventRuns: Math.max(0, (u.legacyEventRuns || 0) - lp.newCount),
+      totalRuns: Math.max(0, u.totalRuns - lp.oldCount - lp.newCount),
     });
+    const withClaim = (u: UserProfile): UserProfile => ({
+      ...u,
+      linkedLegacyIds: [...(u.linkedLegacyIds || []), legacyId],
+      linkedLegacyNames: [...(u.linkedLegacyNames || []), lp.name],
+      pre2021Runs: u.pre2021Runs + lp.oldCount,
+      legacyEventRuns: (u.legacyEventRuns || 0) + lp.newCount,
+      totalRuns: u.totalRuns + lp.oldCount + lp.newCount,
+    });
+
+    const changed: UserProfile[] = [];
+    if (previous) changed.push(withoutClaim(previous));
+    if (target) changed.push(withClaim(target));
+    const toKey = target ? await memberKeyFor(target.email) : null;
+    const claimedAt = target ? new Date().toISOString() : null;
+
+    if (isFirebaseConfigured && db) {
+      const batch = writeBatch(db);
+      batch.update(doc(db, 'legacy_profiles', legacyId), { claimedBy: toKey, claimedAt });
+      for (const u of changed) {
+        const key = await memberKeyFor(u.email);
+        batch.set(doc(db, 'users', u.email), cleanFirestoreData(u));
+        batch.set(doc(db, 'members', key), toPublicMember(u, key));
+      }
+      await batch.commit();
+    }
+    setLegacyMembers((prev) => prev.map((m) => (m.id === legacyId ? { ...m, claimedBy: toKey, claimedAt } : m)));
+    setUsers((prev) => prev.map((u) => changed.find((c) => c.email === u.email) || u));
+    for (const u of changed) await refreshDerivedStats(u);
+  };
+
+  /**
+   * Admin: import (or re-import) the old app's two CSV exports. Existing claims
+   * are kept, and claimers' totals are recalculated from the new counts.
+   */
+  const importLegacyData = async (totalsCsv: string, checkinsCsv: string, onProgress?: (msg: string) => void) => {
+    const imp = buildLegacyImport(totalsCsv, checkinsCsv);
+    if (!isFirebaseConfigured || !db) {
+      setLegacyMembers(imp.profiles.map((p) => ({ ...p, claimedBy: null, claimedByEmail: null, claimedAt: null })));
+      return imp.stats;
+    }
+    const currentDb = db;
+    const existing = await getDocs(query(collection(currentDb, 'legacy_profiles'), where('claimedBy', '!=', null)));
+    const claims = new Map(existing.docs.map((d) => [d.id, d.data()]));
+
+    type Write = (b: ReturnType<typeof writeBatch>) => void;
+    const writes: Write[] = [
+      (b) =>
+        b.set(doc(currentDb, 'legacy_index', 'pool'), {
+          entries: imp.profiles.map(({ id, name, oldCount, newCount }) => ({ id, name, oldCount, newCount })),
+          importedAt: new Date().toISOString(),
+        }),
+    ];
+    for (const p of imp.profiles) {
+      const c = claims.get(p.id);
+      writes.push((b) =>
+        b.set(doc(currentDb, 'legacy_profiles', p.id), {
+          ...p,
+          claimedBy: (c?.claimedBy as string) || null,
+          claimedAt: (c?.claimedAt as string) || null,
+        })
+      );
+      writes.push((b) => b.set(doc(currentDb, 'legacy_history', p.id), { id: p.id, events: imp.histories[p.id] || [] }));
+    }
+
+    // Re-total every claimer from the imported counts (ids that no longer exist are dropped).
+    const byId = new Map(imp.profiles.map((p) => [p.id, p]));
+    const retotaled: UserProfile[] = [];
+    for (const u of users) {
+      if (!(u.linkedLegacyIds || []).length) continue;
+      const lps = (u.linkedLegacyIds || []).filter((id) => byId.has(id)).map((id) => byId.get(id)!);
+      const pre = lps.reduce((sum, p) => sum + p.oldCount, 0);
+      const ev = lps.reduce((sum, p) => sum + p.newCount, 0);
+      retotaled.push({
+        ...u,
+        linkedLegacyIds: lps.map((p) => p.id),
+        linkedLegacyNames: lps.map((p) => p.name),
+        pre2021Runs: pre,
+        legacyEventRuns: ev,
+        totalRuns: pre + ev + u.loggedRuns,
+      });
+    }
+    for (const u of retotaled) {
+      const key = await memberKeyFor(u.email);
+      writes.push((b) => b.set(doc(currentDb, 'users', u.email), cleanFirestoreData(u)));
+      writes.push((b) => b.set(doc(currentDb, 'members', key), toPublicMember(u, key)));
+    }
+
+    const CHUNK = 400;
+    for (let i = 0; i < writes.length; i += CHUNK) {
+      const batch = writeBatch(currentDb);
+      writes.slice(i, i + CHUNK).forEach((w) => w(batch));
+      await batch.commit();
+      onProgress?.(`Saved ${Math.min(i + CHUNK, writes.length)} of ${writes.length} records…`);
+    }
+
+    setUsers((prev) => prev.map((u) => retotaled.find((r) => r.email === u.email) || u));
+    await loadLegacyPool();
+    for (const u of retotaled) await refreshDerivedStats(u);
+    return imp.stats;
   };
 
   /**
@@ -721,46 +959,17 @@ export function useClubStore() {
       zipCode?: string;
       preferredPace?: string;
     },
-    claimedLegacyNames: string[] = []
+    claimedLegacyIds: string[] = []
   ): Promise<UserProfile> => {
     const cleanEmail = profileData.email.trim().toLowerCase();
     const displayName = `${profileData.firstName.trim()} ${profileData.lastName.trim()}`;
-
-    // Find claimed legacy items
-    const claimedRecords = legacyMembers.filter((m) =>
-      claimedLegacyNames.some((cName) => cName.toUpperCase() === m.name.toUpperCase())
-    );
-
-    const legacyNewCount = claimedRecords.reduce((sum, r) => sum + r.newCount, 0);
-    const legacyOldCount = claimedRecords.reduce((sum, r) => sum + r.oldCount, 0);
-    const totalLegacyRuns = legacyNewCount + legacyOldCount;
-
-    // Estimate initial legacy miles (~3.1 miles per legacy run)
-    const initialMiles = Math.round(totalLegacyRuns * 3.1 * 10) / 10;
-
-    const initialBadgeIds: string[] = [];
-    const initialBadgeCounts: Record<string, number> = {};
-    for (const b of badges) {
-      const cfg = b.triggerConfig;
-      if (cfg?.type === 'attendance' || b.id === 'first-chuck') {
-        if (totalLegacyRuns >= 1) {
-          initialBadgeIds.push(b.id);
-          initialBadgeCounts[b.id] = 1;
-        }
-      } else if (cfg?.type === 'milestone' || b.category === 'milestone') {
-        const req = cfg?.minTotalRuns || (b.id === 'milestone-5' ? 5 : b.id === 'milestone-50' ? 50 : b.id === 'milestone-100' ? 100 : b.id === 'milestone-200' ? 200 : 0);
-        if (req > 0 && totalLegacyRuns >= req) {
-          initialBadgeIds.push(b.id);
-          const step = cfg?.step || req;
-          initialBadgeCounts[b.id] = b.isIncremental ? Math.max(1, Math.floor(totalLegacyRuns / step)) : 1;
-        }
-      }
-    }
 
     const effectiveAge = profileData.birthday
       ? calculateAge(profileData.birthday)
       : profileData.age;
 
+    // Profiles start empty: legacy runs arrive one claim at a time (each checked
+    // by the rules), and new runs through check-ins.
     const newUser: UserProfile = {
       email: cleanEmail,
       firstName: profileData.firstName.trim(),
@@ -772,17 +981,19 @@ export function useClubStore() {
       city: profileData.city || 'Woodland',
       zipCode: profileData.zipCode || '95695',
       preferredPace: profileData.preferredPace,
-      pre2021Runs: legacyOldCount,
-      loggedRuns: legacyNewCount,
-      totalRuns: totalLegacyRuns,
-      totalMiles: initialMiles,
-      runCount: totalLegacyRuns,
+      pre2021Runs: 0,
+      legacyEventRuns: 0,
+      loggedRuns: 0,
+      totalRuns: 0,
+      totalMiles: 0,
+      runCount: 0,
       walkCount: 0,
       petRunCount: 0,
-      firstRunDate: totalLegacyRuns > 0 ? '2021-02-10' : new Date().toISOString().split('T')[0],
-      linkedLegacyNames: claimedRecords.map((r) => r.name),
-      unlockedBadgeIds: initialBadgeIds,
-      badgeCounts: initialBadgeCounts,
+      firstRunDate: new Date().toISOString().split('T')[0],
+      linkedLegacyIds: [],
+      linkedLegacyNames: [],
+      unlockedBadgeIds: [],
+      badgeCounts: {},
       role: ADMIN_EMAILS.includes(cleanEmail) ? 'admin' : 'member',
       createdAt: new Date().toISOString(),
     };
@@ -798,21 +1009,31 @@ export function useClubStore() {
       await batch.commit();
     }
 
-    // Update legacy records to mark claimed
-    const nowIso = new Date().toISOString();
-    setLegacyMembers((prev) =>
-      prev.map((m) =>
-        claimedRecords.some((c) => c.name.toUpperCase() === m.name.toUpperCase())
-          ? { ...m, claimedByEmail: cleanEmail, claimedAt: nowIso }
-          : m
-      )
-    );
-
     setUsers((prev) => [newUser, ...prev.filter((u) => u.email.toLowerCase() !== cleanEmail)]);
     setMembers((prev) => [memberFromUser(newUser, memberKey), ...prev.filter((m) => m.id !== memberKey)]);
 
     setCurrentUserEmail(cleanEmail);
     setCurrentMemberId(memberKey);
+
+    // Claim the selected old profiles one by one; a name someone else grabbed
+    // in the meantime is reported but doesn't undo the rest.
+    let finalUser = newUser;
+    const failed: string[] = [];
+    for (const id of claimedLegacyIds) {
+      try {
+        finalUser = await claimLegacyProfile(finalUser, id);
+      } catch (err) {
+        console.warn('Legacy claim failed:', id, err);
+        failed.push(legacyPool.find((m) => m.id === id)?.name || id);
+      }
+    }
+    if ((finalUser.linkedLegacyIds || []).length) {
+      try {
+        finalUser = await refreshDerivedStats(finalUser);
+      } catch (err) {
+        console.warn('Badge refresh failed:', err);
+      }
+    }
 
     // New profiles never go through the returning-user path in App, so load
     // private data (and run the staff code-word migration) here as well.
@@ -820,7 +1041,13 @@ export function useClubStore() {
       syncPrivateData(cleanEmail, newUser.role === 'admin' || newUser.role === 'organizer', newUser.role === 'admin');
     }
 
-    return newUser;
+    if (failed.length) {
+      throw Object.assign(
+        new Error(`Your profile was created, but these old profiles were already claimed: ${failed.join(', ')}. Ask an organizer if one of them is yours.`),
+        { user: finalUser }
+      );
+    }
+    return finalUser;
   };
 
   /**
@@ -1014,6 +1241,13 @@ export function useClubStore() {
       }
     };
 
+    // Weekly streaks from every dated run: claimed old-app sign-ins + this app's check-ins
+    const streaks = computeStreaks([
+      ...(cleanEmail === currentUserEmail.toLowerCase() ? ownLegacyEvents.map((e) => e.d) : []),
+      ...checkins.filter((c) => c.userEmail.toLowerCase() === cleanEmail).map((c) => c.date),
+      eventDate,
+    ]);
+
     // Unified badge evaluation (handles built-in and admin-created custom badges)
     for (const badge of badges) {
       const cfg = badge.triggerConfig;
@@ -1025,8 +1259,8 @@ export function useClubStore() {
         if (badge.id === 'milestone-100' && newTotalRuns >= 100) awardBadge(badge.id, Math.floor(newTotalRuns / 100));
         if (badge.id === 'milestone-200' && newTotalRuns >= 200) awardBadge(badge.id, Math.floor(newTotalRuns / 200));
         if (badge.id === 'power-walker' && newWalkCount >= 10) awardBadge(badge.id, Math.floor(newWalkCount / 10));
-        if (badge.id === 'streak-4' && newTotalRuns >= 4) awardBadge(badge.id, Math.max(1, Math.floor(newTotalRuns / 4)));
-        if (badge.id === 'streak-10' && newTotalRuns >= 10) awardBadge(badge.id, Math.max(1, Math.floor(newTotalRuns / 10)));
+        if (badge.id === 'streak-4' && streaks.longest >= 4) awardBadge(badge.id, Math.floor(streaks.longest / 4));
+        if (badge.id === 'streak-10' && streaks.longest >= 10) awardBadge(badge.id, Math.floor(streaks.longest / 10));
         if (badge.id === 'pet-runner' && newPetRunCount >= 1) awardBadge(badge.id, newPetRunCount);
         continue;
       }
@@ -1075,9 +1309,10 @@ export function useClubStore() {
           break;
         }
         case 'streak': {
+          // Consecutive weeks with a run, across claimed legacy history and app check-ins
           const weeks = cfg.streakWeeks || 4;
-          if (newTotalRuns >= weeks) {
-            const mult = cfg.isIncremental ? Math.floor(newTotalRuns / weeks) : 1;
+          if (streaks.longest >= weeks) {
+            const mult = cfg.isIncremental ? Math.floor(streaks.longest / weeks) : 1;
             awardBadge(badge.id, Math.max(1, mult));
           }
           break;
@@ -1109,6 +1344,8 @@ export function useClubStore() {
       unlockedBadgeIds: unlocked,
       badgeCounts: counts,
       lastCheckInDate: eventDate,
+      currentStreakWeeks: streaks.current,
+      longestStreakWeeks: streaks.longest,
     };
 
     // 7. Milestone gear alert — only when this check-in is what crossed the milestone
@@ -1634,6 +1871,11 @@ export function useClubStore() {
     syncPrivateData,
     clearPrivateData,
     setUserRole,
+    loadLegacyPool,
+    claimLegacyProfile,
+    adminSetLegacyClaim,
+    importLegacyData,
+    refreshDerivedStats,
     users,
     setUsers,
     meetupEvents,

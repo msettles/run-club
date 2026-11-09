@@ -40,6 +40,9 @@ const baseUser = (email, extra = {}) => ({
   ...extra,
 });
 
+const freshUser = (email, extra = {}) =>
+  baseUser(email, { loggedRuns: 0, totalRuns: 0, totalMiles: 0, runCount: 0, ...extra });
+
 const memberFromUser = (u) => ({
   id: memberKeyFor(u.email),
   name: u.displayName,
@@ -176,8 +179,8 @@ test('runner cannot change their own role or legacy totals', async () => {
 
 test('runner cannot create a profile with a staff role', async () => {
   const carol = ctx('carol@example.com');
-  await assertFails(setDoc(doc(carol, 'users', 'carol@example.com'), baseUser('carol@example.com', { role: 'admin' })));
-  await assertSucceeds(setDoc(doc(carol, 'users', 'carol@example.com'), baseUser('carol@example.com')));
+  await assertFails(setDoc(doc(carol, 'users', 'carol@example.com'), freshUser('carol@example.com', { role: 'admin' })));
+  await assertSucceeds(setDoc(doc(carol, 'users', 'carol@example.com'), freshUser('carol@example.com')));
 });
 
 test('runner cannot bump stats without a check-in', async () => {
@@ -329,9 +332,9 @@ test('demoted admin loses admin rights', async () => {
 });
 
 test('only bootstrap emails may self-create an admin profile', async () => {
-  await assertSucceeds(setDoc(doc(ctx(BOOTSTRAP), 'users', BOOTSTRAP), baseUser(BOOTSTRAP, { role: 'admin' })));
+  await assertSucceeds(setDoc(doc(ctx(BOOTSTRAP), 'users', BOOTSTRAP), freshUser(BOOTSTRAP, { role: 'admin' })));
   const carol = 'carol@example.com';
-  await assertFails(setDoc(doc(ctx(carol), 'users', carol), baseUser(carol, { role: 'admin' })));
+  await assertFails(setDoc(doc(ctx(carol), 'users', carol), freshUser(carol, { role: 'admin' })));
 });
 
 test('a former owner email is a normal admin: demotable, and cannot self-create admin', async () => {
@@ -349,5 +352,102 @@ test('a former owner email is a normal admin: demotable, and cannot self-create 
   await env.withSecurityRulesDisabled(async (c) => {
     await deleteDoc(doc(c.firestore(), 'users', MATT));
   });
-  await assertFails(setDoc(doc(ctx(MATT), 'users', MATT), baseUser(MATT, { role: 'admin' })));
+  await assertFails(setDoc(doc(ctx(MATT), 'users', MATT), freshUser(MATT, { role: 'admin' })));
+});
+
+// ---- Legacy (old app) claims ----
+
+const LP = { id: 'matt-settles', name: 'MATT SETTLES', oldCount: 124, newCount: 129, totalRuns: 253, claimedBy: null, claimedAt: null };
+const LP2 = { id: 'matt-l-settles', name: 'MATT L SETTLES', oldCount: 0, newCount: 5, totalRuns: 5, claimedBy: null, claimedAt: null };
+
+async function seedLegacy() {
+  await env.withSecurityRulesDisabled(async (c) => {
+    const db = c.firestore();
+    await setDoc(doc(db, 'legacy_index', 'pool'), { entries: [LP, LP2].map(({ id, name, oldCount, newCount }) => ({ id, name, oldCount, newCount })) });
+    for (const lp of [LP, LP2]) {
+      await setDoc(doc(db, 'legacy_profiles', lp.id), lp);
+      await setDoc(doc(db, 'legacy_history', lp.id), { events: [{ d: '2024-11-27', t: '18:00:00', c: 'TURKEY' }] });
+    }
+  });
+}
+
+function claimBatch(db, email, lps, { extraRuns = 0 } = {}) {
+  const u = baseUser(email);
+  const updated = {
+    ...u,
+    linkedLegacyIds: lps.map((l) => l.id),
+    linkedLegacyNames: lps.map((l) => l.name),
+    pre2021Runs: u.pre2021Runs + lps.reduce((s, l) => s + l.oldCount, 0),
+    legacyEventRuns: lps.reduce((s, l) => s + l.newCount, 0),
+    totalRuns: u.totalRuns + lps.reduce((s, l) => s + l.totalRuns, 0) + extraRuns,
+  };
+  const b = writeBatch(db);
+  for (const l of lps) b.update(doc(db, 'legacy_profiles', l.id), { claimedBy: memberKeyFor(email), claimedAt: '2026-11-09T00:00:00Z' });
+  b.set(doc(db, 'users', email), updated);
+  b.set(doc(db, 'members', memberKeyFor(email)), memberFromUser(updated));
+  return b;
+}
+
+test('legacy names are readable when signed in, not anonymously', async () => {
+  await seedLegacy();
+  const anon = env.unauthenticatedContext().firestore();
+  await assertFails(getDoc(doc(anon, 'legacy_index', 'pool')));
+  await assertFails(getDoc(doc(anon, 'legacy_profiles', LP.id)));
+  await assertSucceeds(getDoc(doc(ctx(ALICE), 'legacy_index', 'pool')));
+  await assertSucceeds(getDoc(doc(ctx(ALICE), 'legacy_profiles', LP.id)));
+});
+
+test('runner claims an unclaimed legacy name and gains exactly its runs', async () => {
+  await seedLegacy();
+  await assertSucceeds(claimBatch(ctx(ALICE), ALICE, [LP]).commit());
+});
+
+test('claimed legacy name is locked to its claimer', async () => {
+  await seedLegacy();
+  await assertSucceeds(claimBatch(ctx(ALICE), ALICE, [LP]).commit());
+  await assertFails(claimBatch(ctx(BOB), BOB, [LP]).commit());
+  // claimer cannot unclaim it themselves either
+  await assertFails(updateDoc(doc(ctx(ALICE), 'legacy_profiles', LP.id), { claimedBy: null, claimedAt: null }));
+});
+
+test('claim must add exactly the legacy counts, one name per write', async () => {
+  await seedLegacy();
+  await assertFails(claimBatch(ctx(ALICE), ALICE, [LP], { extraRuns: 10 }).commit());
+  await assertFails(claimBatch(ctx(ALICE), ALICE, [LP, LP2]).commit());
+});
+
+test('legacy history is private to the claimer and staff', async () => {
+  await seedLegacy();
+  await assertFails(getDoc(doc(ctx(ALICE), 'legacy_history', LP.id)));
+  await assertSucceeds(claimBatch(ctx(ALICE), ALICE, [LP]).commit());
+  await assertSucceeds(getDoc(doc(ctx(ALICE), 'legacy_history', LP.id)));
+  await assertFails(getDoc(doc(ctx(BOB), 'legacy_history', LP.id)));
+  await assertSucceeds(getDoc(doc(ctx(ORGANIZER), 'legacy_history', LP.id)));
+});
+
+test('admin can unclaim or reassign a legacy name and fix totals', async () => {
+  await seedLegacy();
+  await assertSucceeds(claimBatch(ctx(ALICE), ALICE, [LP]).commit());
+  const admin = ctx(BOOTSTRAP);
+  const b = writeBatch(admin);
+  b.update(doc(admin, 'legacy_profiles', LP.id), { claimedBy: memberKeyFor(BOB), claimedAt: '2026-11-10T00:00:00Z' });
+  b.update(doc(admin, 'users', ALICE), { linkedLegacyIds: [], linkedLegacyNames: [], pre2021Runs: 0, legacyEventRuns: 0, totalRuns: 4 });
+  b.update(doc(admin, 'users', BOB), { linkedLegacyIds: [LP.id], linkedLegacyNames: [LP.name], pre2021Runs: 124, legacyEventRuns: 129, totalRuns: 257 });
+  await assertSucceeds(b.commit());
+  // organizers cannot
+  await assertFails(updateDoc(doc(ctx(ORGANIZER), 'legacy_profiles', LP.id), { claimedBy: null, claimedAt: null }));
+  await assertFails(setDoc(doc(ctx(ORGANIZER), 'legacy_index', 'pool'), { entries: [] }));
+});
+
+test('self sign-up must start with no runs, badges or legacy claims', async () => {
+  const carol = 'carol@example.com';
+  await assertFails(setDoc(doc(ctx(carol), 'users', carol), baseUser(carol)));
+  await assertFails(setDoc(doc(ctx(carol), 'users', carol), freshUser(carol, { pre2021Runs: 50, totalRuns: 50 })));
+  await assertSucceeds(setDoc(doc(ctx(carol), 'users', carol), freshUser(carol)));
+});
+
+test('runner can refresh badges and streaks but not touch totals that way', async () => {
+  await assertSucceeds(updateDoc(doc(ctx(ALICE), 'users', ALICE), { unlockedBadgeIds: ['first-chuck'], badgeCounts: { 'first-chuck': 1 }, longestStreakWeeks: 3, currentStreakWeeks: 1 }));
+  await assertFails(updateDoc(doc(ctx(ALICE), 'users', ALICE), { unlockedBadgeIds: [], totalRuns: 99 }));
+  await assertFails(updateDoc(doc(ctx(ALICE), 'users', ALICE), { legacyEventRuns: 99 }));
 });
