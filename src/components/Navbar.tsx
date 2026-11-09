@@ -67,7 +67,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           {/* Logo & Brand */}
           <div
             onClick={() => setActiveTab('runs')}
-            className="flex items-center gap-2 sm:gap-2.5 cursor-pointer select-none shrink min-w-0 group"
+            className="flex items-center gap-2 sm:gap-2.5 cursor-pointer select-none shrink-0 group"
           >
             <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl bg-gradient-to-br from-woodland-700 via-woodland-800 to-woodland-950 flex items-center justify-center shadow-md p-1 border border-woodland-600/40 group-hover:scale-105 transition shrink-0 overflow-hidden">
               <img
@@ -76,12 +76,12 @@ export const Navbar: React.FC<NavbarProps> = ({
                 className="w-full h-full object-contain filter drop-shadow-sm invert sm:invert-0 brightness-110"
               />
             </div>
-            <div className="min-w-0">
+            <div>
               <div className="flex items-center gap-1 sm:gap-1.5 flex-nowrap">
-                <span className="font-display font-bold text-stone-900 tracking-wide text-xs sm:text-base lg:text-lg uppercase truncate">
+                <span className="font-display font-bold text-stone-900 tracking-wide text-xs sm:text-base lg:text-lg uppercase">
                   Woodland Woodchuckers
                 </span>
-                <span className="hidden lg:inline-block text-[10px] font-bold uppercase tracking-wider bg-woodland-100 text-woodland-900 px-1.5 py-0.5 rounded border border-woodland-200 shrink-0">
+                <span className="hidden xl:inline-block text-[10px] font-bold uppercase tracking-wider bg-woodland-100 text-woodland-900 px-1.5 py-0.5 rounded border border-woodland-200 shrink-0">
                   Run Club
                 </span>
                 <button
@@ -96,7 +96,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   {VERSION_LABEL}
                 </button>
               </div>
-              <p className="hidden xl:block text-[11px] text-stone-500 font-medium truncate">
+              <p className="hidden 2xl:block text-[11px] text-stone-500 font-medium truncate">
                 Blue Note Brewing Co. • Pounding trails &amp; pavement!
               </p>
             </div>
@@ -155,7 +155,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             {isAdmin && (
               <button
                 onClick={() => setActiveTab('admin')}
-                className={`flex items-center gap-1.5 px-2.5 lg:px-3 py-1.5 rounded-xl text-xs sm:text-sm font-bold transition ${
+                className={`hidden lg:flex items-center gap-1.5 px-2.5 lg:px-3 py-1.5 rounded-xl text-xs sm:text-sm font-bold transition ${
                   activeTab === 'admin'
                     ? 'bg-stone-900 text-white shadow-xs'
                     : 'text-stone-800 bg-stone-100 hover:bg-stone-200'
@@ -216,11 +216,11 @@ export const Navbar: React.FC<NavbarProps> = ({
 
             <button
               onClick={onOpenNewRun}
-              className="flex items-center gap-1 px-2.5 sm:px-3 py-1.5 text-xs font-semibold bg-woodland-600 hover:bg-woodland-700 text-white rounded-xl transition shadow-sm cursor-pointer"
+              className="flex items-center gap-1 px-2.5 sm:px-3 py-1.5 text-xs font-semibold bg-woodland-600 hover:bg-woodland-700 text-white rounded-xl transition shadow-sm cursor-pointer shrink-0"
             >
               <Plus className="w-3.5 h-3.5" />
-              <span className="hidden md:inline">Schedule Run</span>
-              <span className="md:hidden">Run</span>
+              <span className="hidden lg:inline">Schedule Run</span>
+              <span className="lg:hidden">Run</span>
             </button>
 
             {/* USER LOGIN / PROFILE AREA */}
@@ -235,7 +235,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   <div className="w-7 h-7 rounded-full bg-woodland-800 text-white flex items-center justify-center text-xs font-bold shrink-0">
                     {currentUser.firstName?.[0] || firebaseUser?.email?.[0]?.toUpperCase() || 'W'}
                   </div>
-                  <div className="hidden sm:block">
+                  <div className="hidden lg:block">
                     <span className="block text-xs font-bold text-stone-900 leading-tight">
                       {currentUser.firstName || 'Runner'}
                     </span>
@@ -243,7 +243,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                       {currentUser.totalRuns} Runs
                     </span>
                   </div>
-                  <ChevronDown className="w-3.5 h-3.5 text-stone-400 hidden sm:block" />
+                  <ChevronDown className="w-3.5 h-3.5 text-stone-400 hidden lg:block" />
                 </button>
 
                 {/* Dropdown Menu */}
