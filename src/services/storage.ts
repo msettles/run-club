@@ -16,6 +16,7 @@ import {
   BadgeCategory,
   BadgeTriggerConfig
 } from '../types';
+import { calculateAge } from '../utils/dateUtils';
 import { 
   INITIAL_RUNS, 
   INITIAL_ROUTES, 
@@ -552,6 +553,7 @@ export function useClubStore() {
       firstName: string;
       lastName: string;
       shirtSize: string;
+      birthday?: string;
       age?: number;
       city?: string;
       zipCode?: string;
@@ -593,13 +595,18 @@ export function useClubStore() {
       }
     }
 
+    const effectiveAge = profileData.birthday
+      ? calculateAge(profileData.birthday)
+      : profileData.age;
+
     const newUser: UserProfile = {
       email: cleanEmail,
       firstName: profileData.firstName.trim(),
       lastName: profileData.lastName.trim(),
       displayName,
       shirtSize: profileData.shirtSize,
-      age: profileData.age,
+      birthday: profileData.birthday,
+      age: effectiveAge,
       city: profileData.city || 'Woodland',
       zipCode: profileData.zipCode || '95695',
       preferredPace: profileData.preferredPace,

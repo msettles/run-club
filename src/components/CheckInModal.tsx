@@ -2,6 +2,7 @@ import React, { useState, useMemo, useRef, useEffect } from 'react';
 import confetti from 'canvas-confetti';
 import { MeetupEvent, UserProfile, RouteOption, ActivityType, DistanceChoice, CheckInRecord, LegacyMember, Badge, GPXRoute } from '../types';
 import { CLUB_MILESTONES } from '../data/initialData';
+import { calculateAge } from '../utils/dateUtils';
 import { MapViewer } from './MapViewer';
 import { downloadGPXFile } from '../utils/gpxParser';
 import { 
@@ -55,6 +56,7 @@ interface CheckInModalProps {
       firstName: string;
       lastName: string;
       shirtSize: string;
+      birthday?: string;
       age?: number;
       city?: string;
       zipCode?: string;
@@ -273,7 +275,7 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
   const [regFirstName, setRegFirstName] = useState<string>(currentUser.firstName !== 'Guest' ? currentUser.firstName : '');
   const [regLastName, setRegLastName] = useState<string>(currentUser.lastName !== 'Runner' ? currentUser.lastName : '');
   const [regShirtSize, setRegShirtSize] = useState<string>(currentUser.shirtSize || 'L');
-  const [regAge, setRegAge] = useState<string>('');
+  const [regBirthday, setRegBirthday] = useState<string>(currentUser.birthday || '');
   const [regZip, setRegZip] = useState<string>('95695');
   const [selectedLegacyClaims, setSelectedLegacyClaims] = useState<string[]>([]);
   const autoCheckInAfterRegister = true;
@@ -378,7 +380,8 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
           firstName: regFirstName,
           lastName: regLastName,
           shirtSize: regShirtSize,
-          age: regAge ? parseInt(regAge, 10) : undefined,
+          birthday: regBirthday || undefined,
+          age: regBirthday ? calculateAge(regBirthday) : undefined,
           zipCode: regZip,
         },
         selectedLegacyClaims
@@ -1318,13 +1321,20 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-stone-700 mb-1">Age (Opt)</label>
+                  <label className="block text-xs font-bold text-stone-700 mb-1">
+                    Birthday (Opt)
+                    {calculateAge(regBirthday) !== undefined && (
+                      <span className="ml-1 text-[10px] text-amber-700 font-bold font-mono">
+                        (Age: {calculateAge(regBirthday)})
+                      </span>
+                    )}
+                  </label>
                   <input
-                    type="number"
-                    value={regAge}
-                    onChange={(e) => setRegAge(e.target.value)}
-                    placeholder="e.g. 35"
-                    className="w-full px-3 py-2 text-sm rounded-xl border border-stone-300 focus:ring-2 focus:ring-amber-500 outline-none"
+                    type="date"
+                    value={regBirthday}
+                    onChange={(e) => setRegBirthday(e.target.value)}
+                    max={new Date().toISOString().split('T')[0]}
+                    className="w-full px-2 py-2 text-xs rounded-xl border border-stone-300 focus:ring-2 focus:ring-amber-500 outline-none bg-white font-medium"
                   />
                 </div>
                 <div>

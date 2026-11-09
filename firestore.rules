@@ -93,6 +93,7 @@ service cloud.firestore {
     //   - role: string (required, in ['member', 'organizer', 'admin', 'guest'])
     //   - createdAt: string (required, 8-40 chars)
     //   - age: number (optional, >= 0 and <= 150)
+    //   - birthday: string (optional, YYYY-MM-DD, <= 20 chars)
     //   - city: string (optional, <= 100 chars)
     //   - zipCode: string (optional, <= 20 chars)
     //   - preferredPace: string (optional, <= 50 chars)
@@ -299,7 +300,7 @@ service cloud.firestore {
                'email', 'firstName', 'lastName', 'displayName', 'shirtSize',
                'pre2021Runs', 'loggedRuns', 'totalRuns', 'totalMiles', 'runCount',
                'walkCount', 'linkedLegacyNames', 'unlockedBadgeIds', 'role',
-               'createdAt', 'age', 'city', 'zipCode', 'preferredPace',
+               'createdAt', 'age', 'birthday', 'city', 'zipCode', 'preferredPace',
                'petRunCount', 'distanceCounts', 'firstRunDate', 'badgeCounts',
                'emergencyContact'
              ]) &&
@@ -325,6 +326,7 @@ service cloud.firestore {
              data.role is string && data.role in ['member', 'organizer', 'admin', 'guest'] &&
              data.createdAt is string && data.createdAt.size() >= 8 && data.createdAt.size() <= 40 &&
              (!('age' in data) || (data.age is number && data.age >= 0 && data.age <= 150)) &&
+             (!('birthday' in data) || (data.birthday is string && data.birthday.size() <= 20)) &&
              (!('city' in data) || (data.city is string && data.city.size() <= 100)) &&
              (!('zipCode' in data) || (data.zipCode is string && data.zipCode.size() <= 20)) &&
              (!('preferredPace' in data) || (data.preferredPace is string && data.preferredPace.size() <= 50)) &&

@@ -221,7 +221,8 @@ export interface UserProfile {
   lastName: string;
   displayName: string;
   shirtSize: 'Youth' | 'XS' | 'S' | 'M' | 'L' | 'XL' | '2XL' | string;
-  age?: number;
+  birthday?: string;         // YYYY-MM-DD birthdate
+  age?: number;              // Computed from birthday
   city?: string;
   zipCode?: string;
   emergencyContact?: {

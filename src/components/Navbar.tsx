@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { UserProfile } from '../types';
 import { User as FirebaseUser } from 'firebase/auth';
 import { FULL_VERSION } from '../utils/version';
+import { calculateAge } from '../utils/dateUtils';
 import { 
   Calendar, 
   Map, 
@@ -246,6 +247,17 @@ export const Navbar: React.FC<NavbarProps> = ({
                         </span>
                         <span className="font-bold text-stone-900 capitalize">{currentUser.role}</span>
                       </div>
+                      {(currentUser.birthday || currentUser.age !== undefined) && (
+                        <div className="flex items-center justify-between">
+                          <span className="flex items-center gap-1.5">
+                            <Calendar className="w-3.5 h-3.5 text-woodland-600" />
+                            <span>Age:</span>
+                          </span>
+                          <span className="font-bold text-stone-900 font-mono">
+                            {calculateAge(currentUser.birthday) ?? currentUser.age}
+                          </span>
+                        </div>
+                      )}
                     </div>
 
                     <div className="border-t border-stone-100 pt-2 space-y-1">

@@ -16,6 +16,7 @@ import {
 } from '../types';
 import { INITIAL_BADGES, INITIAL_SPECIAL_EVENTS } from '../data/initialData';
 import { ClubNotification } from '../services/notifications';
+import { calculateAge } from '../utils/dateUtils';
 import { 
   Calendar, 
   Users, 
@@ -244,11 +245,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   };
 
   const exportUsersCSV = () => {
-    const headers = ['Email', 'Display Name', 'Shirt Size', 'Total Runs', 'Pre-2021 Runs', 'Logged Runs', 'Total Miles', 'Runs Count', 'Walks Count', 'First Run Date', 'Linked Legacy Names'];
+    const headers = ['Email', 'Display Name', 'Shirt Size', 'Birthday', 'Age', 'Total Runs', 'Pre-2021 Runs', 'Logged Runs', 'Total Miles', 'Runs Count', 'Walks Count', 'First Run Date', 'Linked Legacy Names'];
     const rows = users.map((u) => [
       u.email,
       `"${u.displayName}"`,
       u.shirtSize,
+      u.birthday || '',
+      calculateAge(u.birthday) ?? u.age ?? '',
       u.totalRuns,
       u.pre2021Runs,
       u.loggedRuns,

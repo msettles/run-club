@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { X, CheckCircle, ShieldCheck, Sparkles, Search, AlertCircle, RefreshCw } from 'lucide-react';
 import { LegacyMember, UserProfile } from '../types';
+import { calculateAge } from '../utils/dateUtils';
 
 interface NewUserModalProps {
   isOpen: boolean;
@@ -14,6 +15,7 @@ interface NewUserModalProps {
       firstName: string;
       lastName: string;
       shirtSize: string;
+      birthday?: string;
       age?: number;
       city?: string;
       zipCode?: string;
@@ -49,8 +51,10 @@ export const NewUserModal: React.FC<NewUserModalProps> = ({
   const [lastName, setLastName] = useState<string>(parsedNames.last);
   const [shirtSize, setShirtSize] = useState<string>('L');
   const [preferredPace, setPreferredPace] = useState<string>('9:30 - 11:00 /mi');
-  const [age, setAge] = useState<string>('');
+  const [birthday, setBirthday] = useState<string>('');
   const [zipCode, setZipCode] = useState<string>('95695');
+
+  const computedAge = useMemo(() => calculateAge(birthday), [birthday]);
 
   // Search query for legacy members (defaults to last name or first name)
   const [searchQuery, setSearchQuery] = useState<string>(() => {
@@ -133,7 +137,8 @@ export const NewUserModal: React.FC<NewUserModalProps> = ({
           firstName: firstName.trim(),
           lastName: lastName.trim(),
           shirtSize,
-          age: age ? parseInt(age, 10) : undefined,
+          birthday: birthday || undefined,
+          age: computedAge,
           city: 'Woodland',
           zipCode: zipCode.trim() || '95695',
           preferredPace,
@@ -260,16 +265,23 @@ export const NewUserModal: React.FC<NewUserModalProps> = ({
             </div>
           </div>
 
-          {/* Optional Age & Zip Code */}
+          {/* Optional Birthday & Zip Code */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-bold text-stone-700 mb-1">Age (Optional)</label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs font-bold text-stone-700">Birthday (Optional)</label>
+                {computedAge !== undefined && (
+                  <span className="text-[10px] font-bold bg-amber-100 text-amber-900 px-1.5 py-0.5 rounded font-mono">
+                    Age: {computedAge}
+                  </span>
+                )}
+              </div>
               <input
-                type="number"
-                value={age}
-                onChange={(e) => setAge(e.target.value)}
-                placeholder="e.g. 40"
-                className="w-full px-3 py-2 text-sm rounded-xl border border-stone-300 focus:ring-2 focus:ring-amber-500 outline-none"
+                type="date"
+                value={birthday}
+                onChange={(e) => setBirthday(e.target.value)}
+                max={new Date().toISOString().split('T')[0]}
+                className="w-full px-3 py-2 text-sm rounded-xl border border-stone-300 focus:ring-2 focus:ring-amber-500 outline-none bg-white font-medium"
               />
             </div>
             <div>
