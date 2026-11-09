@@ -17,9 +17,6 @@ export function createAnnouncementOps(ctx: StoreState) {
     currentMember,
   } = ctx;
 
-  /**
-   * Send a club-wide push announcement (Admin)
-   */
   /** Post a club announcement to everyone's bell feed (admins). Phones get it only via the Firebase console. */
   const sendPushAnnouncement = async (title: string, body: string) => {
     const notif: ClubNotification = {

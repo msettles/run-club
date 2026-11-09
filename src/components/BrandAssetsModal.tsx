@@ -321,7 +321,7 @@ export const BrandAssetsModal: React.FC<BrandAssetsModalProps> = ({ isOpen, onCl
                   runner statistics.
                 </p>
                 <div className="mt-3 font-sport font-black text-base text-amber-600 tracking-tight">
-                  Spring 2026 Season • 100% Free
+                  Woodland Run Club • 100% Free
                 </div>
               </div>
 

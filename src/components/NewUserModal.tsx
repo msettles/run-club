@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { X, CheckCircle, ShieldCheck, Sparkles, Search, AlertCircle, RefreshCw } from 'lucide-react';
 import { LegacyMember, UserProfile } from '../types';
-import { calculateAge } from '../utils/dateUtils';
+import { calculateAge, localYmd } from '../utils/dateUtils';
 import { isLegacyClaimed, matchLegacyNames } from '../utils/legacy';
 
 interface NewUserModalProps {
@@ -267,7 +267,7 @@ export const NewUserModal: React.FC<NewUserModalProps> = ({
                 type="date"
                 value={birthday}
                 onChange={(e) => setBirthday(e.target.value)}
-                max={new Date().toISOString().split('T')[0]}
+                max={localYmd()}
                 className="w-full px-3 py-2 text-sm rounded-xl border border-stone-300 focus:ring-2 focus:ring-amber-500 outline-none bg-white font-medium"
               />
             </div>

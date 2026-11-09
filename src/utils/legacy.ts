@@ -1,3 +1,4 @@
+import { formatMiles } from './miles';
 /**
  * Legacy (old app) data: import, fuzzy name matching, streaks and badge recompute.
  *
@@ -309,10 +310,16 @@ export function datedEventsFrom(
   return [
     ...legacyEvents.map((e) => ({ date: e.d, specialEventIds: specialEventIdsFor(e.c) })),
     ...appCheckins.map((c) => {
-      const ev = (c.runId && byId.get(c.runId)) || byDate.get(c.date);
+      const ev = c.runId ? byId.get(c.runId) : byDate.get(c.date);
       return { date: c.date, specialEventIds: specialEventIdsFor(c.codeWord || '', ev?.title, ev?.specialEvent) };
     }),
   ];
+}
+
+/** Last actual check-in after a deletion, so a removed run cannot keep a streak alive. */
+export function lastCheckInFields(checkins: CheckInRecord[]): Pick<UserProfile, 'lastCheckInDate' | 'lastCheckInRunId'> {
+  const latest = [...checkins].sort((a, b) => b.date.localeCompare(a.date) || b.time.localeCompare(a.time))[0];
+  return { lastCheckInDate: latest?.date, lastCheckInRunId: latest?.runId };
 }
 
 /**
@@ -321,7 +328,7 @@ export function datedEventsFrom(
  * be configured with either).
  */
 export function distanceCountKeys(miles: number): string[] {
-  const rounded = (Math.round(miles * 10) / 10).toFixed(1);
+  const rounded = formatMiles(miles);
   return [miles <= 2.0 ? '1' : miles <= 4.0 ? '3' : '5', rounded, `${rounded} mi`];
 }
 

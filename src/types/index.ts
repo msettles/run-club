@@ -308,9 +308,3 @@ export interface MilestoneAlert {
   fulfilledAt?: string;
   fulfilledBy?: string;
 }
-
-export interface CheckInPayload {
-  runId: string;
-  memberId: string;
-  memberName: string;
-}

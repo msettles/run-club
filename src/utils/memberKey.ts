@@ -1,22 +1,24 @@
+import { sha256Hex } from './hash';
+
+const memberKeys = new Map<string, Promise<string>>();
+
 /**
  * Public leaderboard key for a runner: sha256("woodchuckers:" + lowercase email) as hex.
  * Used as the members/{memberKey} doc ID and RSVP attendee ID so the public
  * collections never contain email addresses.
  * Must match memberKeyFor() in firestore.rules.
  */
-export async function memberKeyFor(email: string): Promise<string> {
-  const data = new TextEncoder().encode(`woodchuckers:${email.trim().toLowerCase()}`);
-  const digest = await crypto.subtle.digest('SHA-256', data);
-  return Array.from(new Uint8Array(digest))
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
-}
-
-async function sha256Hex(text: string): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
-  return Array.from(new Uint8Array(digest))
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
+export function memberKeyFor(email: string): Promise<string> {
+  const normalized = email.trim().toLowerCase();
+  const cached = memberKeys.get(normalized);
+  if (cached) return cached;
+  if (memberKeys.size >= 512) memberKeys.delete(memberKeys.keys().next().value!);
+  const key = sha256Hex(`woodchuckers:${normalized}`).catch((error) => {
+    memberKeys.delete(normalized);
+    throw error;
+  });
+  memberKeys.set(normalized, key);
+  return key;
 }
 
 /**

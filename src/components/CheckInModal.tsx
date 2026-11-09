@@ -1,5 +1,7 @@
+import { formatMiles } from '../utils/miles';
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import confetti from 'canvas-confetti';
+import { celebrate } from '../utils/celebrate';
+import { milestoneProgress } from '../utils/milestones';
 import { RunEvent, MeetupEvent, UserProfile, RouteOption, ActivityType, DistanceChoice, CheckInRecord, Badge, GPXRoute } from '../types';
 import { CLUB_MILESTONES } from '../data/initialData';
 import { checkInStatus, checkInWindow, formatOpening } from '../utils/checkInWindow';
@@ -75,14 +77,14 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
   const selectedEventId = resolvedEventId || eventId || (candidateEventIds?.length === 1 ? candidateEventIds[0] : undefined);
   const isChoosingRun = !selectedEventId && (candidateEventIds?.length || 0) > 1;
   const matchedEvent = selectedEventId ? meetupEvents.find((e) => e.id === selectedEventId) : undefined;
-  const activeEvent: MeetupEvent = matchedEvent || {
+  const activeEvent: MeetupEvent = useMemo(() => matchedEvent || {
     id: selectedEventId || '',
     date: '',
     title: 'Check-in',
     codeWord: '',
     activeDistances: [],
     routes: {},
-  };
+  }, [matchedEvent, selectedEventId]);
   const eventStatus = matchedEvent ? checkInStatus(matchedEvent) : null;
 
   const isGuest = currentUser.role === 'guest' || !currentUser.email;
@@ -114,13 +116,6 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
         }
       }
     }
-    if (list.length === 0) {
-      list.push(
-        { key: '1', route: { name: '1-Mile Club Route', actualMiles: 1.15 } },
-        { key: '3', route: { name: '3-Mile Club Route', actualMiles: 3.22 } },
-        { key: '5', route: { name: '5-Mile Club Route', actualMiles: 5.12 } }
-      );
-    }
     return list;
   }, [activeEvent]);
 
@@ -138,7 +133,7 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
       );
       if (match) return match.key;
     }
-    return availableOptions[0]?.key || '3';
+    return availableOptions[0]?.key || '';
   });
   const [loopSelections, setLoopSelections] = useState<Record<string, number>>(() => {
     if (existingCheckIn && existingCheckIn.loops) {
@@ -181,7 +176,11 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
     const activeRec = successResult?.checkIn || existingCheckIn;
     const optRoute = isEditingCheckIn
       ? selectedOption?.route
-      : (successResult?.route || (activeRec ? { name: activeRec.routeName || '', actualMiles: activeRec.actualMiles } : selectedOption?.route));
+      : (successResult?.route || (activeRec ? {
+          ...activeEvent.routes[String(activeRec.distanceChoice)],
+          routeId: activeEvent.routes[String(activeRec.distanceChoice)]?.routeId || String(activeRec.distanceChoice),
+          name: activeRec.routeName || '', actualMiles: activeRec.actualMiles,
+        } : selectedOption?.route));
     let found: GPXRoute | undefined;
     if (optRoute?.routeId && routes) {
       found = routes.find((r) => r.id === optRoute.routeId);
@@ -191,11 +190,7 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
         (r) => r.name.toLowerCase() === optRoute.name.toLowerCase()
       );
     }
-    if (!found && optRoute && routes) {
-      found = routes.find(
-        (r) => Math.abs(r.distanceMiles - optRoute.actualMiles) < 0.2
-      );
-    }
+
 
     const extLinks = {
       stravaUrl: found?.externalLinks?.stravaUrl || optRoute?.externalLinks?.stravaUrl || (optRoute?.routeUrl?.includes('strava') ? optRoute.routeUrl : undefined),
@@ -217,9 +212,9 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
     return {
       id: 'default-route',
       name: optRoute?.name || 'Woodland Woodchuckers Route',
-      description: optRoute?.directions || 'Start and finish at Blue Note Brewing Co.',
-      distanceMiles: optRoute?.actualMiles || creditedMiles || 3.1,
-      elevationGainFt: 25,
+      description: optRoute?.directions || 'Route details are not available for this check-in.',
+      distanceMiles: optRoute?.actualMiles || creditedMiles,
+      elevationGainFt: 0,
       surface: 'Pavement',
       difficulty: 'Easy',
       // No library route matched: no map (never show another route's map).
@@ -228,7 +223,7 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
       directions: optRoute?.directionsList,
       createdAt: new Date().toISOString(),
     };
-  }, [successResult, existingCheckIn, isEditingCheckIn, selectedOption, routes, creditedMiles]);
+  }, [successResult, existingCheckIn, isEditingCheckIn, selectedOption, routes, creditedMiles, activeEvent.routes]);
 
   if (!isOpen) return null;
 
@@ -259,6 +254,8 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
           setChooserError("That code word doesn't match any run open right now. Double-check the word the organizer announced.");
           return;
         }
+        const resolvedEvent = candidates.find((c) => c.id === found)!;
+        setSelectedOptionKey(resolvedEvent.activeDistances?.[0] || Object.keys(resolvedEvent.routes)[0] || '');
         setCodeWordInput(word);
         setResolvedEventId(found);
       } catch (err) {
@@ -410,6 +407,10 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
 
   const handlePerformCheckIn = async () => {
     setErrorMsg(null);
+    if (!selectedOption) {
+      setErrorMsg('No routes are configured for this run. Please ask an organizer to add a route.');
+      return;
+    }
     const effectiveCodeWord = codeWordInput.trim() || (existingCheckIn ? (existingCheckIn.codeWord || activeEvent.codeWord) : '');
     if (!effectiveCodeWord) {
       setErrorMsg("Please enter today's code word!");
@@ -441,7 +442,7 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
         userEmail: currentUser.email,
         codeWordEntered: effectiveCodeWord,
         activity: selectedActivity,
-        distanceChoice: selectedOptionKey,
+        distanceChoice: selectedOption.key,
         loops: currentLoops,
         withPet: runningWithPet,
       });
@@ -453,12 +454,7 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
       }
 
       // Trigger celebratory woodchuck confetti!
-      confetti({
-        particleCount: 90,
-        spread: 80,
-        origin: { y: 0.6 },
-        colors: ['#f59e0b', '#2a859e', '#13495d', '#10b981'],
-      });
+      celebrate('check-in');
 
       setPostCheckInStep('run_info');
       setIsEditingCheckIn(false);
@@ -472,14 +468,7 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
 
   // Milestone helpers
   const activeUserRuns = successResult?.user?.totalRuns ?? currentUser.totalRuns;
-  const nextMilestone = CLUB_MILESTONES.find((m) => m.runsRequired > activeUserRuns) || null;
-  const previousMilestoneRuns = nextMilestone 
-    ? (CLUB_MILESTONES[CLUB_MILESTONES.indexOf(nextMilestone) - 1]?.runsRequired || 0)
-    : 200;
-  const span = nextMilestone ? nextMilestone.runsRequired - previousMilestoneRuns : 1;
-  const currentInSpan = nextMilestone ? Math.max(0, activeUserRuns - previousMilestoneRuns) : span;
-  const progressPct = Math.min(100, Math.round((currentInSpan / span) * 100));
-  const runsRemaining = nextMilestone ? nextMilestone.runsRequired - activeUserRuns : 0;
+  const { nextMilestone, runsRemaining, progressPercent: progressPct } = milestoneProgress(activeUserRuns);
   const justUnlockedMilestone = [5, 50, 100, 200].includes(activeUserRuns)
     ? CLUB_MILESTONES.find((m) => m.runsRequired === activeUserRuns)
     : null;
@@ -673,12 +662,7 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
                   <button
                     type="button"
                     onClick={() => {
-                      confetti({
-                        particleCount: 50,
-                        spread: 60,
-                        origin: { y: 0.7 },
-                        colors: ['#f59e0b', '#2a859e', '#13495d'],
-                      });
+                      celebrate('rewards');
                       setPostCheckInStep('rewards');
                     }}
                     className="w-full py-3.5 bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 hover:from-amber-600 hover:to-amber-500 text-stone-950 font-black text-sm rounded-xl transition shadow-md flex items-center justify-center gap-2 font-display uppercase tracking-wider cursor-pointer"
@@ -935,12 +919,17 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  {availableOptions.length === 0 && (
+                    <p className="text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded-xl p-3">
+                      No routes are configured for this run. Please ask an organizer to add a route before checking in.
+                    </p>
+                  )}
                   {availableOptions.map((opt) => {
                     const isSelected = selectedOptionKey === opt.key;
                     const optLoops = opt.route.isLoop ? (loopSelections[opt.key] || 1) : 1;
                     const optBaseMiles = opt.route.baseMiles || opt.route.actualMiles;
                     const optTotalMiles = opt.route.isLoop ? (optBaseMiles * optLoops) : opt.route.actualMiles;
-                    const optFormattedMiles = (Math.round(optTotalMiles * 10) / 10).toFixed(1);
+                    const optFormattedMiles = formatMiles(optTotalMiles);
                     const maxPresets = Math.max(opt.route.maxLoops || 4, 4);
 
                     return (
@@ -992,14 +981,14 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
                                 <span className="font-mono font-black text-woodland-900">{optLoops}x</span>
                               </span>
                               <span className="text-stone-500 font-medium text-[10px]">
-                                ~{(Math.round(optBaseMiles * 10) / 10).toFixed(1)} mi/loop
+                                ~{formatMiles(optBaseMiles)} mi/loop
                               </span>
                             </div>
 
                             {/* Quick presets (1, 2, 3, 4) + Stepper for 5, 6, etc. */}
                             <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
                               {Array.from({ length: maxPresets }, (_, i) => i + 1).map((n) => {
-                                const loopMiles = (Math.round(optBaseMiles * n * 10) / 10).toFixed(1);
+                                const loopMiles = formatMiles(optBaseMiles * n);
                                 const isActive = optLoops === n;
                                 return (
                                   <button
@@ -1105,7 +1094,7 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
                 <button
                   type="button"
                   onClick={handlePerformCheckIn}
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || !selectedOption}
                   className="w-full py-3.5 bg-amber-500 hover:bg-amber-600 active:scale-98 text-stone-950 font-black text-base rounded-2xl transition shadow-lg flex items-center justify-center gap-2 font-display uppercase tracking-wide cursor-pointer disabled:opacity-50"
                 >
                   <Sparkles className="w-5 h-5 text-stone-950" />

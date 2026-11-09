@@ -38,6 +38,7 @@ export function createLegacyOps(ctx: StoreState) {
     setOwnLegacyEvents,
     currentUserEmail,
     legacyMembers,
+    privateSyncEpoch,
   } = ctx;
 
   /**
@@ -46,6 +47,7 @@ export function createLegacyOps(ctx: StoreState) {
    */
   const loadLegacyPool = async (): Promise<LegacyMember[]> => {
     if (!isFirebaseConfigured || !db) return legacyPool;
+    const epoch = privateSyncEpoch.current;
     const [indexSnap, claimedSnap] = await Promise.all([
       getDoc(doc(db, 'legacy_index', 'pool')),
       getDocs(query(collection(db, 'legacy_profiles'), where('claimedBy', '!=', null))),
@@ -63,7 +65,7 @@ export function createLegacyOps(ctx: StoreState) {
       claimedByEmail: null,
       claimedAt: (claimed.get(e.id)?.claimedAt as string) || null,
     }));
-    setLegacyMembers(pool);
+    if (epoch === privateSyncEpoch.current) setLegacyMembers(pool);
     return pool;
   };
 

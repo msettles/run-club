@@ -77,9 +77,9 @@ export function useStoreState() {
   }, []);
 
   const [runs, setRuns] = useState<RunEvent[]>(() => (LOCAL_MODE ? loadFromStorage(STORAGE_KEYS.RUNS, INITIAL_RUNS) : []));
-  // The official club routes always show; Firestore adds the rest (see syncFromFirestore).
+  // Production routes come only from Firestore; deleted routes stay deleted.
   const [routes, setRoutes] = useState<GPXRoute[]>(() =>
-    (LOCAL_MODE ? loadMerged(STORAGE_KEYS.ROUTES, INITIAL_ROUTES, idOf) : INITIAL_ROUTES).map(hydrateRouteFromFirestore)
+    (LOCAL_MODE ? loadMerged(STORAGE_KEYS.ROUTES, INITIAL_ROUTES, idOf) : []).map(hydrateRouteFromFirestore)
   );
   const [members, setMembers] = useState<Member[]>(() => (LOCAL_MODE ? loadMerged(STORAGE_KEYS.MEMBERS, INITIAL_MEMBERS, emailOf) : []));
   // The built-in badge catalog is part of the app; admin-made badges come from Firestore.
@@ -119,6 +119,7 @@ export function useStoreState() {
   );
   // Staff code words by run ID (from meetup_secrets). Kept here too so they survive
   // the public schedule loading after the staff sync (the two run in parallel).
+  const privateSyncEpoch = useRef(0);
   const staffCodeWords = useRef<Record<string, string>>({});
   // True once the schedule and check-in events have loaded (immediately in local mode).
   const [scheduleLoaded, setScheduleLoaded] = useState<boolean>(LOCAL_MODE);
@@ -214,6 +215,7 @@ export function useStoreState() {
     meetupEvents,
     setMeetupEvents,
     staffCodeWords,
+    privateSyncEpoch,
     scheduleLoaded,
     setScheduleLoaded,
     checkins,

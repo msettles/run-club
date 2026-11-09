@@ -59,10 +59,12 @@ npm run dev             # http://localhost:5173
 | `npm run typecheck` | TypeScript, no output |
 | `npm run lint` | ESLint (errors fail; `any` is a warning for now) |
 | `npm run build` | Type-check + production build into `dist/` |
+| `npm test` | Unit tests for club logic (Vitest) |
+| `npm run test:watch` | Unit tests in watch mode |
 | `npm run test:rules` | Firestore security-rules tests in the emulator (needs Java 11+) |
 | `npx firebase deploy --only firestore:rules,hosting` | Deploy rules + site (**always deploy both together**) |
 
-**CI** (`.github/workflows/ci.yml`) runs type-check, lint, build and the rules tests on every PR and every push to `main`.
+**CI** (`.github/workflows/ci.yml`) runs type-check, lint, unit tests, build and the rules tests on every PR and every push to `main`.
 
 ## How it's put together
 

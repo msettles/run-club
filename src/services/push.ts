@@ -9,7 +9,7 @@
  * /push/) → FCM token. Signed-in runners' devices are recorded in
  * push_devices/{sha256(token)} so admins can see how many are signed up.
  */
-import { getMessaging, getToken, deleteToken, isSupported } from 'firebase/messaging';
+import { sha256Hex } from '../utils/hash';
 import { doc, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { app, db, isFirebaseConfigured } from './firebase';
 
@@ -22,20 +22,17 @@ const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent);
 const isStandalone = () =>
   window.matchMedia('(display-mode: standalone)').matches || Boolean((navigator as any).standalone);
 
-async function sha256Hex(text: string): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
-  return Array.from(new Uint8Array(digest))
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
-}
-
 /** Where this device stands. iPhones only support web push from the Home Screen app. */
 export async function getPushStatus(): Promise<PushStatus> {
   if (typeof window === 'undefined' || !('Notification' in window) || !('serviceWorker' in navigator)) {
-    return isIOS() && !isStandalone() ? 'needs-install' : 'unsupported';
+    return typeof window !== 'undefined' && typeof navigator !== 'undefined' && isIOS() && !isStandalone() ? 'needs-install' : 'unsupported';
   }
   if (!isFirebaseConfigured || !app || !VAPID_KEY) return 'not-configured';
-  if (!(await isSupported().catch(() => false))) return isIOS() && !isStandalone() ? 'needs-install' : 'unsupported';
+  // Status is queried at startup: use browser capabilities here, and load the
+  // Messaging SDK only when the runner enables or disables notifications.
+  if (!('PushManager' in window) || !('indexedDB' in window)) {
+    return isIOS() && !isStandalone() ? 'needs-install' : 'unsupported';
+  }
   if (Notification.permission === 'denied') return 'blocked';
   return Notification.permission === 'granted' && localStorage.getItem(ENABLED_KEY) ? 'on' : 'off';
 }
@@ -56,6 +53,8 @@ export async function enablePushOnThisDevice(account?: { email?: string; memberK
   const permission = await Notification.requestPermission();
   if (permission !== 'granted') return permission === 'denied' ? 'blocked' : 'off';
 
+  const { getMessaging, getToken, isSupported } = await import('firebase/messaging');
+  if (!(await isSupported())) return isIOS() && !isStandalone() ? 'needs-install' : 'unsupported';
   const registration = await pushRegistration();
   const token = await getToken(getMessaging(app!), { vapidKey: VAPID_KEY, serviceWorkerRegistration: registration });
   if (!token) throw new Error('Could not get a notification token for this device.');
@@ -81,6 +80,7 @@ export async function enablePushOnThisDevice(account?: { email?: string; memberK
 export async function disablePushOnThisDevice(): Promise<void> {
   if (!app) return;
   try {
+    const { getMessaging, getToken, deleteToken } = await import('firebase/messaging');
     const registration = await pushRegistration();
     const messaging = getMessaging(app);
     const token = await getToken(messaging, { vapidKey: VAPID_KEY, serviceWorkerRegistration: registration }).catch(() => null);

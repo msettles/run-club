@@ -91,7 +91,6 @@ export const MapViewer: React.FC<MapViewerProps> = ({
       baseLayerRef.current = null;
       turnMarkersGroupRef.current = null;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [route]);
 
   // Switch the base map style without rebuilding the map.

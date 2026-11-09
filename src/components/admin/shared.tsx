@@ -1,7 +1,7 @@
 /** Shared admin-dashboard helpers: roles, runner picker, CSV download. */
 import React, { useState } from 'react';
 import type { UserProfile } from '../../types';
-import { ADMIN_EMAILS } from '../../utils/roles';
+import { isAdminProfile, isStaffProfile } from '../../utils/roles';
 
 export type AssignableRole = 'member' | 'organizer' | 'admin';
 
@@ -18,9 +18,9 @@ export const ROLE_BADGE: Record<AssignableRole, string> = {
 };
 
 export const effectiveRole = (u: UserProfile): AssignableRole =>
-  ADMIN_EMAILS.includes(u.email.toLowerCase()) || u.role === 'admin'
+  isAdminProfile(u)
     ? 'admin'
-    : u.role === 'organizer'
+    : isStaffProfile(u)
       ? 'organizer'
       : 'member';
 

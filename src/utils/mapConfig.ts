@@ -4,7 +4,6 @@
 
 export const CARTO_API_KEY = 'cb1_54rv_1_4440b43c9454a0eed99329cb';
 
-export const CARTO_VOYAGER_URL = `https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png?key=${CARTO_API_KEY}`;
 export const CARTO_VOYAGER_NOLABELS_URL = `https://basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}.png?key=${CARTO_API_KEY}`;
 export const CARTO_VOYAGER_LABELS_URL = `https://basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}.png?key=${CARTO_API_KEY}`;
 

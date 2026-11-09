@@ -1,3 +1,4 @@
+import { formatMiles } from '../utils/miles';
 import React from 'react';
 import { GPXRoute, RunRouteChoice } from '../types';
 import { resolveChoices, deriveRunStats } from '../utils/runChoices';
@@ -98,7 +99,7 @@ export const RouteChoicesEditor: React.FC<RouteChoicesEditorProps> = ({ routes, 
                   {!r && <option value={c.routeId}>Select route...</option>}
                   {routes.map((rt) => (
                     <option key={rt.id} value={rt.id}>
-                      {rt.name} — {(Math.round(rt.distanceMiles * 10) / 10).toFixed(1)} mi ({rt.surface})
+                      {rt.name} — {formatMiles(rt.distanceMiles)} mi ({rt.surface})
                     </option>
                   ))}
                 </select>
@@ -118,7 +119,7 @@ export const RouteChoicesEditor: React.FC<RouteChoicesEditorProps> = ({ routes, 
               {r && (
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-stone-600 pl-8">
                   <span className="font-extrabold text-stone-900 bg-stone-200/70 px-2 py-0.5 rounded-md">
-                    {(Math.round(r.distanceMiles * 10) / 10).toFixed(1)} mi
+                    {formatMiles(r.distanceMiles)} mi
                   </span>
                   <span className="flex items-center gap-0.5 font-medium">
                     <Mountain className="w-3 h-3 text-stone-400" />+{r.elevationGainFt} ft

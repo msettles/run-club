@@ -4,9 +4,6 @@ import {
   CheckInRecord,
   MilestoneAlert,
 } from '../../types';
-import {
-  INITIAL_ROUTES,
-} from '../../data/initialData';
 import { isFirebaseConfigured, db } from '../firebase';
 import {
   collection,
@@ -18,7 +15,7 @@ import {
   where,
 } from 'firebase/firestore';
 import { memberKeyFor } from '../../utils/memberKey';
-import { formatRouteForFirestore, hydrateRouteFromFirestore, recentCheckinCutoff, toPublicMember } from './helpers';
+import { recentCheckinCutoff, toPublicMember } from './helpers';
 import type { StoreState } from './state';
 import type { createLegacyOps } from './legacy';
 
@@ -38,6 +35,7 @@ export function createPrivateSyncOps(ctx: StoreState & ReturnType<typeof createL
     setUsers,
     setMeetupEvents,
     staffCodeWords,
+    privateSyncEpoch,
     setCheckins,
     setOwnLegacyEvents,
     setLegacyMembers,
@@ -52,6 +50,8 @@ export function createPrivateSyncOps(ctx: StoreState & ReturnType<typeof createL
    */
   const syncPrivateData = async (email: string, isStaff: boolean, isAdmin = false) => {
     if (!isFirebaseConfigured || !db) return;
+    const epoch = ++privateSyncEpoch.current;
+    const isCurrent = () => epoch === privateSyncEpoch.current;
     const currentDb = db;
     const cleanEmail = email.trim().toLowerCase();
     const ownCheckinsQuery = query(collection(currentDb, 'checkins'), where('userEmail', '==', cleanEmail));
@@ -60,11 +60,12 @@ export function createPrivateSyncOps(ctx: StoreState & ReturnType<typeof createL
       // Own claimed legacy history feeds streaks and badges at check-in.
       getDoc(doc(currentDb, 'users', cleanEmail))
         .then((snap) => fetchLegacyEvents((snap.exists() && (snap.data().linkedLegacyIds as string[])) || []))
-        .then(setOwnLegacyEvents)
+        .then((events) => { if (isCurrent()) setOwnLegacyEvents(events); })
         .catch((err) => console.warn('Legacy history load failed:', err));
 
       if (!isStaff) {
         const own = await getDocs(ownCheckinsQuery);
+        if (!isCurrent()) return;
         const ownCheckins = own.docs.map((d) => d.data() as CheckInRecord);
         setCheckins((prev) => {
           const ids = new Set(ownCheckins.map((c) => c.id));
@@ -78,15 +79,15 @@ export function createPrivateSyncOps(ctx: StoreState & ReturnType<typeof createL
       // Check-ins grow every week: staff load the last RECENT_CHECKIN_DAYS for the
       // Check-In Log, plus all of their own (for their streaks). Anything that
       // recalculates another runner's stats queries that runner's check-ins.
-      const [usersSnap, recentSnap, ownSnap, alertsSnap, routesSnap, secretsSnap] = await Promise.all([
+      const [usersSnap, recentSnap, ownSnap, alertsSnap, secretsSnap] = await Promise.all([
         getDocs(collection(currentDb, 'users')),
         getDocs(query(collection(currentDb, 'checkins'), where('date', '>=', recentCheckinCutoff()))),
         getDocs(ownCheckinsQuery),
         getDocs(collection(currentDb, 'milestone_alerts')),
-        getDocs(collection(currentDb, 'routes')),
         getDocs(collection(currentDb, 'meetup_secrets')),
       ]);
 
+      if (!isCurrent()) return;
       const remoteUsers = usersSnap.docs.map((d) => d.data() as UserProfile);
       setUsers(remoteUsers);
 
@@ -105,22 +106,12 @@ export function createPrivateSyncOps(ctx: StoreState & ReturnType<typeof createL
       staffCodeWords.current = codeWords;
       setMeetupEvents((prev) => prev.map((e) => (codeWords[e.id] ? { ...e, codeWord: codeWords[e.id] } : e)));
 
-      // Save any official club route that isn't in Firestore yet (staff only; runners can't write routes).
-      const savedRouteIds = new Set(routesSnap.docs.map((d) => d.id));
-      const unsavedOfficial = INITIAL_ROUTES.filter((r) => !savedRouteIds.has(r.id)).map(hydrateRouteFromFirestore);
-      if (unsavedOfficial.length) {
-        const results = await Promise.allSettled(
-          unsavedOfficial.map((r) => setDoc(doc(currentDb, 'routes', r.id), formatRouteForFirestore(r)))
-        );
-        const failed = results.filter((x) => x.status === 'rejected').length;
-        if (failed) console.warn(`Saving official club routes: ${failed} of ${unsavedOfficial.length} failed.`);
-      }
-
       // Make sure every profile has an up-to-date hashed leaderboard row. Only
       // admins may write other people's rows, and only rows that differ are written
       // (reads are much cheaper than writes on the free plan).
       if (isAdmin) {
         const rowsSnap = await getDocs(collection(currentDb, 'members'));
+        if (!isCurrent()) return;
         const rows = new Map(rowsSnap.docs.map((d) => [d.id, d.data()]));
         const results = await Promise.allSettled(
           remoteUsers.map(async (u) => {
@@ -141,6 +132,7 @@ export function createPrivateSyncOps(ctx: StoreState & ReturnType<typeof createL
   const clearPrivateData = () => {
     // In local (no-Firebase) mode the browser IS the database, so keep it.
     if (!isFirebaseConfigured) return;
+    privateSyncEpoch.current++;
     setUsers([]);
     setCheckins([]);
     setMilestoneAlerts([]);

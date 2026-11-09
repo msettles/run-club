@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { useClubStore } from './services/storage';
 import { RunEvent, GPXRoute, UserProfile } from './types';
-import { buildMeetupFromRun, deleteRunConfirmMessage, getRunChoices, resolveChoices } from './utils/runChoices';
+import { deleteRunConfirmMessage, getRunChoices, resolveChoices } from './utils/runChoices';
 import { Navbar } from './components/Navbar';
 import { RunCard } from './components/RunCard';
 import { Leaderboard } from './components/Leaderboard';
@@ -81,7 +81,6 @@ export function App() {
     currentUser,
     registerUser,
     checkInRunner,
-    saveMeetupEvent,
     resolveRunByCodeWord,
     countPushDevices,
     countRunCheckIns,
@@ -140,15 +139,12 @@ export function App() {
   const toggleBell = () => setShowNotificationsDrawer((open) => !open);
 
   // Selected route for viewing
-  const [selectedRoute, setSelectedRoute] = useState<GPXRoute>(routes[0]);
+  const [selectedRoute, setSelectedRoute] = useState<GPXRoute | undefined>(routes[0]);
 
   // Keep selectedRoute valid and in sync when routes load or change
   useEffect(() => {
-    if (routes.length > 0) {
-      if (!selectedRoute || !routes.some((r) => r.id === selectedRoute.id)) {
-        setSelectedRoute(routes[0]);
-      }
-    }
+    const latest = routes.find((r) => r.id === selectedRoute?.id) || routes[0];
+    if (latest !== selectedRoute) setSelectedRoute(latest);
   }, [routes, selectedRoute]);
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   // False until Firebase has restored the sign-in (and loaded the profile), so the
@@ -185,14 +181,17 @@ export function App() {
   const pendingCheckInRunRef = useRef(pendingCheckInRun);
   pendingCheckInRunRef.current = pendingCheckInRun;
 
+  const authEpoch = useRef(0);
+
   // Handle post-auth check: if user has a profile, switch to them; if new, launch onboarding
-  const handleUserAuthenticated = async (email: string, displayName?: string | null) => {
+  const handleUserAuthenticated = async (email: string, displayName?: string | null, epoch = authEpoch.current) => {
     const cleanEmail = email.trim().toLowerCase();
     
     let existingProfile = usersRef.current.find((u) => u.email.toLowerCase() === cleanEmail);
     if (isFirebaseConfigured && db) {
       try {
         const snap = await getDoc(doc(db, 'users', cleanEmail));
+        if (epoch !== authEpoch.current) return;
         if (snap.exists()) {
           existingProfile = snap.data() as UserProfile;
           setUsers((prev) => [existingProfile!, ...prev.filter((u) => u.email.toLowerCase() !== cleanEmail)]);
@@ -203,9 +202,12 @@ export function App() {
         }
       } catch (err) {
         console.warn('Firestore user check error:', err);
+        if (epoch === authEpoch.current) setCheckInNotice('Your sign-in succeeded, but your club profile could not be loaded. Please reload the app and try again.');
+        return;
       }
     }
 
+    if (epoch !== authEpoch.current) return;
     if (existingProfile) {
       switchCurrentUser(cleanEmail);
       syncPrivateData(cleanEmail, isStaffProfile(existingProfile), isAdminProfile(existingProfile));
@@ -231,10 +233,16 @@ export function App() {
     // Completing the link signs the user in; onAuthChange below then handles them.
     checkAndCompleteEmailLinkSignIn().catch((err) => console.error('Email sign in check error:', err));
 
+    const sessionEpoch = authEpoch;
     const unsubscribe = onAuthChange((user) => {
+      const epoch = ++authEpoch.current;
+      if (isFirebaseConfigured) clearPrivateData();
+      setIsOnboardingOpen(false);
       setFirebaseUser(user);
       if (user && user.email) {
-        handleUserAuthenticated(user.email, user.displayName).finally(() => setAuthReady(true));
+        handleUserAuthenticated(user.email, user.displayName, epoch).finally(() => {
+          if (epoch === authEpoch.current) setAuthReady(true);
+        });
       } else {
         // Local mode has no accounts: the browser's saved runner stays selected.
         if (isFirebaseConfigured) {
@@ -245,7 +253,7 @@ export function App() {
       }
     });
 
-    return () => unsubscribe();
+    return () => { sessionEpoch.current++; unsubscribe(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -350,9 +358,7 @@ export function App() {
 
   const handleUpdateRun = async (run: RunEvent, codeWord: string) => {
     try {
-      await updateRun(run);
-      const existing = meetupEvents.find((e) => e.id === run.id);
-      await saveMeetupEvent(buildMeetupFromRun(run, routes, codeWord, existing));
+      await updateRun(run, codeWord);
     } catch (err) {
       console.error('Saving run failed:', err);
       throw friendlyRunError(err);
@@ -398,7 +404,7 @@ export function App() {
       alert("The route couldn't be deleted. Please check your connection and try again.");
       return;
     }
-    if (selectedRoute.id === routeId && routes.length > 1) {
+    if (selectedRoute?.id === routeId && routes.length > 1) {
       setSelectedRoute(routes.find((r) => r.id !== routeId) || routes[0]);
     }
     setIsRouteStudioOpen(false);
@@ -623,14 +629,14 @@ export function App() {
                   key={r.id}
                   onClick={() => setSelectedRoute(r)}
                   className={`px-4 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap flex items-center gap-2 ${
-                    selectedRoute.id === r.id
+                    selectedRoute?.id === r.id
                       ? 'bg-woodland-800 text-white shadow-sm'
                       : 'bg-white text-stone-700 border border-stone-200 hover:bg-stone-50'
                   }`}
                 >
                   <span>{r.name}</span>
                   <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-semibold ${
-                    selectedRoute.id === r.id ? 'bg-woodland-950 text-woodland-200' : 'bg-stone-100 text-stone-600'
+                    selectedRoute?.id === r.id ? 'bg-woodland-950 text-woodland-200' : 'bg-stone-100 text-stone-600'
                   }`}>
                     {r.distanceMiles} mi
                   </span>
@@ -663,7 +669,7 @@ export function App() {
                   key={r.id}
                   onClick={() => setSelectedRoute(r)}
                   className={`p-4 rounded-xl border bg-white cursor-pointer transition ${
-                    selectedRoute.id === r.id
+                    selectedRoute?.id === r.id
                       ? 'border-woodland-600 ring-2 ring-woodland-500/20 shadow-sm'
                       : 'border-stone-200 hover:border-woodland-300'
                   }`}

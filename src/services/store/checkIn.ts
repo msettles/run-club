@@ -93,25 +93,17 @@ export function createCheckInOps(ctx: StoreState & ReturnType<typeof createLegac
     let routeOption: RouteOption | undefined = event.routes[String(distanceChoice)];
     if (!routeOption) {
       const allRoutes = Object.values(event.routes || {});
-      const numDist = typeof distanceChoice === 'number' ? distanceChoice : parseFloat(String(distanceChoice)) || 0;
       routeOption = allRoutes.find(
         (r) => r.routeId === String(distanceChoice) ||
-               (numDist > 0 && Math.abs(r.actualMiles - numDist) < 0.25) ||
                r.name.toLowerCase() === String(distanceChoice).toLowerCase()
       );
     }
     if (!routeOption) {
-      const numDist = typeof distanceChoice === 'number' ? distanceChoice : parseFloat(String(distanceChoice)) || 3.0;
-      routeOption = {
-        name: `${distanceChoice}-Mile Club Route`,
-        actualMiles: numDist,
-        baseMiles: numDist,
-        directions: 'Follow group leader from Blue Note Brewing.',
-      };
+      return { success: false, message: 'This route is no longer available. Please reopen check-in and choose one of this run’s routes.' };
     }
 
     // 3b. Compute effective loops and actual credited mileage
-    const effectiveLoops = (loops && loops > 0) ? loops : 1;
+    const effectiveLoops = routeOption.isLoop && loops && Number.isInteger(loops) && loops > 0 ? loops : 1;
     const baseLoopMiles = routeOption.baseMiles || routeOption.actualMiles;
     const computedActualMiles = effectiveLoops > 1
       ? Math.round(baseLoopMiles * effectiveLoops * 100) / 100

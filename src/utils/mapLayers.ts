@@ -77,14 +77,16 @@ export function drawTurnPins(
     const marker = L.marker([lat, lon], {
       icon: L.divIcon({
         className: 'custom-turn-pin',
-        html: `<div style="background-color:${selected ? '#de9c1e' : '#1a607c'};color:${selected ? '#000' : '#fff'};width:${px}px;height:${px}px;border-radius:50%;font-size:${selected ? 11 : 9}px;font-weight:900;display:flex;align-items:center;justify-content:center;border:2px solid white;box-shadow:0 1px 4px rgba(0,0,0,0.35);cursor:pointer;">${step.step}</div>`,
+        html: `<div style="background-color:${selected ? '#de9c1e' : '#1a607c'};color:${selected ? '#000' : '#fff'};width:${px}px;height:${px}px;border-radius:50%;font-size:${selected ? 11 : 9}px;font-weight:900;display:flex;align-items:center;justify-content:center;border:2px solid white;box-shadow:0 1px 4px rgba(0,0,0,0.35);cursor:pointer;">${idx + 1}</div>`,
         iconSize: [size.selected, size.selected],
         iconAnchor: [size.selected / 2, size.selected / 2],
       }),
       zIndexOffset: selected ? 400 : 0,
     });
     marker.on('click', () => onSelect(idx));
-    marker.bindTooltip(`<b>#${step.step}</b> ${step.instruction_concise}`, { direction: 'top', offset: [0, -10] });
+    const tooltip = document.createElement('span');
+    tooltip.textContent = `#${idx + 1} ${step.instruction_concise}`;
+    marker.bindTooltip(tooltip, { direction: 'top', offset: [0, -10] });
     layer.addLayer(marker);
   });
 }

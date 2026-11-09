@@ -1,3 +1,4 @@
+import { roundMiles } from '../utils/miles';
 import React, { useState } from 'react';
 import { 
   GPXRoute, 
@@ -84,7 +85,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = (props) => {
 
   // Quick stats
   const totalCheckinsLogged = checkins.length;
-  const totalLifetimeMiles = Math.round(users.reduce((sum, u) => sum + u.totalMiles, 0) * 10) / 10;
+  const totalLifetimeMiles = roundMiles(users.reduce((sum, u) => sum + u.totalMiles, 0));
   const totalLegacyClaimed = legacyMembers.filter(isLegacyClaimed).length;
   const pendingMilestones = milestoneAlerts.filter((a) => !a.fulfilled);
 

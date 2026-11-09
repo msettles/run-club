@@ -729,3 +729,36 @@ test('announcements: public read, admins post and delete, no edits', async () =>
   await assertFails(deleteDoc(doc(ctx(ALICE), 'announcements', a.id)));
   await assertSucceeds(deleteDoc(doc(ctx(BOOTSTRAP), 'announcements', a.id)));
 });
+
+test('a locked code-word change rolls back the entire run edit', async () => {
+  const db = ctx(ORGANIZER);
+  const batch = writeBatch(db);
+  batch.update(doc(db, 'runs', RUN), { title: 'Should not save' });
+  batch.update(doc(db, 'meetup_events', RUN), { title: 'Should not save' });
+  batch.set(doc(db, 'meetup_secrets', RUN), { codeWord: 'CHANGED' });
+  await assertFails(batch.commit());
+  assert.equal((await getDoc(doc(db, 'runs', RUN))).data().title, run.title);
+  assert.equal((await getDoc(doc(db, 'meetup_secrets', RUN))).data().codeWord, 'ACORN');
+});
+
+test('a pre-window run edit saves its code word atomically and preserves RSVPs', async () => {
+  await env.clearFirestore();
+  await seed({ windowOpen: false });
+  const attendee = { memberId: memberKeyFor(BOB), name: 'Bob', checkedIn: false, rsvpDate: 'original' };
+  await env.withSecurityRulesDisabled(async (c) => {
+    await updateDoc(doc(c.firestore(), 'runs', RUN), { attendees: [attendee] });
+  });
+  const db = ctx(ORGANIZER);
+  const batch = writeBatch(db);
+  batch.update(doc(db, 'runs', RUN), { title: 'New title' });
+  batch.update(doc(db, 'meetup_events', RUN), { title: 'New title', codeWordSet: true });
+  batch.set(doc(db, 'meetup_secrets', RUN), { codeWord: 'LEAF' });
+  batch.set(doc(db, 'meetup_codes', codeKey(DATE, 'LEAF')), { runId: RUN, date: DATE });
+  batch.delete(doc(db, 'meetup_codes', codeKey(DATE, 'ACORN')));
+  await assertSucceeds(batch.commit());
+  const saved = (await getDoc(doc(db, 'runs', RUN))).data();
+  assert.equal(saved.title, 'New title');
+  assert.deepEqual(saved.attendees, [attendee]);
+  assert.equal((await getDoc(doc(db, 'meetup_secrets', RUN))).data().codeWord, 'LEAF');
+  assert.equal((await getDoc(doc(db, 'meetup_codes', codeKey(DATE, 'ACORN')))).exists(), false);
+});

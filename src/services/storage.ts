@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { RunEvent, Badge, SpecialEventDefinition } from '../types';
-import { INITIAL_ROUTES, INITIAL_BADGES, INITIAL_SPECIAL_EVENTS } from '../data/initialData';
+import { INITIAL_BADGES, INITIAL_SPECIAL_EVENTS } from '../data/initialData';
 import { isFirebaseConfigured, db } from './firebase';
 import { collection, getDocs, orderBy, limit, onSnapshot, query } from 'firebase/firestore';
 import { ClubNotification, showLocalNotification } from './notifications';
@@ -39,14 +39,15 @@ export function useClubStore() {
   } = s;
 
   // Each group of operations can use the state and every group created before it.
-  const c1 = { ...s, ...createLegacyOps(s) };
-  const c2 = { ...c1, ...createPrivateSyncOps(c1) };
-  const c3 = { ...c2, ...createMemberOps(c2) };
-  const c4 = { ...c3, ...createCheckInOps(c3) };
-  const c5 = { ...c4, ...createEventOps(c4) };
-  const c6 = { ...c5, ...createBadgeOps(c5) };
-  const c7 = { ...c6, ...createRunOps(c6) };
-  const store = { ...c7, ...createAnnouncementOps(c7) };
+  // Extend one context in dependency order; each operation sees current render state.
+  const c1 = Object.assign(s, createLegacyOps(s));
+  const c2 = Object.assign(c1, createPrivateSyncOps(c1));
+  const c3 = Object.assign(c2, createMemberOps(c2));
+  const c4 = Object.assign(c3, createCheckInOps(c3));
+  const c5 = Object.assign(c4, createEventOps(c4));
+  const c6 = Object.assign(c5, createBadgeOps(c5));
+  const c7 = Object.assign(c6, createRunOps(c6));
+  const store = Object.assign(c7, createAnnouncementOps(c7));
 
   // If Firebase is configured, fetch the public collections on initial load
   useEffect(() => {
@@ -63,11 +64,7 @@ export function useClubStore() {
         );
         setRuns(runsSnap.docs.map((d) => d.data() as RunEvent));
 
-        // Routes: what's saved plus any official club route that isn't saved yet
-        // (staff save those when they sign in; see syncPrivateData).
-        const remoteRoutes = routesSnap.docs.map((d) => hydrateRouteFromFirestore(d.data()));
-        const remoteRouteIds = new Set(remoteRoutes.map((r) => r.id));
-        setRoutes([...remoteRoutes, ...INITIAL_ROUTES.filter((r) => !remoteRouteIds.has(r.id)).map(hydrateRouteFromFirestore)]);
+        setRoutes(routesSnap.docs.map((d) => hydrateRouteFromFirestore(d.data())));
 
         // Public leaderboard projection (keyed by hashed email, no PII).
         // Ignore any old email-keyed docs left over from the previous schema.

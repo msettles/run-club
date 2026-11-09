@@ -12,6 +12,7 @@ import {
   adjustDistanceCounts,
   datedEventsFrom,
   recomputeBadges,
+  lastCheckInFields,
 } from '../../utils/legacy';
 import { isFirebaseConfigured, db } from '../firebase';
 import {
@@ -33,11 +34,13 @@ import { codeKeyFor, memberKeyFor } from '../../utils/memberKey';
 import { isAdminProfile } from '../../utils/roles';
 import { assertRouteFitsFirestore, cleanFirestoreData, formatRouteForFirestore, memberFromUser, toPublicMember } from './helpers';
 import type { StoreState } from './state';
+import type { createEventOps } from './events';
 import type { createLegacyOps } from './legacy';
 
-export function createRunOps(ctx: StoreState & ReturnType<typeof createLegacyOps>) {
+export function createRunOps(ctx: StoreState & ReturnType<typeof createLegacyOps> & ReturnType<typeof createEventOps>) {
   const {
     runs,
+    saveMeetupEvent,
     setRuns,
     routes,
     setRoutes,
@@ -51,6 +54,7 @@ export function createRunOps(ctx: StoreState & ReturnType<typeof createLegacyOps
     currentUserEmail,
     setMilestoneAlerts,
     currentUser,
+    users,
     currentMember,
     fetchLegacyEvents,
     fetchRunnerCheckins,
@@ -156,7 +160,8 @@ export function createRunOps(ctx: StoreState & ReturnType<typeof createLegacyOps
     if (isFirebaseConfigured && db) {
       const formatted = formatRouteForFirestore(updatedObj);
       assertRouteFitsFirestore(formatted);
-      await setDoc(doc(db, 'routes', routeId), formatted, { merge: true });
+      // Replace the complete route so cleared links and old raw GPX fields disappear.
+      await setDoc(doc(db, 'routes', routeId), formatted);
     }
     setRoutes((prev) => prev.map((r) => (r.id === routeId ? updatedObj : r)));
     return updatedObj;
@@ -176,12 +181,9 @@ export function createRunOps(ctx: StoreState & ReturnType<typeof createLegacyOps
    * Update an existing run's details (staff). The RSVP list is left alone: it may
    * have changed since the edit form opened, and only runners change their own RSVP.
    */
-  const updateRun = async (updatedRun: RunEvent) => {
-    const { attendees: _attendees, ...details } = updatedRun;
-    if (isFirebaseConfigured && db) {
-      await setDoc(doc(db, 'runs', updatedRun.id), cleanFirestoreData(details), { merge: true });
-    }
-    setRuns((prev) => prev.map((r) => (r.id === updatedRun.id ? { ...r, ...details } : r)));
+  const updateRun = async (updatedRun: RunEvent, codeWord: string) => {
+    const existing = meetupEvents.find((e) => e.id === updatedRun.id);
+    await saveMeetupEvent(buildMeetupFromRun(updatedRun, routes, codeWord, existing), updatedRun);
   };
 
   /** Undo one check-in's effect on a runner's totals (badges/streaks are recomputed separately). */
@@ -218,6 +220,7 @@ export function createRunOps(ctx: StoreState & ReturnType<typeof createLegacyOps
   const deleteRun = async (runId: string) => {
     const ev = meetupEvents.find((e) => e.id === runId);
     const remainingEvents = meetupEvents.filter((e) => e.id !== runId);
+    const touchedUsers: UserProfile[] = [];
 
     if (isFirebaseConfigured && db) {
       const currentDb = db;
@@ -232,7 +235,6 @@ export function createRunOps(ctx: StoreState & ReturnType<typeof createLegacyOps
         );
       }
 
-      const touchedUsers: UserProfile[] = [];
       for (const cDoc of ciSnap.docs) {
         const c = cDoc.data() as CheckInRecord;
         const email = c.userEmail.toLowerCase();
@@ -247,7 +249,7 @@ export function createRunOps(ctx: StoreState & ReturnType<typeof createLegacyOps
           const rolled = rollBackCheckIn(userSnap.data() as UserProfile, c);
           const legacy = await fetchLegacyEvents(rolled.linkedLegacyIds || []);
           const remaining = (await fetchRunnerCheckins(email)).filter((x) => x.id !== c.id);
-          const final: UserProfile = { ...rolled, ...recomputeBadges(rolled, badges, datedEventsFrom(legacy, remaining, remainingEvents)) };
+          const final: UserProfile = { ...rolled, ...recomputeBadges(rolled, badges, datedEventsFrom(legacy, remaining, remainingEvents)), ...lastCheckInFields(remaining) };
           const key = await memberKeyFor(email);
           batch.set(doc(currentDb, 'users', email), cleanFirestoreData(final));
           batch.set(doc(currentDb, 'members', key), toPublicMember(final, key));
@@ -256,25 +258,31 @@ export function createRunOps(ctx: StoreState & ReturnType<typeof createLegacyOps
         await batch.commit();
       }
 
-      await deleteDoc(doc(currentDb, 'runs', runId));
-      // Remove its check-in event so the QR code can't open a deleted run.
-      await deleteDoc(doc(currentDb, 'meetup_events', runId)).catch((err) => console.warn('Check-in event not removed:', err));
-      if (ev?.codeWord) {
-        await deleteDoc(doc(currentDb, 'meetup_codes', await codeKeyFor(ev.date, ev.codeWord))).catch(() => {});
-      }
-      if (isAdminProfile(currentUser)) {
-        await deleteDoc(doc(currentDb, 'meetup_secrets', runId)).catch(() => {});
-      }
+      const cleanup = writeBatch(currentDb);
+      cleanup.delete(doc(currentDb, 'runs', runId));
+      cleanup.delete(doc(currentDb, 'meetup_events', runId));
+      if (ev?.codeWord) cleanup.delete(doc(currentDb, 'meetup_codes', await codeKeyFor(ev.date, ev.codeWord)));
+      if (isAdminProfile(currentUser)) cleanup.delete(doc(currentDb, 'meetup_secrets', runId));
+      await cleanup.commit();
 
-      if (touchedUsers.length) {
-        const byEmail = new Map(touchedUsers.map((u) => [u.email.toLowerCase(), u]));
-        setUsers((prev) => prev.map((u) => byEmail.get(u.email.toLowerCase()) || u));
-        const keyed = await Promise.all(touchedUsers.map(async (u) => [await memberKeyFor(u.email), u] as const));
-        setMembers((prev) => [
-          ...keyed.map(([key, u]) => memberFromUser(u, key)),
-          ...prev.filter((m) => !keyed.some(([key]) => key === m.id)),
-        ]);
+    } else {
+      for (const c of checkins.filter((c) => c.runId === runId)) {
+        const user = users.find((u) => u.email.toLowerCase() === c.userEmail.toLowerCase());
+        if (!user) continue;
+        const remaining = checkins.filter((x) => x.id !== c.id && x.userEmail.toLowerCase() === c.userEmail.toLowerCase());
+        const rolled = rollBackCheckIn(user, c);
+        const legacy = await fetchLegacyEvents(user.linkedLegacyIds || []);
+        touchedUsers.push({ ...rolled, ...recomputeBadges(rolled, badges, datedEventsFrom(legacy, remaining, remainingEvents)), ...lastCheckInFields(remaining) });
       }
+    }
+    if (touchedUsers.length) {
+      const byEmail = new Map(touchedUsers.map((u) => [u.email.toLowerCase(), u]));
+      setUsers((prev) => prev.map((u) => byEmail.get(u.email.toLowerCase()) || u));
+      const keyed = await Promise.all(touchedUsers.map(async (u) => [await memberKeyFor(u.email), u] as const));
+      setMembers((prev) => [
+        ...keyed.map(([key, u]) => memberFromUser(u, key)),
+        ...prev.filter((m) => !keyed.some(([key]) => key === m.id)),
+      ]);
     }
 
     setCheckins((prev) => prev.filter((c) => c.runId !== runId));

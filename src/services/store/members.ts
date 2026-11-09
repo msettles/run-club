@@ -1,6 +1,7 @@
 /** Club store operations: members. */
 import { 
   UserProfile,
+  RunEvent,
 } from '../../types';
 import { calculateAge, localYmd } from '../../utils/dateUtils';
 import { isFirebaseConfigured, db } from '../firebase';
@@ -12,6 +13,7 @@ import {
   query,
   where,
   writeBatch,
+  arrayRemove,
 } from 'firebase/firestore';
 import { memberKeyFor } from '../../utils/memberKey';
 import { ADMIN_EMAILS } from '../../utils/roles';
@@ -22,7 +24,6 @@ import type { createPrivateSyncOps } from './privateSync';
 
 export function createMemberOps(ctx: StoreState & ReturnType<typeof createLegacyOps> & ReturnType<typeof createPrivateSyncOps>) {
   const {
-    runs,
     setRuns,
     setMembers,
     users,
@@ -129,7 +130,7 @@ export function createMemberOps(ctx: StoreState & ReturnType<typeof createLegacy
     }
 
     // New profiles never go through the returning-user path in App, so load
-    // private data (and run the staff code-word migration) here as well.
+    // private data here as well.
     if (isFirebaseConfigured && db) {
       syncPrivateData(cleanEmail, newUser.role === 'admin' || newUser.role === 'organizer', newUser.role === 'admin');
     }
@@ -163,10 +164,11 @@ export function createMemberOps(ctx: StoreState & ReturnType<typeof createLegacy
       type Op = (b: ReturnType<typeof writeBatch>) => void;
       const ops: Op[] = [];
       // Query the server too, so nothing is missed if local state is partial.
-      const [ciSnap, alertSnap, claimSnap] = await Promise.all([
+      const [ciSnap, alertSnap, claimSnap, runsSnap] = await Promise.all([
         getDocs(query(collection(currentDb, 'checkins'), where('userEmail', '==', cleanEmail))),
         getDocs(query(collection(currentDb, 'milestone_alerts'), where('userEmail', '==', cleanEmail))),
         getDocs(query(collection(currentDb, 'legacy_profiles'), where('claimedBy', '==', key))),
+        getDocs(collection(currentDb, 'runs')),
       ]);
       ciSnap.docs.forEach((d) => ops.push((b) => b.delete(d.ref)));
       alertSnap.docs.forEach((d) => ops.push((b) => b.delete(d.ref)));
@@ -174,10 +176,11 @@ export function createMemberOps(ctx: StoreState & ReturnType<typeof createLegacy
       legacyIds.forEach((id) =>
         ops.push((b) => b.update(doc(currentDb, 'legacy_profiles', id), { claimedBy: null, claimedAt: null }))
       );
-      for (const run of runs) {
+      for (const runDoc of runsSnap.docs) {
+        const run = runDoc.data() as RunEvent;
         if (run.attendees.some((a) => a.memberId === key)) {
           ops.push((b) =>
-            b.update(doc(currentDb, 'runs', run.id), { attendees: run.attendees.filter((a) => a.memberId !== key) })
+            b.update(doc(currentDb, 'runs', run.id), { attendees: arrayRemove(...run.attendees.filter((a) => a.memberId === key)) })
           );
         }
       }

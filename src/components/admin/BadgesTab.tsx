@@ -1,3 +1,4 @@
+import { formatMiles } from '../../utils/miles';
 import React, { useState } from 'react';
 import { 
   BadgeCategory,
@@ -486,7 +487,7 @@ export const BadgesTab: React.FC<AdminDashboardProps> = (props) => {
                     >
                       {routes && routes.length > 0 ? (
                         routes.map((r) => {
-                          const mi = (Math.round(r.distanceMiles * 10) / 10).toFixed(1);
+                          const mi = formatMiles(r.distanceMiles);
                           return (
                             <option key={r.id} value={`${mi} mi`}>
                               {mi} mi ({r.name})

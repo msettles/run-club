@@ -1,3 +1,4 @@
+import { roundMiles } from './miles';
 import { GPXRoute, MeetupEvent, RouteOption, RunEvent, RunRouteChoice, SurfaceType } from '../types';
 
 export interface ResolvedChoice {
@@ -6,11 +7,6 @@ export interface ResolvedChoice {
   miles: number; // distance rounded to 1 decimal point (e.g. 1.2)
   actualMiles: number; // exact GPS distance (e.g. 1.22)
   route: GPXRoute;
-}
-
-/** Formats a distance in miles rounded to 1 decimal point */
-export function formatMiles(miles: number): number {
-  return Math.round(miles * 10) / 10;
 }
 
 /** A run's choices, falling back to the legacy single routeId. */
@@ -30,7 +26,7 @@ export function resolveChoices(choices: RunRouteChoice[], routes: GPXRoute[]): R
     const r = routes.find((rt) => rt.id === c.routeId);
     if (r) {
       const actualMiles = r.distanceMiles || 0;
-      const miles = formatMiles(actualMiles);
+      const miles = roundMiles(actualMiles);
       resolved.push({
         id: r.id,
         label: c.customLabel || `${miles.toFixed(1)} mi • ${r.name}`,
@@ -53,7 +49,7 @@ export function deriveRunStats(resolved: ResolvedChoice[]): {
   const surfaces = Array.from(new Set(resolved.map((c) => c.route.surface || 'Pavement')));
   const maxMiles = Math.max(...resolved.map((c) => c.actualMiles || 0));
   return {
-    distanceMiles: formatMiles(maxMiles),
+    distanceMiles: roundMiles(maxMiles),
     elevationGainFt: Math.max(...resolved.map((c) => c.route.elevationGainFt || 0)),
     surface: surfaces.length === 1 ? surfaces[0] : 'Mixed',
   };

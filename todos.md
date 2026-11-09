@@ -13,7 +13,7 @@ The Run Organizer runs the Wednesday night table on the patio at Blue Note Brewi
 
 ### ✅ Completed & Implemented
 - [x] **Data Model Role:** `role: 'organizer'` defined in user profiles and legacy models.
-- [x] **Check-In Window Bypass:** Organizers and admins have a toggle switch in the Check-In modal to bypass the 2-hour pre-event lock for testing and route prep.
+- [ ] **Check-In Window Bypass:** Deferred. The current check-in UI enforces the run window; it has no organizer bypass toggle.
 - [x] **Milestone Runner Alert Dispatch:** When a runner checks in for their 5th, 50th, 100th, or 200th run, an alert record is created with the runner's shirt size and reward perks.
 
 ### 📋 Pending TODOs
