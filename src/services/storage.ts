@@ -813,6 +813,12 @@ export function useClubStore() {
     setCurrentUserEmail(cleanEmail);
     setCurrentMemberId(memberKey);
 
+    // New profiles never go through the returning-user path in App, so load
+    // private data (and run the staff code-word migration) here as well.
+    if (isFirebaseConfigured && db) {
+      syncPrivateData(cleanEmail, newUser.role === 'admin' || newUser.role === 'organizer');
+    }
+
     return newUser;
   };
 
