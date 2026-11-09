@@ -63,6 +63,7 @@ export function App() {
     // V2 Relational props
     syncPrivateData,
     clearPrivateData,
+    setUserRole,
     users,
     setUsers,
     meetupEvents,
@@ -151,7 +152,7 @@ export function App() {
 
     if (existingProfile) {
       switchCurrentUser(cleanEmail);
-      syncPrivateData(cleanEmail, isStaffProfile(existingProfile));
+      syncPrivateData(cleanEmail, isStaffProfile(existingProfile), isAdminProfile(existingProfile));
       const pending = pendingCheckInRunRef.current;
       if (pending) {
         setSelectedRunForCheckIn(pending);
@@ -573,6 +574,7 @@ export function App() {
               onSaveMeetupEvent={saveMeetupEvent}
               onOpenNewRun={() => setIsNewRunOpen(true)}
               onSendBroadcast={sendPushAnnouncement}
+              onSetUserRole={setUserRole}
             />
           </Suspense>
         )}

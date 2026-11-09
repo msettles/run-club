@@ -64,19 +64,29 @@ service cloud.firestore {
       return tokenEmail() in ['woodlandwoodchuckers@gmail.com', 'mattsettles@gmail.com'];
     }
 
-    // Staff = admins and organizers. Recognized via custom claims, the bootstrap
-    // club emails, or role 'admin' / 'organizer' on the caller's own users doc
-    // (users cannot change their own role, see users rules).
+    function callerRole() {
+      return exists(userPath(tokenEmail()))
+        ? get(userPath(tokenEmail())).data.get('role', 'member')
+        : 'member';
+    }
+
+    // Admin = full control: roles, profiles, badges, settings.
+    // Recognized via an 'admin' custom claim, the bootstrap club emails, or
+    // role 'admin' on the caller's own users doc (only another admin can set it).
     function isAdmin() {
       return isAuthenticated() && (
         request.auth.token.get('admin', false) == true ||
-        request.auth.token.get('organizer', false) == true ||
-        (hasVerifiedEmail() && (
-          isBootstrapAdminEmail() ||
-          (exists(userPath(tokenEmail())) &&
-           get(userPath(tokenEmail())).data.get('role', 'member') in ['admin', 'organizer'])
-        ))
+        (hasVerifiedEmail() && (isBootstrapAdminEmail() || callerRole() == 'admin'))
       );
+    }
+
+    // Staff = admins and organizers: event-night tools (runs, routes, events,
+    // code words, check-ins, gear queue) and read access to the roster.
+    function isStaff() {
+      return isAdmin() || (isAuthenticated() && (
+        request.auth.token.get('organizer', false) == true ||
+        (hasVerifiedEmail() && callerRole() == 'organizer')
+      ));
     }
 
     function isUserEmailOwner(email) {
@@ -341,6 +351,10 @@ service cloud.firestore {
       ]);
     }
 
+    function roleChanged() {
+      return request.resource.data.get('role', 'member') != resource.data.get('role', 'member');
+    }
+
     // Stats a runner may only change while writing a valid check-in in the same batch.
     function statsUnchanged() {
       return !request.resource.data.diff(resource.data).affectedKeys().hasAny([
@@ -377,33 +391,33 @@ service cloud.firestore {
     match /runs/{runId} {
       allow read: if true;
 
-      allow create: if isAdmin() &&
+      allow create: if isStaff() &&
                        isValidRun(request.resource.data) &&
                        request.resource.data.id == runId;
 
       allow update: if isValidRun(request.resource.data) &&
                        request.resource.data.id == resource.data.id &&
                        request.resource.data.id == runId &&
-                       (isAdmin() || isOwnRsvpToggle());
+                       (isStaff() || isOwnRsvpToggle());
 
-      allow delete: if isAdmin();
+      allow delete: if isStaff();
     }
 
     // 2. ROUTES — public library, staff-managed.
     match /routes/{routeId} {
       allow read: if true;
 
-      allow create: if isAdmin() &&
+      allow create: if isStaff() &&
                        isValidGPXRoute(request.resource.data) &&
                        request.resource.data.id == routeId;
 
-      allow update: if isAdmin() &&
+      allow update: if isStaff() &&
                        isValidGPXRoute(request.resource.data) &&
                        request.resource.data.id == resource.data.id &&
                        request.resource.data.id == routeId &&
                        request.resource.data.createdAt == resource.data.createdAt;
 
-      allow delete: if isAdmin();
+      allow delete: if isStaff();
     }
 
     // 3. MEMBERS — public leaderboard projection keyed by memberKey (hashed email).
@@ -424,14 +438,14 @@ service cloud.firestore {
 
     // 4. CHECKINS — private audit log. Doc ID is `${date}_${email}`.
     match /checkins/{checkinId} {
-      allow read: if isAdmin() ||
+      allow read: if isStaff() ||
                      (hasVerifiedEmail() && resource.data.userEmail == tokenEmail());
 
       allow create: if isValidCheckIn(request.resource.data) &&
                        checkinId == request.resource.data.date + '_' + request.resource.data.userEmail &&
                        request.resource.data.id == checkinId &&
                        (
-                         isAdmin() ||
+                         isStaff() ||
                          (isUserEmailOwner(request.resource.data.userEmail) &&
                           request.resource.data.get('source', 'pwa') == 'pwa' &&
                           codeWordMatches(request.resource.data.date, request.resource.data.get('codeWord', null)) &&
@@ -442,40 +456,44 @@ service cloud.firestore {
                        !request.resource.data.diff(resource.data).affectedKeys()
                          .hasAny(['id', 'date', 'userEmail', 'createdAt']) &&
                        (
-                         isAdmin() ||
+                         isStaff() ||
                          (isUserEmailOwner(resource.data.userEmail) &&
                           request.resource.data.get('source', 'pwa') == 'pwa' &&
                           codeWordMatches(request.resource.data.date, request.resource.data.get('codeWord', null)) &&
                           isInsideCheckInWindow(request.resource.data.date))
                        );
 
-      allow delete: if isAdmin();
+      allow delete: if isStaff();
     }
 
     // 5. USERS — private profiles. Doc ID is the lowercase email.
+    // Staff can read the roster; only admins can create, edit or delete other
+    // people's profiles. Roles change only by an admin, never on your own profile.
     match /users/{email} {
-      allow get: if isUserEmailOwner(email) || isAdmin();
-      allow list: if isAdmin();
+      allow get: if isUserEmailOwner(email) || isStaff();
+      allow list: if isStaff();
 
       allow create: if isValidUserProfile(request.resource.data) &&
                        request.resource.data.email == email &&
                        (
-                         isAdmin() ||
-                         (isUserEmailOwner(email) && request.resource.data.role == 'member')
+                         (isAdmin() && !isUserEmailOwner(email)) ||
+                         (isUserEmailOwner(email) &&
+                          (request.resource.data.role == 'member' ||
+                           (request.resource.data.role == 'admin' && isBootstrapAdminEmail())))
                        );
 
       allow update: if isValidUserProfile(request.resource.data) &&
                        (
-                         isAdmin() ||
+                         (isAdmin() && (!isUserEmailOwner(email) || !roleChanged())) ||
                          (isUserEmailOwner(email) &&
                           lockedProfileFieldsUnchanged() &&
                           (statsUnchanged() || isStatsChangeBackedByCheckIn(email)))
                        );
 
-      allow delete: if isAdmin();
+      allow delete: if isAdmin() && !isUserEmailOwner(email);
     }
 
-    // 6. BADGES / 7. SPECIAL EVENTS — public catalog, staff-managed.
+    // 6. BADGES / 7. SPECIAL EVENTS — public catalog, admin-managed.
     match /badges/{badgeId} {
       allow read: if true;
       allow create, update, delete: if isAdmin();
@@ -490,10 +508,10 @@ service cloud.firestore {
     // Runners may create exactly one alert per milestone, only alongside the
     // check-in that brought their total to that milestone.
     match /milestone_alerts/{alertId} {
-      allow read: if isAdmin() ||
+      allow read: if isStaff() ||
                      (hasVerifiedEmail() && resource.data.userEmail == tokenEmail());
 
-      allow create: if isAdmin() ||
+      allow create: if isStaff() ||
                        (hasVerifiedEmail() &&
                         request.resource.data.keys().hasOnly([
                           'id', 'userEmail', 'runnerName', 'shirtSize', 'milestoneRuns',
@@ -508,22 +526,22 @@ service cloud.firestore {
                         isCheckInCreatedInBatch(checkinPath(request.resource.data.date, tokenEmail())) &&
                         getAfter(userPath(tokenEmail())).data.totalRuns == request.resource.data.milestoneRuns);
 
-      allow update, delete: if isAdmin();
+      allow update, delete: if isStaff();
     }
 
     // 9. MEETUP EVENTS — public check-in event info. The code word lives in meetup_secrets.
     match /meetup_events/{eventId} {
       allow read: if true;
-      allow create, update: if isAdmin() && !('codeWord' in request.resource.data);
-      allow delete: if isAdmin();
+      allow create, update: if isStaff() && !('codeWord' in request.resource.data);
+      allow delete: if isStaff();
     }
 
     // 9b. MEETUP SECRETS — tonight's code word, staff only.
     match /meetup_secrets/{eventId} {
-      allow read, write: if isAdmin();
+      allow read, write: if isStaff();
     }
 
-    // 10. CLUB SETTINGS — public read, staff write.
+    // 10. CLUB SETTINGS — public read, admin write.
     match /settings/{settingId} {
       allow read: if true;
       allow create, update, delete: if isAdmin();

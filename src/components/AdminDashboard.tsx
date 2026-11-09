@@ -17,6 +17,7 @@ import {
 import { INITIAL_BADGES, INITIAL_SPECIAL_EVENTS } from '../data/initialData';
 import { ClubNotification } from '../services/notifications';
 import { calculateAge } from '../utils/dateUtils';
+import { ADMIN_EMAILS } from '../utils/roles';
 import { 
   Calendar, 
   Users, 
@@ -68,7 +69,29 @@ interface AdminDashboardProps {
   onMarkMilestoneFulfilled?: (alertId: string, fulfilledBy: string) => void;
   onOpenNewRun?: () => void;
   onSendBroadcast: (title: string, body: string) => void;
+  onSetUserRole?: (email: string, role: AssignableRole) => Promise<void>;
 }
+
+type AssignableRole = 'member' | 'organizer' | 'admin';
+
+const ROLE_OPTIONS: { value: AssignableRole; label: string }[] = [
+  { value: 'member', label: 'Runner' },
+  { value: 'organizer', label: 'Organizer' },
+  { value: 'admin', label: 'Admin' },
+];
+
+const ROLE_BADGE: Record<AssignableRole, string> = {
+  member: 'bg-stone-100 text-stone-700',
+  organizer: 'bg-cyan-100 text-cyan-800',
+  admin: 'bg-amber-100 text-amber-800',
+};
+
+const effectiveRole = (u: UserProfile): AssignableRole =>
+  ADMIN_EMAILS.includes(u.email.toLowerCase()) || u.role === 'admin'
+    ? 'admin'
+    : u.role === 'organizer'
+      ? 'organizer'
+      : 'member';
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   routes = [],
@@ -87,9 +110,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onMarkMilestoneFulfilled,
   onOpenNewRun,
   onSendBroadcast,
+  onSetUserRole,
 }) => {
   const [adminTab, setAdminTab] = useState<'events' | 'badges' | 'checkins' | 'milestones' | 'members' | 'notifications'>('events');
   const [memberSearch, setMemberSearch] = useState<string>('');
+  const [roleFilter, setRoleFilter] = useState<'all' | AssignableRole>('all');
+  const [roleSaving, setRoleSaving] = useState<string | null>(null);
+  const [roleError, setRoleError] = useState<{ email: string; message: string } | null>(null);
   const [checkinFilterDate, setCheckinFilterDate] = useState<string>('all');
   const [notifTitle, setNotifTitle] = useState<string>('🦫 Run Tonight: Wednesday Code Word!');
   const [notifBody, setNotifBody] = useState<string>('Meet at 6:00 PM on Blue Note Brewing patio. Check-in is live!');
@@ -165,9 +192,41 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   // Filtered members
   const filteredUsers = users.filter(
     (u) =>
-      u.displayName.toLowerCase().includes(memberSearch.toLowerCase()) ||
-      u.email.toLowerCase().includes(memberSearch.toLowerCase())
+      (roleFilter === 'all' || effectiveRole(u) === roleFilter) &&
+      (u.displayName.toLowerCase().includes(memberSearch.toLowerCase()) ||
+        u.email.toLowerCase().includes(memberSearch.toLowerCase()))
   );
+
+  const roleCounts = users.reduce<Record<AssignableRole, number>>(
+    (acc, u) => {
+      acc[effectiveRole(u)] += 1;
+      return acc;
+    },
+    { member: 0, organizer: 0, admin: 0 }
+  );
+
+  const handleRoleChange = async (u: UserProfile, next: AssignableRole) => {
+    if (!onSetUserRole || next === effectiveRole(u)) return;
+    const label = ROLE_OPTIONS.find((o) => o.value === next)?.label ?? next;
+    const warning =
+      next === 'admin'
+        ? `Make ${u.displayName} an admin? Admins can change anyone's role, edit profiles and manage badges.`
+        : effectiveRole(u) === 'admin'
+          ? `Remove admin from ${u.displayName} and make them ${label === 'Runner' ? 'a runner' : 'an organizer'}?`
+          : null;
+    if (warning && !window.confirm(warning)) return;
+
+    setRoleSaving(u.email);
+    setRoleError(null);
+    try {
+      await onSetUserRole(u.email, next);
+    } catch (err) {
+      console.error('Role change failed:', err);
+      setRoleError({ email: u.email, message: 'Could not change role. Only admins can change roles, and not their own.' });
+    } finally {
+      setRoleSaving(null);
+    }
+  };
 
   // Handle saving the Meetup Event
   const handleSaveMeetup = (e: React.FormEvent) => {
@@ -1885,11 +1944,22 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   Active User Profiles (Keyed on Email)
                 </h3>
                 <p className="text-xs text-stone-500">
-                  Roster of registered runners, their shirt sizes, lifetime miles, and claimed legacy records.
+                  Roster of registered runners, their roles, shirt sizes, lifetime miles, and claimed legacy records.
                 </p>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <select
+                  value={roleFilter}
+                  onChange={(e) => setRoleFilter(e.target.value as 'all' | AssignableRole)}
+                  aria-label="Filter by role"
+                  className="px-2.5 py-1.5 text-xs border rounded-xl outline-none bg-white"
+                >
+                  <option value="all">All roles ({users.length})</option>
+                  <option value="admin">Admins ({roleCounts.admin})</option>
+                  <option value="organizer">Organizers ({roleCounts.organizer})</option>
+                  <option value="member">Runners ({roleCounts.member})</option>
+                </select>
                 <div className="relative">
                   <Search className="w-3.5 h-3.5 absolute left-2.5 top-2 text-stone-400" />
                   <input
@@ -1915,6 +1985,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 <thead className="bg-stone-50 text-stone-600 font-bold uppercase tracking-wider border-b border-stone-200">
                   <tr>
                     <th className="py-2.5 px-3">Runner</th>
+                    <th className="py-2.5 px-3">Role</th>
                     <th className="py-2.5 px-3">Email Key</th>
                     <th className="py-2.5 px-3">Shirt</th>
                     <th className="py-2.5 px-3">Total Runs</th>
@@ -1928,6 +1999,45 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   {filteredUsers.map((u) => (
                     <tr key={u.email} className="hover:bg-stone-50/70 transition">
                       <td className="py-2.5 px-3 font-bold text-stone-900">{u.displayName}</td>
+                      <td className="py-2.5 px-3">
+                        {(() => {
+                          const role = effectiveRole(u);
+                          const isOwner = ADMIN_EMAILS.includes(u.email.toLowerCase());
+                          const isSelf = currentUser?.email?.toLowerCase() === u.email.toLowerCase();
+                          if (isOwner || isSelf || !onSetUserRole) {
+                            return (
+                              <span
+                                className={`inline-flex items-center gap-1 px-2 py-0.5 font-bold text-[10px] rounded-full ${ROLE_BADGE[role]}`}
+                                title={isOwner ? 'Club owner account: always an admin' : isSelf ? "You can't change your own role" : undefined}
+                              >
+                                {role === 'admin' && <ShieldCheck className="w-3 h-3" />}
+                                {ROLE_OPTIONS.find((o) => o.value === role)?.label}
+                                {isOwner ? ' · Owner' : isSelf ? ' · You' : ''}
+                              </span>
+                            );
+                          }
+                          return (
+                            <div className="space-y-1">
+                              <select
+                                value={role}
+                                disabled={roleSaving === u.email}
+                                onChange={(e) => handleRoleChange(u, e.target.value as AssignableRole)}
+                                aria-label={`Role for ${u.displayName}`}
+                                className={`px-2 py-1 text-[11px] font-bold rounded-lg border border-transparent outline-none cursor-pointer disabled:opacity-50 ${ROLE_BADGE[role]}`}
+                              >
+                                {ROLE_OPTIONS.map((o) => (
+                                  <option key={o.value} value={o.value}>
+                                    {o.label}
+                                  </option>
+                                ))}
+                              </select>
+                              {roleError?.email === u.email && (
+                                <div className="text-[10px] text-red-600 font-semibold max-w-[180px]">{roleError.message}</div>
+                              )}
+                            </div>
+                          );
+                        })()}
+                      </td>
                       <td className="py-2.5 px-3 text-stone-500 font-mono text-[11px]">{u.email}</td>
                       <td className="py-2.5 px-3">
                         <span className="px-2 py-0.5 bg-stone-100 text-stone-800 font-mono font-bold rounded-md">

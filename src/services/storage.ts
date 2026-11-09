@@ -588,7 +588,7 @@ export function useClubStore() {
    * Load private data for the signed-in viewer. Staff get the full roster,
    * check-in log, gear queue and code words; runners get only their own check-ins.
    */
-  const syncPrivateData = async (email: string, isStaff: boolean) => {
+  const syncPrivateData = async (email: string, isStaff: boolean, isAdmin = false) => {
     if (!isFirebaseConfigured || !db) return;
     const currentDb = db;
     const cleanEmail = email.trim().toLowerCase();
@@ -658,7 +658,8 @@ export function useClubStore() {
       setMeetupEvents((prev) => prev.map((e) => (codeWords[e.date] ? { ...e, codeWord: codeWords[e.date] } : e)));
 
       // Make sure every profile has an up-to-date hashed leaderboard row.
-      for (const u of remoteUsers) {
+      // Only admins may write other people's rows.
+      for (const u of isAdmin ? remoteUsers : []) {
         const key = await memberKeyFor(u.email);
         setDoc(doc(currentDb, 'members', key), toPublicMember(u, key)).catch(console.error);
       }
@@ -816,10 +817,22 @@ export function useClubStore() {
     // New profiles never go through the returning-user path in App, so load
     // private data (and run the staff code-word migration) here as well.
     if (isFirebaseConfigured && db) {
-      syncPrivateData(cleanEmail, newUser.role === 'admin' || newUser.role === 'organizer');
+      syncPrivateData(cleanEmail, newUser.role === 'admin' || newUser.role === 'organizer', newUser.role === 'admin');
     }
 
     return newUser;
+  };
+
+  /**
+   * Admin only: change another runner's role (member / organizer / admin).
+   * The rules reject role changes by non-admins and on your own profile.
+   */
+  const setUserRole = async (email: string, role: 'member' | 'organizer' | 'admin'): Promise<void> => {
+    const cleanEmail = email.trim().toLowerCase();
+    if (isFirebaseConfigured && db) {
+      await updateDoc(doc(db, 'users', cleanEmail), { role });
+    }
+    setUsers((prev) => prev.map((u) => (u.email.toLowerCase() === cleanEmail ? { ...u, role } : u)));
   };
 
   /**
@@ -1620,6 +1633,7 @@ export function useClubStore() {
     // V2 Relational Collections
     syncPrivateData,
     clearPrivateData,
+    setUserRole,
     users,
     setUsers,
     meetupEvents,
