@@ -100,6 +100,88 @@ const effectiveRole = (u: UserProfile): AssignableRole =>
       ? 'organizer'
       : 'member';
 
+/** Searchable runner picker (the roster can get long). */
+const RunnerPicker: React.FC<{
+  users: UserProfile[];
+  excludeEmail?: string;
+  label: string;
+  disabled?: boolean;
+  onPick: (email: string) => void;
+}> = ({ users, excludeEmail, label, disabled, onPick }) => {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState('');
+  const query = q.trim().toLowerCase();
+  const matches = users
+    .filter((u) => u.email !== excludeEmail)
+    .filter((u) => !query || u.displayName.toLowerCase().includes(query) || u.email.toLowerCase().includes(query))
+    .slice(0, 8);
+  if (!open) {
+    return (
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => setOpen(true)}
+        className="px-2 py-1 text-[11px] font-semibold border rounded-lg bg-white hover:bg-stone-50 disabled:opacity-50"
+      >
+        {label}
+      </button>
+    );
+  }
+  return (
+    <div className="relative w-52">
+      <input
+        type="search"
+        value={q}
+        autoFocus
+        onChange={(e) => setQ(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') {
+            setOpen(false);
+            setQ('');
+          }
+        }}
+        placeholder="Search runners…"
+        aria-label="Search runners to assign"
+        className="w-full px-2 py-1 text-[11px] border rounded-lg outline-none focus:ring-2 focus:ring-woodland-500"
+      />
+      <ul className="mt-1 w-full max-h-56 overflow-y-auto bg-white border border-stone-200 rounded-lg shadow-lg text-[11px]" role="listbox">
+        {matches.length === 0 ? (
+          <li className="px-2 py-1.5 text-stone-500 italic">No runners match</li>
+        ) : (
+          matches.map((u) => (
+            <li key={u.email} role="option" aria-selected="false">
+              <button
+                type="button"
+                onClick={() => {
+                  setOpen(false);
+                  setQ('');
+                  onPick(u.email);
+                }}
+                className="w-full text-left px-2 py-1.5 hover:bg-stone-100"
+              >
+                <span className="font-semibold text-stone-900">{u.displayName}</span>
+                <span className="block text-stone-500 truncate">{u.email}</span>
+              </button>
+            </li>
+          ))
+        )}
+        <li>
+          <button
+            type="button"
+            onClick={() => {
+              setOpen(false);
+              setQ('');
+            }}
+            className="w-full text-left px-2 py-1.5 text-stone-500 hover:bg-stone-100 border-t border-stone-100"
+          >
+            Cancel
+          </button>
+        </li>
+      </ul>
+    </div>
+  );
+};
+
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   routes = [],
   notifications,
@@ -1940,22 +2022,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           <td className="py-2 px-3">
                             {onSetLegacyClaim && (
                               <div className="flex items-center gap-2">
-                                <select
-                                  value=""
+                                <RunnerPicker
+                                  users={assignableUsers}
+                                  excludeEmail={claimer?.email}
+                                  label={claimed ? 'Reassign to…' : 'Assign to…'}
                                   disabled={busy}
-                                  onChange={(e) => e.target.value && handleLegacyAssign(leg, e.target.value)}
-                                  aria-label={`Assign ${leg.name} to a runner`}
-                                  className="max-w-[150px] px-2 py-1 text-[11px] border rounded-lg outline-none bg-white disabled:opacity-50"
-                                >
-                                  <option value="">{claimed ? 'Reassign to…' : 'Assign to…'}</option>
-                                  {assignableUsers
-                                    .filter((u) => u.email !== claimer?.email)
-                                    .map((u) => (
-                                      <option key={u.email} value={u.email}>
-                                        {u.displayName}
-                                      </option>
-                                    ))}
-                                </select>
+                                  onPick={(email) => handleLegacyAssign(leg, email)}
+                                />
                                 {claimed && (
                                   <button
                                     type="button"

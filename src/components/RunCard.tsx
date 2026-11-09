@@ -13,7 +13,8 @@ interface RunCardProps {
   onViewRoute: (route: GPXRoute) => void;
   isCheckedIn?: boolean; // The signed-in runner has a check-in for this run
   notLive?: boolean;     // Missing its code word / check-in event: shown to staff only
-  onEdit?: (run: RunEvent) => void; // Organizers and admins
+  onEdit?: (run: RunEvent) => void; // Organizers and admins, upcoming runs only
+  onDelete?: (run: RunEvent) => void; // Admins, past runs (which can't be edited)
 }
 
 export const RunCard: React.FC<RunCardProps> = ({
@@ -27,6 +28,7 @@ export const RunCard: React.FC<RunCardProps> = ({
   isCheckedIn = false,
   notLive = false,
   onEdit,
+  onDelete,
 }) => {
   const isAttending = run.attendees.some((a) => a.memberId === currentMember.id);
   const checkedInCount = run.attendees.filter((a) => a.checkedIn).length;
@@ -350,6 +352,17 @@ export const RunCard: React.FC<RunCardProps> = ({
             >
               <Pencil className="w-3.5 h-3.5" />
               <span>Edit</span>
+            </button>
+          )}
+
+          {onDelete && (
+            <button
+              type="button"
+              onClick={() => onDelete(run)}
+              aria-label={`Delete ${run.title}`}
+              className="px-3 py-1.5 text-xs font-semibold rounded-lg transition cursor-pointer bg-white border border-red-200 text-red-700 hover:bg-red-50"
+            >
+              Delete
             </button>
           )}
 

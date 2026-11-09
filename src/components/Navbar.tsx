@@ -27,6 +27,7 @@ interface NavbarProps {
   setActiveTab: (tab: 'runs' | 'routes' | 'milestones' | 'leaderboard' | 'admin') => void;
   currentUser: UserProfile;
   firebaseUser: FirebaseUser | null;
+  authReady?: boolean; // false while Firebase restores the sign-in after a refresh
   unreadNotifsCount?: number;
   onOpenNewRun: () => void;
   onOpenUploadGpx: () => void;
@@ -50,6 +51,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenRegister,
   onOpenVersionModal,
   onLogout,
+  authReady = true,
 }) => {
   const [showProfileMenu, setShowProfileMenu] = useState<boolean>(false);
   const isUserLoggedIn = isFirebaseConfigured
@@ -197,7 +199,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             )}
 
             {/* USER LOGIN / PROFILE AREA */}
-            {isUserLoggedIn ? (
+            {isUserLoggedIn && authReady ? (
               /* LOGGED IN RUNNER PILL */
               <div className="relative">
                 <button
@@ -306,6 +308,13 @@ export const Navbar: React.FC<NavbarProps> = ({
                   </div>
                 )}
               </div>
+            ) : !authReady ? (
+              /* Restoring sign-in after a refresh: neutral placeholder, no Sign In flash */
+              <div
+                className="h-9 w-28 rounded-full bg-stone-100 animate-pulse"
+                role="status"
+                aria-label="Loading your profile"
+              />
             ) : (
               /* GUEST - JOIN CLUB & SIGN IN BUTTONS */
               <div className="flex items-center gap-1.5 sm:gap-2">

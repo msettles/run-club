@@ -162,6 +162,14 @@ service cloud.firestore {
         request.time <= get(ev).data.checkInClosesAt;
     }
 
+    // The run is over: its check-in window has closed. Past runs can't be edited.
+    function runIsOver(runId) {
+      let ev = eventPath(runId);
+      return exists(ev) &&
+        get(ev).data.get('checkInClosesAt', null) is timestamp &&
+        request.time > get(ev).data.checkInClosesAt;
+    }
+
     // The code word is locked once the run is live AND its check-in has opened.
     // A run that isn't live has no open check-in, so its code word can still be set.
     function checkInHasOpened(runId) {
@@ -506,10 +514,14 @@ service cloud.firestore {
                        isValidRun(request.resource.data) &&
                        request.resource.data.id == runId;
 
+      // Past runs can't be edited (only their RSVP list, e.g. when a runner is deleted).
       allow update: if isValidRun(request.resource.data) &&
                        request.resource.data.id == resource.data.id &&
                        request.resource.data.id == runId &&
-                       (isStaff() || isOwnRsvpToggle());
+                       ((isStaff() &&
+                         (!runIsOver(runId) ||
+                          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['attendees']))) ||
+                        isOwnRsvpToggle());
 
       allow delete: if isStaff();
     }
@@ -651,6 +663,7 @@ service cloud.firestore {
     match /meetup_events/{eventId} {
       allow read: if true;
       allow create, update: if isStaff() && !('codeWord' in request.resource.data) &&
+                               !runIsOver(eventId) &&
                                // A live run with check-in open can't be switched to "not live"
                                // (that would unlock its code word).
                                (!checkInHasOpened(eventId) ||
