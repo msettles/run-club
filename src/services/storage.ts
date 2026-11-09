@@ -531,6 +531,7 @@ export function useClubStore() {
       unsubscribeAnnouncements = onSnapshot(
         query(collection(db, 'announcements'), orderBy('timestamp', 'desc'), limit(30)),
         (snap) => {
+          // Replace the feed with the server's list (never append), so nothing shows twice.
           setNotifications(snap.docs.map((d) => ({ ...(d.data() as ClubNotification), kind: 'announcement' as const })));
           if (!firstSnapshot) {
             snap.docChanges()
@@ -2064,12 +2065,13 @@ export function useClubStore() {
       kind: 'announcement',
     };
     if (isFirebaseConfigured && db) {
+      // The live announcements listener adds it to the feed (including this browser).
       const { kind: _k, ...stored } = notif;
       await setDoc(doc(db, 'announcements', notif.id), stored);
-    } else {
-      storeNotification(notif);
+      return;
     }
-    setNotifications((prev) => [notif, ...prev]);
+    storeNotification(notif);
+    setNotifications((prev) => [notif, ...prev.filter((n) => n.id !== notif.id)]);
   };
 
   /** Remove an announcement from everyone's bell feed (admins). */
