@@ -1,7 +1,7 @@
 import React from 'react';
 import { RunEvent, Member, GPXRoute } from '../types';
 import { ResolvedChoice } from '../utils/runChoices';
-import { Clock, MapPin, Mountain, Check, CalendarPlus, Map } from 'lucide-react';
+import { Clock, MapPin, Mountain, Check, CalendarPlus, Map, Pencil } from 'lucide-react';
 
 interface RunCardProps {
   run: RunEvent;
@@ -11,6 +11,9 @@ interface RunCardProps {
   onToggleRSVP: (runId: string) => void;
   onOpenCheckIn: (run: RunEvent) => void;
   onViewRoute: (route: GPXRoute) => void;
+  isCheckedIn?: boolean; // The signed-in runner has a check-in for this run
+  notLive?: boolean;     // Missing its code word / check-in event: shown to staff only
+  onEdit?: (run: RunEvent) => void; // Organizers and admins
 }
 
 export const RunCard: React.FC<RunCardProps> = ({
@@ -21,9 +24,11 @@ export const RunCard: React.FC<RunCardProps> = ({
   onToggleRSVP,
   onOpenCheckIn,
   onViewRoute,
+  isCheckedIn = false,
+  notLive = false,
+  onEdit,
 }) => {
   const isAttending = run.attendees.some((a) => a.memberId === currentMember.id);
-  const isCheckedIn = run.attendees.some((a) => a.memberId === currentMember.id && a.checkedIn);
   const checkedInCount = run.attendees.filter((a) => a.checkedIn).length;
 
   // Normalize available routes: use choices if provided, otherwise fall back to attached route
@@ -336,7 +341,24 @@ export const RunCard: React.FC<RunCardProps> = ({
             )}
           </button>
 
+          {onEdit && (
+            <button
+              type="button"
+              onClick={() => onEdit(run)}
+              aria-label={`Edit ${run.title}`}
+              className="px-3 py-1.5 text-xs font-semibold rounded-lg transition flex items-center gap-1.5 cursor-pointer bg-white border border-stone-300 text-stone-700 hover:bg-stone-100"
+            >
+              <Pencil className="w-3.5 h-3.5" />
+              <span>Edit</span>
+            </button>
+          )}
+
           {/* Check-In Button */}
+          {notLive ? (
+            <span className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-amber-100 text-amber-900 border border-amber-200">
+              Not live — needs a code word
+            </span>
+          ) : (
           <button
             onClick={() => onOpenCheckIn(run)}
             className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition flex items-center gap-1.5 cursor-pointer ${
@@ -354,6 +376,7 @@ export const RunCard: React.FC<RunCardProps> = ({
               <span>Check In</span>
             )}
           </button>
+          )}
         </div>
       </div>
     </div>

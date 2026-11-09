@@ -16,7 +16,7 @@ import { db } from './services/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import { downloadGPXFile } from './utils/gpxParser';
 import { isAdminProfile, isStaffProfile } from './utils/roles';
-import { formatOpening, nextCheckInEvent, openCheckInEvents, checkInWindow, upcomingRuns, priorRuns } from './utils/checkInWindow';
+import { formatOpening, nextCheckInEvent, openCheckInEvents, checkInWindow, upcomingRuns, priorRuns, isRunLive } from './utils/checkInWindow';
 
 // Lazy-loaded heavy components & modals (saves >60% initial mobile bundle size)
 const AdminDashboard = lazy(() => import('./components/AdminDashboard').then((m) => ({ default: m.AdminDashboard })));
@@ -41,7 +41,8 @@ import {
   Palette,
   Gift,
   UserPlus,
-  Edit3
+  Edit3,
+  CheckCircle
 } from 'lucide-react';
 
 export function App() {
@@ -53,7 +54,7 @@ export function App() {
     notifications,
     currentMember,
     toggleRSVP,
-    addRun,
+    createRunWithCheckIn,
     updateRun,
     deleteRun,
     sendPushAnnouncement,
@@ -134,6 +135,15 @@ export function App() {
     : isUserLoggedIn;
   const isAdmin = isUserLoggedIn && isProfileVerified && isAdminProfile(currentUser);
   const isOrganizerOrAdmin = isUserLoggedIn && isProfileVerified && isStaffProfile(currentUser);
+
+  // Runs the signed-in runner has checked into, and whether that includes a run open right now.
+  const myEmail = (currentUser.email || '').toLowerCase();
+  const myCheckedInRunIds = new Set(
+    isUserLoggedIn && myEmail
+      ? checkins.filter((c) => c.userEmail.toLowerCase() === myEmail && c.runId).map((c) => c.runId as string)
+      : []
+  );
+  const checkedInTonight = openCheckInEvents(meetupEvents).some((e) => myCheckedInRunIds.has(e.id));
 
   // Refs so the auth listener can be subscribed once without stale values
   const usersRef = useRef(users);
@@ -251,19 +261,15 @@ export function App() {
 
   // Scheduling or editing a run also updates that night's check-in event,
   // so runners pick from the run's distance options when they check in.
-  const syncCheckInEvent = (run: RunEvent, codeWord: string) => {
-    const existing = meetupEvents.find((e) => e.id === run.id);
-    saveMeetupEvent(buildMeetupFromRun(run, routes, codeWord, existing)).catch((err) => {
-      console.error('Saving check-in event failed:', err);
-      alert(
-        err?.code === 'duplicate-code-word'
-          ? `The run was saved, but not its code word: ${err.message} Edit the run to set a new one.`
-          : err?.code === 'permission-denied'
-            ? "The run was saved, but its check-in details weren't: the code word is locked once check-in opens."
-            : "The run was saved, but its check-in details couldn't be saved. Please try again."
-      );
-    });
-  };
+  // Errors from these are shown inside the New Run / Edit Run form, which stays open.
+  const friendlyRunError = (err: any): Error =>
+    new Error(
+      err?.code === 'duplicate-code-word'
+        ? err.message
+        : err?.code === 'permission-denied'
+          ? "Not saved: the code word is locked once this run's check-in has opened."
+          : "Not saved. Please check your connection and try again."
+    );
 
   const handleDeleteRun = async (runId: string) => {
     try {
@@ -276,17 +282,22 @@ export function App() {
 
   const handleAddRun = async (run: Omit<RunEvent, 'id' | 'attendees'>, codeWord: string) => {
     try {
-      const created = await addRun(run);
-      syncCheckInEvent(created, codeWord);
+      await createRunWithCheckIn(run, codeWord);
     } catch (err) {
       console.error('Creating run failed:', err);
-      alert("The run couldn't be saved. Please check your connection and try again.");
+      throw friendlyRunError(err);
     }
   };
 
-  const handleUpdateRun = (run: RunEvent, codeWord: string) => {
-    updateRun(run);
-    syncCheckInEvent(run, codeWord);
+  const handleUpdateRun = async (run: RunEvent, codeWord: string) => {
+    try {
+      await updateRun(run);
+      const existing = meetupEvents.find((e) => e.id === run.id);
+      await saveMeetupEvent(buildMeetupFromRun(run, routes, codeWord, existing));
+    } catch (err) {
+      console.error('Saving run failed:', err);
+      throw friendlyRunError(err);
+    }
   };
 
   const handleViewRouteFromRun = (route: GPXRoute) => {
@@ -380,10 +391,23 @@ export function App() {
                   <div className="mt-5 flex flex-wrap items-center gap-3">
                     <button
                       onClick={handleQuickCheckIn}
-                      className="flex items-center gap-2 px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-stone-950 font-black text-xs sm:text-sm rounded-xl transition shadow-md font-display uppercase tracking-wide cursor-pointer"
+                      className={`flex items-center gap-2 px-5 py-2.5 font-black text-xs sm:text-sm rounded-xl transition shadow-md font-display uppercase tracking-wide cursor-pointer ${
+                        checkedInTonight
+                          ? 'bg-emerald-500 hover:bg-emerald-600 text-white'
+                          : 'bg-amber-500 hover:bg-amber-600 text-stone-950'
+                      }`}
                     >
-                      <Sparkles className="w-4 h-4 text-stone-950" />
-                      <span>Check In Tonight 🦫</span>
+                      {checkedInTonight ? (
+                        <>
+                          <CheckCircle className="w-4 h-4" />
+                          <span>Checked In ✓</span>
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="w-4 h-4 text-stone-950" />
+                          <span>Check In Tonight 🦫</span>
+                        </>
+                      )}
                     </button>
 
                     {/* Prominent Join Club button for Guests */}
@@ -449,11 +473,16 @@ export function App() {
                     onToggleRSVP={toggleRSVP}
                     onOpenCheckIn={handleOpenCheckIn}
                     onViewRoute={handleViewRouteFromRun}
+                    isCheckedIn={myCheckedInRunIds.has(run.id)}
+                    notLive={!isRunLive(run, meetupEvents)}
+                    onEdit={isOrganizerOrAdmin ? setEditingRun : undefined}
                   />
                 );
               };
-              const upcoming = upcomingRuns(runs);
-              const prior = priorRuns(runs);
+              // Runs without a saved code word aren't live: only staff see them (to finish setting them up).
+              const visible = runs.filter((r) => isOrganizerOrAdmin || isRunLive(r, meetupEvents));
+              const upcoming = upcomingRuns(visible);
+              const prior = priorRuns(visible);
               return (
                 <div className="space-y-4">
                   {upcoming.length === 0 ? (

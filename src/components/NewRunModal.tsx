@@ -10,7 +10,7 @@ interface NewRunModalProps {
   onClose: () => void;
   routes: GPXRoute[];
   organizerName: string;
-  onAddRun: (run: Omit<RunEvent, 'id' | 'attendees'>, codeWord: string) => void;
+  onAddRun: (run: Omit<RunEvent, 'id' | 'attendees'>, codeWord: string) => Promise<void>;
   specialEvents?: SpecialEventDefinition[];
 }
 
@@ -54,7 +54,9 @@ export const NewRunModal: React.FC<NewRunModalProps> = ({
     setPaceGroups(paceGroups.filter((_, i) => i !== index));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const [isSaving, setIsSaving] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title) return;
     const resolved = resolveChoices(routeChoices, routes);
@@ -68,7 +70,10 @@ export const NewRunModal: React.FC<NewRunModalProps> = ({
     }
     const stats = deriveRunStats(resolved);
 
-    onAddRun({
+    setIsSaving(true);
+    setFormError(null);
+    try {
+      await onAddRun({
       title,
       date,
       time,
@@ -81,9 +86,14 @@ export const NewRunModal: React.FC<NewRunModalProps> = ({
       organizerName,
       paceGroups,
       specialEvent: specialEvent !== 'none' ? specialEvent : undefined,
-    }, codeWord);
-
-    onClose();
+      }, codeWord);
+      onClose();
+    } catch (err: any) {
+      // Nothing was saved; keep the form open so the code word can be changed.
+      setFormError(err?.message || 'Not saved. Please try again.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -281,9 +291,10 @@ export const NewRunModal: React.FC<NewRunModalProps> = ({
             </button>
             <button
               type="submit"
-              className="px-5 py-2 text-xs font-semibold bg-woodland-600 text-white rounded-lg hover:bg-woodland-700 shadow-sm"
+              disabled={isSaving}
+              className="px-5 py-2 text-xs font-semibold bg-woodland-600 text-white rounded-lg hover:bg-woodland-700 shadow-sm disabled:opacity-50"
             >
-              Publish Run
+              {isSaving ? 'Publishing…' : 'Publish Run'}
             </button>
           </div>
         </form>
