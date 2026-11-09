@@ -79,6 +79,7 @@ interface AdminDashboardProps {
   ) => Promise<{ names: number; events: number; duplicatesDropped: number; oldRuns: number }>;
   onReloadLegacyPool?: () => Promise<unknown>;
   onCountPushDevices?: () => Promise<number>;
+  onDeleteAnnouncement?: (id: string) => Promise<void>;
 }
 
 type AssignableRole = 'member' | 'organizer' | 'admin';
@@ -206,6 +207,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onImportLegacyData,
   onReloadLegacyPool,
   onCountPushDevices,
+  onDeleteAnnouncement,
 }) => {
   const [adminTab, setAdminTab] = useState<'events' | 'badges' | 'checkins' | 'milestones' | 'members' | 'notifications'>('events');
   const [memberSearch, setMemberSearch] = useState<string>('');
@@ -452,9 +454,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         setBroadcastSent(true);
         setTimeout(() => setBroadcastSent(false), 4000);
       })
-      .catch((err) => {
+      .catch((err: any) => {
         console.error('Announcement failed:', err);
-        alert("The announcement couldn't be sent. Only admins can send announcements; please try again.");
+        alert(
+          err?.code === 'permission-denied'
+            ? 'Not posted: only admins can post announcements.'
+            : "The announcement couldn't be posted. Please check your connection and try again."
+        );
       });
   };
 
@@ -2182,14 +2188,30 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
             <div className="space-y-2.5 max-h-[380px] overflow-y-auto">
               {notifications.length === 0 ? (
-                <p className="text-xs text-stone-400 py-4 text-center">No announcements broadcast yet.</p>
+                <p className="text-xs text-stone-400 py-4 text-center">No announcements posted yet.</p>
               ) : (
                 notifications.map((n) => (
                   <div key={n.id} className="p-3 bg-stone-50 rounded-xl border border-stone-200 text-xs space-y-1">
                     <div className="flex items-center justify-between">
                       <strong className="text-stone-900 font-bold">{n.title}</strong>
-                      <span className="text-[10px] text-stone-400">
+                      <span className="flex items-center gap-2 text-[10px] text-stone-400">
                         {new Date(n.timestamp).toLocaleDateString()}
+                        {onDeleteAnnouncement && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (!window.confirm(`Delete "${n.title}" from everyone's announcements?`)) return;
+                              onDeleteAnnouncement(n.id).catch((err) => {
+                                console.error('Deleting announcement failed:', err);
+                                window.alert("Couldn't delete that announcement. Please try again.");
+                              });
+                            }}
+                            aria-label={`Delete announcement ${n.title}`}
+                            className="text-red-600 hover:text-red-800"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                       </span>
                     </div>
                     <p className="text-stone-600 leading-relaxed">{n.body}</p>

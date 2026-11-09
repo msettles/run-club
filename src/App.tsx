@@ -59,6 +59,8 @@ export function App() {
     updateRun,
     deleteRun,
     sendPushAnnouncement,
+    deleteAnnouncement,
+    bellItems,
     addRoute,
     updateRoute,
     deleteRoute,
@@ -110,6 +112,29 @@ export function App() {
   const [isBrandAssetsOpen, setIsBrandAssetsOpen] = useState<boolean>(false);
   const [isVersionModalOpen, setIsVersionModalOpen] = useState<boolean>(false);
   const [showNotificationsDrawer, setShowNotificationsDrawer] = useState<boolean>(false);
+  // Bell: items newer than the last time this browser opened the feed count as unread.
+  const BELL_SEEN_KEY = 'woodchuckers_bell_seen_at';
+  const [bellSeenAt, setBellSeenAt] = useState<string>(() => {
+    try {
+      return localStorage.getItem(BELL_SEEN_KEY) || '';
+    } catch {
+      return '';
+    }
+  });
+  const toggleBell = () => {
+    setShowNotificationsDrawer((open) => {
+      if (!open) {
+        const now = new Date().toISOString();
+        setBellSeenAt(now);
+        try {
+          localStorage.setItem(BELL_SEEN_KEY, now);
+        } catch {
+          // ignore
+        }
+      }
+      return !open;
+    });
+  };
 
   // Selected route for viewing
   const [selectedRoute, setSelectedRoute] = useState<GPXRoute>(routes[0]);
@@ -383,13 +408,13 @@ export function App() {
         currentUser={currentUser}
         firebaseUser={firebaseUser}
         authReady={authReady}
-        unreadNotifsCount={notifications.length}
+        unreadNotifsCount={bellItems.filter((n) => n.timestamp > bellSeenAt).length}
         onOpenNewRun={() => setIsNewRunOpen(true)}
         onOpenUploadGpx={() => {
           setEditingRoute(null);
           setIsRouteStudioOpen(true);
         }}
-        onToggleNotifications={() => setShowNotificationsDrawer(!showNotificationsDrawer)}
+        onToggleNotifications={toggleBell}
         onOpenAuthModal={() => setIsAuthModalOpen(true)}
         onOpenRegister={handleOpenRegister}
         onOpenVersionModal={() => setIsVersionModalOpen(true)}
@@ -718,6 +743,7 @@ export function App() {
               onDeleteBadge={deleteBadge}
               onOpenNewRun={() => setIsNewRunOpen(true)}
               onSendBroadcast={sendPushAnnouncement}
+              onDeleteAnnouncement={deleteAnnouncement}
               onSetUserRole={setUserRole}
               onDeleteRunner={adminDeleteRunner}
               onSetLegacyClaim={adminSetLegacyClaim}
@@ -804,20 +830,39 @@ export function App() {
             </div>
 
             <div className="flex-1 overflow-y-auto space-y-3">
-              {notifications.length === 0 ? (
+              {bellItems.length === 0 ? (
                 <p className="text-xs text-stone-500 text-center py-8">No announcements yet.</p>
               ) : (
-                notifications.map((n) => (
-                  <div key={n.id} className="p-3 bg-stone-50 border border-stone-200 rounded-xl space-y-1">
-                    <div className="flex items-center justify-between text-xs">
-                      <strong className="text-stone-900 font-bold">{n.title}</strong>
-                      <span className="text-[10px] text-stone-400">
-                        {new Date(n.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </span>
+                bellItems.map((n) => {
+                  const isPush = n.kind === 'push';
+                  const when = new Date(n.timestamp);
+                  const content = (
+                    <>
+                      <div className={`text-[10px] font-bold uppercase tracking-wider ${isPush ? 'text-indigo-600' : 'text-amber-700'}`}>
+                        {isPush ? '📲 Push notification' : '📣 Announcement'}
+                      </div>
+                      <div className="flex items-start justify-between gap-2 text-xs">
+                        <strong className={`font-bold ${isPush ? 'text-indigo-950' : 'text-stone-900'}`}>{n.title}</strong>
+                        <span className="text-[10px] text-stone-400 shrink-0">
+                          {when.toLocaleDateString([], { month: 'short', day: 'numeric' })}{' '}
+                          {when.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                        </span>
+                      </div>
+                      {n.body && <p className={`text-xs leading-relaxed ${isPush ? 'text-indigo-900/80' : 'text-stone-600'}`}>{n.body}</p>}
+                      {n.timestamp > bellSeenAt && <span className="sr-only">New</span>}
+                    </>
+                  );
+                  const box = `block p-3 rounded-xl space-y-1 border ${isPush ? 'bg-indigo-50 border-indigo-200' : 'bg-stone-50 border-stone-200'}`;
+                  return isPush && n.link && n.link !== '/' ? (
+                    <a key={n.id} href={n.link} className={`${box} hover:bg-indigo-100`}>
+                      {content}
+                    </a>
+                  ) : (
+                    <div key={n.id} className={box}>
+                      {content}
                     </div>
-                    <p className="text-xs text-stone-600 leading-relaxed">{n.body}</p>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
 
@@ -829,7 +874,7 @@ export function App() {
                 }}
                 className="w-full py-2 bg-stone-900 text-white rounded-xl text-xs font-bold hover:bg-stone-800 transition"
               >
-                Send New Push Announcement
+                Post Announcement
               </button>
             )}
           </div>

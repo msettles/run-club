@@ -48,6 +48,8 @@ import {
   getDocs,
   getDoc,
   getCountFromServer,
+  orderBy,
+  limit,
   setDoc,
   updateDoc,
   deleteDoc,
@@ -69,6 +71,7 @@ import {
   storeNotification, 
   showLocalNotification 
 } from './notifications';
+import { onPushReceived, readReceivedPushes, type ReceivedPush } from './push';
 
 /**
  * Recursively removes any keys with `undefined` values, which Firestore rejects.
@@ -295,7 +298,30 @@ export function useClubStore() {
     const missing = INITIAL_SPECIAL_EVENTS.filter((s) => !existingIds.has(s.id));
     return [...stored, ...missing];
   });
-  const [notifications, setNotifications] = useState<ClubNotification[]>(() => getStoredNotifications());
+  // Club announcements: shared via Firestore (announcements collection); local mode keeps them in the browser.
+  const [notifications, setNotifications] = useState<ClubNotification[]>(() =>
+    isFirebaseConfigured ? [] : getStoredNotifications()
+  );
+  // Pushes this device received from the Firebase console (saved by the push worker).
+  const [receivedPushes, setReceivedPushes] = useState<ClubNotification[]>([]);
+  useEffect(() => {
+    const toItem = (p: ReceivedPush): ClubNotification => ({
+      id: p.id,
+      title: p.title,
+      body: p.body,
+      link: p.link,
+      timestamp: p.timestamp,
+      sender: 'Push notification',
+      kind: 'push',
+    });
+    readReceivedPushes().then((list) => setReceivedPushes(list.map(toItem)));
+    return onPushReceived((p) => setReceivedPushes((prev) => [toItem(p), ...prev.filter((x) => x.id !== p.id)]));
+  }, []);
+  /** Bell feed: announcements + received pushes, newest first. */
+  const bellItems = useMemo(
+    () => [...notifications, ...receivedPushes].sort((a, b) => b.timestamp.localeCompare(a.timestamp)),
+    [notifications, receivedPushes]
+  );
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
 
   // New Relational Collections state (local testing / offline first)
@@ -498,21 +524,26 @@ export function useClubStore() {
 
     syncFromFirestore();
 
-    // Listen for real-time club broadcasts from organizers / admins
+    // Club announcements (public, latest 30), live: new ones appear in everyone's bell.
     let unsubscribeAnnouncements: (() => void) | undefined;
     try {
-      unsubscribeAnnouncements = onSnapshot(doc(db, 'settings', 'latest_announcement'), (snap) => {
-        if (!snap.exists()) return;
-        const announcement = snap.data() as ClubNotification;
-        if (!announcement || !announcement.id) return;
-
-        setNotifications((prev) => {
-          if (prev.some((n) => n.id === announcement.id)) return prev;
-          storeNotification(announcement);
-          showLocalNotification(announcement.title, announcement.body);
-          return [announcement, ...prev];
-        });
-      });
+      let firstSnapshot = true;
+      unsubscribeAnnouncements = onSnapshot(
+        query(collection(db, 'announcements'), orderBy('timestamp', 'desc'), limit(30)),
+        (snap) => {
+          setNotifications(snap.docs.map((d) => ({ ...(d.data() as ClubNotification), kind: 'announcement' as const })));
+          if (!firstSnapshot) {
+            snap.docChanges()
+              .filter((c) => c.type === 'added' && !c.doc.metadata.hasPendingWrites)
+              .forEach((c) => {
+                const a = c.doc.data() as ClubNotification;
+                showLocalNotification(a.title, a.body);
+              });
+          }
+          firstSnapshot = false;
+        },
+        (err) => console.warn('Announcements listener error:', err)
+      );
     } catch (e) {
       console.warn('Real-time announcement listener error:', e);
     }
@@ -2022,22 +2053,31 @@ export function useClubStore() {
   /**
    * Send a club-wide push announcement (Admin)
    */
-  const sendPushAnnouncement = async (title: string, body: string, targetRunId?: string) => {
+  /** Post a club announcement to everyone's bell feed (admins). Phones get it only via the Firebase console. */
+  const sendPushAnnouncement = async (title: string, body: string) => {
     const notif: ClubNotification = {
       id: `notif-${Date.now()}`,
-      title,
-      body,
+      title: title.trim(),
+      body: body.trim(),
       timestamp: new Date().toISOString(),
-      targetRunId,
-      sender: currentMember.name,
+      sender: currentMember.name || 'Woodchuckers',
+      kind: 'announcement',
     };
-
     if (isFirebaseConfigured && db) {
-      await setDoc(doc(db, 'settings', 'latest_announcement'), notif);
+      const { kind: _k, ...stored } = notif;
+      await setDoc(doc(db, 'announcements', notif.id), stored);
+    } else {
+      storeNotification(notif);
     }
-    storeNotification(notif);
     setNotifications((prev) => [notif, ...prev]);
-    showLocalNotification(title, body);
+  };
+
+  /** Remove an announcement from everyone's bell feed (admins). */
+  const deleteAnnouncement = async (id: string) => {
+    if (isFirebaseConfigured && db) {
+      await deleteDoc(doc(db, 'announcements', id));
+    }
+    setNotifications((prev) => prev.filter((n) => n.id !== id));
   };
 
   /**
@@ -2113,6 +2153,8 @@ export function useClubStore() {
     updateRun,
     deleteRun,
     sendPushAnnouncement,
+    deleteAnnouncement,
+    bellItems,
     addRoute,
     updateRoute,
     deleteRoute,

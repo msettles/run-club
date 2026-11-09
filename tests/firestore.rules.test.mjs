@@ -678,3 +678,15 @@ test('runners record their own push device; only admins can read the list', asyn
   await assertSucceeds(deleteDoc(doc(ctx(BOB), 'push_devices', id)));
   await assertFails(setDoc(doc(env.unauthenticatedContext().firestore(), 'push_devices', id), device(ALICE)));
 });
+
+test('announcements: public read, admins post and delete, no edits', async () => {
+  const a = { id: 'notif-1', title: 'Run tonight', body: 'Meet at 6', timestamp: '2026-11-11T18:00:00.000Z', sender: 'Club' };
+  await assertFails(setDoc(doc(ctx(ORGANIZER), 'announcements', a.id), a));
+  await assertFails(setDoc(doc(ctx(ALICE), 'announcements', a.id), a));
+  await assertFails(setDoc(doc(ctx(BOOTSTRAP), 'announcements', a.id), { ...a, targetRunId: null }));
+  await assertSucceeds(setDoc(doc(ctx(BOOTSTRAP), 'announcements', a.id), a));
+  await assertSucceeds(getDocs(collection(env.unauthenticatedContext().firestore(), 'announcements')));
+  await assertFails(updateDoc(doc(ctx(BOOTSTRAP), 'announcements', a.id), { title: 'Edited' }));
+  await assertFails(deleteDoc(doc(ctx(ALICE), 'announcements', a.id)));
+  await assertSucceeds(deleteDoc(doc(ctx(BOOTSTRAP), 'announcements', a.id)));
+});
