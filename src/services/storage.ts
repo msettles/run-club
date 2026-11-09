@@ -1596,24 +1596,26 @@ export function useClubStore() {
         {
           ...cleanFirestoreData(publicEvent),
           codeWord: deleteField(),
-          // Live only once its code word is saved; a change that fails below leaves it not live.
-          codeWordSet: !wordOrDateChanged && Boolean(oldWord || previous?.codeWordSet),
+          // A live run stays live while its word changes (a refused change keeps the old word);
+          // a run without a word only goes live once the word below is saved.
+          codeWordSet: Boolean(previous && previous.codeWordSet !== false && oldWord) || (!wordOrDateChanged && Boolean(oldWord)),
           checkInOpensAt: Timestamp.fromDate(win.opensAt),
           checkInClosesAt: Timestamp.fromDate(win.closesAt),
         },
         { merge: true }
       );
       if (wordOrDateChanged) {
-        // New lookup key first: creating it fails if the word is taken that day.
-        try {
-          await setDoc(doc(db, 'meetup_codes', await codeKeyFor(event.date, newWord)), { runId, date: event.date });
-        } catch (err: any) {
-          if (err?.code === 'permission-denied' && !(previous && win.opensAt <= new Date())) {
-            throw Object.assign(new Error(`The code word ${newWord} is already used by another run on ${event.date}. Pick a different word.`), {
-              code: 'duplicate-code-word',
-            });
-          }
-          throw err;
+        // Is the word really taken that day? Check the lookup key first, so a lock
+        // refusal is never reported as a duplicate.
+        const keyRef = doc(db, 'meetup_codes', await codeKeyFor(event.date, newWord));
+        const existingKey = await getDoc(keyRef);
+        if (existingKey.exists() && existingKey.data().runId !== runId) {
+          throw Object.assign(new Error(`The code word ${newWord} is already used by another run on ${event.date}. Pick a different word.`), {
+            code: 'duplicate-code-word',
+          });
+        }
+        if (!existingKey.exists()) {
+          await setDoc(keyRef, { runId, date: event.date }); // refused only if the word is locked
         }
         if (previous && oldWord) {
           await deleteDoc(doc(db, 'meetup_codes', await codeKeyFor(previous.date, oldWord))).catch((err) =>
@@ -1903,13 +1905,8 @@ export function useClubStore() {
       });
       batch.set(doc(db, 'meetup_secrets', id), { codeWord: word });
       batch.set(doc(db, 'meetup_codes', key), { runId: id, date: run.date });
-      try {
-        await batch.commit();
-      } catch (err: any) {
-        // The lookup key already existing is the only expected refusal here.
-        if (err?.code === 'permission-denied') throw duplicateError();
-        throw err;
-      }
+      // The duplicate check above already ran; any refusal here is reported as-is.
+      await batch.commit();
     }
     setRuns((prev) => [run, ...prev]);
     setMeetupEvents((prev) => [event, ...prev.filter((e) => e.id !== id)]);

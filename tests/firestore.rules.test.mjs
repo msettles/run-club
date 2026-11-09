@@ -613,3 +613,24 @@ test('creating a run with a code word already used that day saves nothing', asyn
   });
   await assertSucceeds(create('run-ok', 'WALNUT'));
 });
+
+test('a run that is not live has no open check-in and no code word lock', async () => {
+  const org = ctx(ORGANIZER);
+  await env.withSecurityRulesDisabled(async (c) => {
+    await setDoc(doc(c.firestore(), 'meetup_events', 'run-draft'), {
+      id: 'run-draft', runId: 'run-draft', date: DATE, title: 'Draft', activeDistances: [], routes: {}, codeWordSet: false,
+      checkInOpensAt: Timestamp.fromMillis(Date.now() - 3600e3), checkInClosesAt: Timestamp.fromMillis(Date.now() + 7200e3),
+    });
+  });
+  // Not live, inside its window: setting the code word is allowed
+  await assertSucceeds(setDoc(doc(org, 'meetup_codes', codeKey(DATE, 'HOME')), { runId: 'run-draft', date: DATE }));
+  await assertSucceeds(setDoc(doc(org, 'meetup_secrets', 'run-draft'), { codeWord: 'HOME' }));
+  // ...but nobody can check in while it's not live, even with the right word
+  await assertFails(checkInToRun(ctx(ALICE), ALICE, 'run-draft', 'HOME').batch.commit());
+  // Go live: check-in works, the word is locked, and it can't be switched back to not live
+  await assertSucceeds(updateDoc(doc(org, 'meetup_events', 'run-draft'), { codeWordSet: true }));
+  await assertSucceeds(checkInToRun(ctx(ALICE), ALICE, 'run-draft', 'HOME').batch.commit());
+  await assertFails(setDoc(doc(org, 'meetup_codes', codeKey(DATE, 'AWAY')), { runId: 'run-draft', date: DATE }));
+  await assertFails(setDoc(doc(org, 'meetup_secrets', 'run-draft'), { codeWord: 'AWAY' }));
+  await assertFails(updateDoc(doc(org, 'meetup_events', 'run-draft'), { codeWordSet: false }));
+});

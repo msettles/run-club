@@ -866,7 +866,8 @@ export function App() {
             currentCodeWord={meetupEvents.find((e) => e.id === editingRun.id)?.codeWord || ''}
             codeWordLockedSince={(() => {
               const ev = meetupEvents.find((e) => e.id === editingRun.id);
-              if (!ev) return undefined;
+              // Only an existing code word locks; a run without one can always get its first.
+              if (!ev || ev.codeWordSet === false || !ev.codeWord) return undefined;
               const { opensAt } = checkInWindow(ev);
               return opensAt <= new Date() ? formatOpening(opensAt) : undefined;
             })()}
