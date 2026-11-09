@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { UserProfile } from '../types';
 import { User as FirebaseUser } from 'firebase/auth';
-import { VERSION_LABEL, FULL_VERSION } from '../utils/version';
+import { FULL_VERSION } from '../utils/version';
 import { 
   Calendar, 
   Map, 
@@ -79,22 +79,12 @@ export const Navbar: React.FC<NavbarProps> = ({
             <div>
               <div className="flex items-center gap-1 sm:gap-1.5 flex-nowrap">
                 <span className="font-display font-bold text-stone-900 tracking-wide text-xs sm:text-base lg:text-lg uppercase">
-                  Woodland Woodchuckers
+                  <span className="lg:hidden">Woodchuckers</span>
+                  <span className="hidden lg:inline">Woodland Woodchuckers</span>
                 </span>
                 <span className="hidden xl:inline-block text-[10px] font-bold uppercase tracking-wider bg-woodland-100 text-woodland-900 px-1.5 py-0.5 rounded border border-woodland-200 shrink-0">
                   Run Club
                 </span>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onOpenVersionModal?.();
-                  }}
-                  title={`Version ${FULL_VERSION} - Tap to check for updates`}
-                  className="text-[10px] font-mono font-bold text-woodland-800 bg-woodland-50 hover:bg-woodland-100 active:scale-95 border border-woodland-200/90 px-1.5 py-0.5 rounded transition shadow-2xs cursor-pointer select-none shrink-0"
-                >
-                  {VERSION_LABEL}
-                </button>
               </div>
               <p className="hidden 2xl:block text-[11px] text-stone-500 font-medium truncate">
                 Blue Note Brewing Co. • Pounding trails &amp; pavement!
@@ -103,10 +93,10 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
 
           {/* Navigation Tabs (Desktop / Tablet) */}
-          <nav className="hidden sm:flex items-center gap-1 shrink-0">
+          <nav className="hidden md:flex items-center gap-0.5 lg:gap-1 shrink-0">
             <button
               onClick={() => setActiveTab('runs')}
-              className={`flex items-center gap-1.5 px-2.5 lg:px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition ${
+              className={`flex items-center gap-1.5 px-2 lg:px-3 py-1.5 rounded-xl text-xs lg:text-sm font-semibold transition ${
                 activeTab === 'runs'
                   ? 'bg-woodland-50 text-woodland-900 font-bold shadow-xs border border-woodland-200/60'
                   : 'text-stone-600 hover:text-stone-900 hover:bg-stone-100'
@@ -118,7 +108,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
             <button
               onClick={() => setActiveTab('routes')}
-              className={`flex items-center gap-1.5 px-2.5 lg:px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition ${
+              className={`flex items-center gap-1.5 px-2 lg:px-3 py-1.5 rounded-xl text-xs lg:text-sm font-semibold transition ${
                 activeTab === 'routes'
                   ? 'bg-woodland-50 text-woodland-900 font-bold shadow-xs border border-woodland-200/60'
                   : 'text-stone-600 hover:text-stone-900 hover:bg-stone-100'
@@ -130,7 +120,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
             <button
               onClick={() => setActiveTab('milestones')}
-              className={`flex items-center gap-1.5 px-2.5 lg:px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition ${
+              className={`flex items-center gap-1.5 px-2 lg:px-3 py-1.5 rounded-xl text-xs lg:text-sm font-semibold transition ${
                 activeTab === 'milestones'
                   ? 'bg-woodland-50 text-woodland-900 font-bold shadow-xs border border-woodland-200/60'
                   : 'text-stone-600 hover:text-stone-900 hover:bg-stone-100'
@@ -142,7 +132,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
             <button
               onClick={() => setActiveTab('leaderboard')}
-              className={`flex items-center gap-1.5 px-2.5 lg:px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition ${
+              className={`flex items-center gap-1.5 px-2 lg:px-3 py-1.5 rounded-xl text-xs lg:text-sm font-semibold transition ${
                 activeTab === 'leaderboard'
                   ? 'bg-woodland-50 text-woodland-900 font-bold shadow-xs border border-woodland-200/60'
                   : 'text-stone-600 hover:text-stone-900 hover:bg-stone-100'
@@ -155,7 +145,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             {isAdmin && (
               <button
                 onClick={() => setActiveTab('admin')}
-                className={`hidden lg:flex items-center gap-1.5 px-2.5 lg:px-3 py-1.5 rounded-xl text-xs sm:text-sm font-bold transition ${
+                className={`hidden lg:flex items-center gap-1.5 px-2 lg:px-3 py-1.5 rounded-xl text-xs lg:text-sm font-bold transition ${
                   activeTab === 'admin'
                     ? 'bg-stone-900 text-white shadow-xs'
                     : 'text-stone-800 bg-stone-100 hover:bg-stone-200'
@@ -216,7 +206,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
             <button
               onClick={onOpenNewRun}
-              className="flex items-center gap-1 px-2.5 sm:px-3 py-1.5 text-xs font-semibold bg-woodland-600 hover:bg-woodland-700 text-white rounded-xl transition shadow-sm cursor-pointer shrink-0"
+              className="hidden sm:flex items-center gap-1 px-2.5 sm:px-3 py-1.5 text-xs font-semibold bg-woodland-600 hover:bg-woodland-700 text-white rounded-xl transition shadow-sm cursor-pointer shrink-0"
             >
               <Plus className="w-3.5 h-3.5" />
               <span className="hidden lg:inline">Schedule Run</span>
@@ -315,7 +305,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                           }}
                           className="font-mono font-bold text-woodland-700 hover:underline cursor-pointer"
                         >
-                          {VERSION_LABEL}
+                          {FULL_VERSION}
                         </button>
                       </div>
                     </div>

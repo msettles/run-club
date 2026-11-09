@@ -206,7 +206,7 @@ export function App() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-stone-100 font-sans pb-16 sm:pb-0 w-full overflow-x-hidden">
+    <div className="min-h-screen flex flex-col bg-stone-100 font-sans pb-16 md:pb-0 w-full overflow-x-hidden">
       {/* Mobile PWA Install & Push Notification Banner */}
       <InstallPwaBanner />
 
@@ -520,7 +520,7 @@ export function App() {
       />
 
       {/* Footer (Mobile & Desktop with bottom navigation spacing) */}
-      <footer className="bg-white border-t border-stone-200 py-6 mt-12 pb-24 sm:pb-6">
+      <footer className="bg-white border-t border-stone-200 py-6 mt-12 pb-24 md:pb-6">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-stone-500 text-center sm:text-left">
           <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
             <img src="/Woodchucker2026.png" alt="2026 Mascot" className="w-5 h-5 object-contain" />

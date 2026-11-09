@@ -187,7 +187,7 @@ export function useClubStore() {
     return [...updated, ...missing];
   });
   const [currentMemberId, setCurrentMemberId] = useState<string>(() =>
-    loadFromStorage(STORAGE_KEYS.CURRENT_USER_ID, INITIAL_MEMBERS[0].id)
+    loadFromStorage(STORAGE_KEYS.CURRENT_USER_ID, '')
   );
   const [badges, setBadges] = useState<Badge[]>(() => {
     const stored = loadFromStorage<Badge[]>(STORAGE_KEYS.BADGES, INITIAL_BADGES);
@@ -235,9 +235,14 @@ export function useClubStore() {
     });
     return [...updated, ...missing];
   });
-  const [currentUserEmail, setCurrentUserEmail] = useState<string>(() =>
-    loadFromStorage(STORAGE_KEYS.CURRENT_USER_EMAIL, INITIAL_USERS[0].email)
-  );
+  const [currentUserEmail, setCurrentUserEmail] = useState<string>(() => {
+    const stored = loadFromStorage<string>(STORAGE_KEYS.CURRENT_USER_EMAIL, '');
+    // If stored was the old dummy 'matt.settles@example.com', reset to guest ''
+    if (stored === 'matt.settles@example.com') {
+      return '';
+    }
+    return stored;
+  });
   const [milestoneAlerts, setMilestoneAlerts] = useState<MilestoneAlert[]>(() =>
     loadFromStorage(STORAGE_KEYS.MILESTONE_ALERTS, INITIAL_MILESTONE_ALERTS)
   );
@@ -294,10 +299,10 @@ export function useClubStore() {
 
   // Derived current user (Falls back to GUEST_USER if not logged in)
   const currentUser: UserProfile = currentUserEmail
-    ? (users.find((u) => u.email.toLowerCase() === currentUserEmail.toLowerCase()) || users[0])
+    ? (users.find((u) => u.email.toLowerCase() === currentUserEmail.toLowerCase()) || GUEST_USER)
     : GUEST_USER;
   const currentMember: Member = currentUserEmail
-    ? (members.find((m) => m.email.toLowerCase() === currentUserEmail.toLowerCase()) || members[0])
+    ? (members.find((m) => m.email.toLowerCase() === currentUserEmail.toLowerCase()) || { ...GUEST_USER, id: 'guest', name: 'Guest Runner', streak: 0, favoritePace: 'Any', joinedDate: '' })
     : { ...GUEST_USER, id: 'guest', name: 'Guest Runner', streak: 0, favoritePace: 'Any', joinedDate: '' };
 
   // If Firebase is configured, fetch collections on initial load
@@ -1210,12 +1215,12 @@ export function useClubStore() {
     setRuns(INITIAL_RUNS);
     setRoutes(INITIAL_ROUTES);
     setMembers(INITIAL_MEMBERS);
-    setCurrentMemberId(INITIAL_MEMBERS[0].id);
+    setCurrentMemberId('');
     setUsers(INITIAL_USERS);
     setMeetupEvents(INITIAL_MEETUP_EVENTS);
     setCheckins(INITIAL_CHECKINS);
     setLegacyMembers(INITIAL_LEGACY_MEMBERS);
-    setCurrentUserEmail(INITIAL_USERS[0].email);
+    setCurrentUserEmail('');
 
     localStorage.removeItem(STORAGE_KEYS.RUNS);
     localStorage.removeItem(STORAGE_KEYS.ROUTES);

@@ -15,7 +15,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
   onQuickCheckIn,
 }) => {
   return (
-    <nav className="sm:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-stone-200 px-1 py-1 shadow-lg pb-[env(safe-area-inset-bottom)]">
+    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-stone-200 px-1 py-1 shadow-lg pb-[env(safe-area-inset-bottom)]">
       <div className="flex items-center justify-around text-[10px] font-semibold text-stone-500">
         <button
           onClick={() => setActiveTab('runs')}
