@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { 
   RunEvent, 
   GPXRoute, 
@@ -369,7 +369,7 @@ export function useClubStore() {
     const missing = INITIAL_CHECKINS.filter((c) => !existingIds.has(c.id) && !REMOVED_TEST_EMAILS.has(c.userEmail.toLowerCase()));
     return [...stored, ...missing];
   });
-  const [legacyMembers, setLegacyMembers] = useState<LegacyMember[]>(() => {
+  const [legacyPool, setLegacyMembers] = useState<LegacyMember[]>(() => {
     const stored = loadFromStorage<LegacyMember[]>(STORAGE_KEYS.LEGACY_MEMBERS, INITIAL_LEGACY_MEMBERS);
     const existingNames = new Set(stored.map((m) => m.name.toUpperCase()));
     const missing = INITIAL_LEGACY_MEMBERS.filter((m) => !existingNames.has(m.name.toUpperCase()));
@@ -388,6 +388,23 @@ export function useClubStore() {
       return m;
     });
   });
+  // Profiles are the source of truth for claims: users/{email}.linkedLegacyNames
+  // is saved in Firestore, while the pool itself only lives in this browser.
+  // Admins load every profile, so their view shows every claim.
+  const legacyMembers = useMemo<LegacyMember[]>(() => {
+    const claimedBy = new Map<string, { email: string; at: string | null }>();
+    for (const u of users) {
+      for (const name of u.linkedLegacyNames || []) {
+        claimedBy.set(name.toUpperCase(), { email: u.email, at: u.createdAt || null });
+      }
+    }
+    return legacyPool.map((m) => {
+      const claim = claimedBy.get(m.name.toUpperCase());
+      if (claim) return { ...m, claimedByEmail: claim.email, claimedAt: m.claimedAt || claim.at };
+      return m;
+    });
+  }, [legacyPool, users]);
+
   const [currentUserEmail, setCurrentUserEmail] = useState<string>(() => {
     const stored = loadFromStorage<string>(STORAGE_KEYS.CURRENT_USER_EMAIL, '');
     if (stored && REMOVED_TEST_EMAILS.has(stored.toLowerCase())) {
@@ -431,8 +448,8 @@ export function useClubStore() {
   }, [checkins]);
 
   useEffect(() => {
-    saveToStorage(STORAGE_KEYS.LEGACY_MEMBERS, legacyMembers);
-  }, [legacyMembers]);
+    saveToStorage(STORAGE_KEYS.LEGACY_MEMBERS, legacyPool);
+  }, [legacyPool]);
 
   useEffect(() => {
     saveToStorage(STORAGE_KEYS.CURRENT_USER_EMAIL, currentUserEmail);
