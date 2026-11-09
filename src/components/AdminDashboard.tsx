@@ -6,7 +6,6 @@ import {
   UserProfile, 
   LegacyMember,
   MilestoneAlert,
-  SpecialEventType,
   Badge,
   SpecialEventDefinition,
   BadgeCategory,
@@ -66,7 +65,6 @@ interface AdminDashboardProps {
     createSpecialEventOption?: boolean;
   }) => Promise<Badge>;
   onDeleteBadge?: (badgeId: string) => Promise<void>;
-  onSaveMeetupEvent: (event: MeetupEvent) => Promise<void> | void;
   onMarkMilestoneFulfilled?: (alertId: string, fulfilledBy: string) => void;
   onOpenNewRun?: () => void;
   onSendBroadcast: (title: string, body: string) => void;
@@ -115,7 +113,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   specialEvents = INITIAL_SPECIAL_EVENTS,
   onCreateBadge,
   onDeleteBadge,
-  onSaveMeetupEvent,
   onMarkMilestoneFulfilled,
   onOpenNewRun,
   onSendBroadcast,
@@ -134,37 +131,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [notifTitle, setNotifTitle] = useState<string>('🦫 Run Tonight: Wednesday Code Word!');
   const [notifBody, setNotifBody] = useState<string>('Meet at 6:00 PM on Blue Note Brewing patio. Check-in is live!');
   const [broadcastSent, setBroadcastSent] = useState<boolean>(false);
-
-  // Edit / Schedule Meetup Event State
-  const defaultNextDate = '2026-11-18';
-  const [eventDate, setEventDate] = useState<string>(defaultNextDate);
-  const [eventTitle, setEventTitle] = useState<string>('Wednesday Woodchucker Meetup');
-  const [eventCodeWord, setEventCodeWord] = useState<string>('WOODCHUCK');
-  const [specialEvent, setSpecialEvent] = useState<SpecialEventType>('none');
-  const [eventNotes, setEventNotes] = useState<string>('Weekly social run & post-run social on the patio.');
-  
-  // 1-Mile route state
-  const [has1Mi, setHas1Mi] = useState<boolean>(true);
-  const [name1Mi, setName1Mi] = useState<string>('Downtown Historic Stroll');
-  const [miles1Mi, setMiles1Mi] = useState<number>(1.15);
-  const [url1Mi, setUrl1Mi] = useState<string>('https://www.strava.com/routes/31201');
-  const [dir1Mi, setDir1Mi] = useState<string>('East on Main St, loop at 1st St back to brewery.');
-
-  // 3-Mile route state
-  const [has3Mi, setHas3Mi] = useState<boolean>(true);
-  const [name3Mi, setName3Mi] = useState<string>('Heritage Park Loop');
-  const [miles3Mi, setMiles3Mi] = useState<number>(3.22);
-  const [url3Mi, setUrl3Mi] = useState<string>('https://www.strava.com/routes/31203');
-  const [dir3Mi, setDir3Mi] = useState<string>('East on Main, left on 3rd, through Heritage Park trail, back via Court St.');
-
-  // 5-Mile route state
-  const [has5Mi, setHas5Mi] = useState<boolean>(true);
-  const [name5Mi, setName5Mi] = useState<string>('Spring Lake Trek');
-  const [miles5Mi, setMiles5Mi] = useState<number>(5.12);
-  const [url5Mi, setUrl5Mi] = useState<string>('https://www.strava.com/routes/31205');
-  const [dir5Mi, setDir5Mi] = useState<string>('South on East St to Farmers Central, perimeter loop of Spring Lake, back on 6th St.');
-
-  const [eventSavedToast, setEventSavedToast] = useState<boolean>(false);
 
   // Badge & Special Event Creator State
   const [newBadgeName, setNewBadgeName] = useState<string>('');
@@ -328,70 +294,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     } finally {
       setRoleSaving(null);
     }
-  };
-
-  // Handle saving the Meetup Event
-  const handleSaveMeetup = (e: React.FormEvent) => {
-    e.preventDefault();
-    const activeDists: string[] = [];
-    if (has1Mi) activeDists.push('1');
-    if (has3Mi) activeDists.push('3');
-    if (has5Mi) activeDists.push('5');
-
-    if (activeDists.length === 0) {
-      alert('Please activate at least one distance (1, 3, or 5 miles) for the run.');
-      return;
-    }
-
-    const newEvent: MeetupEvent = {
-      id: eventDate,
-      date: eventDate,
-      time: '06:00 PM',
-      title: eventTitle,
-      codeWord: eventCodeWord.trim().toUpperCase(),
-      specialEvent,
-      activeDistances: activeDists,
-      routes: {
-        ...(has1Mi && {
-          '1': {
-            name: name1Mi,
-            actualMiles: miles1Mi,
-            routeUrl: url1Mi,
-            directions: dir1Mi,
-          },
-        }),
-        ...(has3Mi && {
-          '3': {
-            name: name3Mi,
-            actualMiles: miles3Mi,
-            routeUrl: url3Mi,
-            directions: dir3Mi,
-          },
-        }),
-        ...(has5Mi && {
-          '5': {
-            name: name5Mi,
-            actualMiles: miles5Mi,
-            routeUrl: url5Mi,
-            directions: dir5Mi,
-          },
-        }),
-      },
-      notes: eventNotes,
-    };
-
-    Promise.resolve(onSaveMeetupEvent(newEvent))
-      .then(() => {
-        setEventSavedToast(true);
-        setTimeout(() => setEventSavedToast(false), 3000);
-      })
-      .catch((err: any) => {
-        alert(
-          err?.code === 'permission-denied'
-            ? "Not saved: the code word is locked once that run's check-in has opened."
-            : 'Not saved. Please check your connection and try again.'
-        );
-      });
   };
 
   // Export CSV functions
@@ -600,325 +502,26 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       {/* ============================================================== */}
       {adminTab === 'events' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left: Schedule Form */}
-          <div className="lg:col-span-2 bg-white rounded-2xl p-6 shadow-sm border border-stone-200 space-y-5">
-            <div className="flex items-center justify-between border-b border-stone-100 pb-3">
-              <div>
-                <h3 className="font-extrabold text-base text-stone-900 font-display">
-                  Configure Scheduled Run Event
-                </h3>
-                <p className="text-xs text-stone-500">
-                  Set today's secret code word, title, and select which 1, 3, and 5-mile routes are active tonight.
-                </p>
-              </div>
-              {eventSavedToast && (
-                <div className="flex items-center gap-1.5 px-3 py-1 bg-emerald-100 text-emerald-800 text-xs font-bold rounded-lg animate-in fade-in">
-                  <Check className="w-3.5 h-3.5" />
-                  <span>Event Saved!</span>
-                </div>
-              )}
+          {/* Left: runs are the only place check-in events and code words are created */}
+          <div className="lg:col-span-2 bg-white rounded-2xl p-6 shadow-sm border border-stone-200 space-y-4">
+            <div className="border-b border-stone-100 pb-3">
+              <h3 className="font-extrabold text-base text-stone-900 font-display">Check-in Events &amp; Code Words</h3>
+              <p className="text-xs text-stone-500">
+                Each run has its own check-in event and code word. Create them with <strong>New Run</strong>, and change the code word from
+                <strong> Edit Run</strong> until that run&apos;s check-in opens (2 hours before the start). Code words must be different for runs on the same day:
+                the word tells the app which run a runner is checking into.
+              </p>
             </div>
-
-            <form onSubmit={handleSaveMeetup} className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-stone-700 mb-1">Meetup Date *</label>
-                  <input
-                    type="date"
-                    required
-                    value={eventDate}
-                    onChange={(e) => setEventDate(e.target.value)}
-                    className="w-full px-3 py-2 text-sm border rounded-xl font-bold bg-stone-50 focus:bg-white outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-stone-700 mb-1">Event Code Word *</label>
-                  <input
-                    type="text"
-                    required
-                    value={eventCodeWord}
-                    onChange={(e) => setEventCodeWord(e.target.value.toUpperCase())}
-                    placeholder="e.g. TURKEY"
-                    className="w-full px-3 py-2 text-sm border rounded-xl font-mono uppercase font-black text-amber-700 bg-amber-50/50 focus:bg-white outline-none tracking-wider"
-                  />
-                </div>
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="text-xs font-bold text-stone-700">Is Special Event?</label>
-                    <button
-                      type="button"
-                      onClick={() => setAdminTab('badges')}
-                      className="text-[10px] font-bold text-amber-700 hover:text-amber-900 flex items-center gap-0.5 underline cursor-pointer"
-                    >
-                      <Plus className="w-3 h-3 inline" /> New Event/Badge
-                    </button>
-                  </div>
-                  <select
-                    value={specialEvent}
-                    onChange={(e) => setSpecialEvent(e.target.value as SpecialEventType)}
-                    className="w-full px-3 py-2 text-sm border rounded-xl font-bold bg-amber-50/70 border-amber-300 text-stone-900 outline-none"
-                  >
-                    <option value="none">None (Regular Run)</option>
-                    {specialEvents.map((se) => (
-                      <option key={se.id} value={se.id}>
-                        {se.emoji} {se.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-stone-700 mb-1">Event Title</label>
-                  <input
-                    type="text"
-                    required
-                    value={eventTitle}
-                    onChange={(e) => setEventTitle(e.target.value)}
-                    placeholder="Wednesday Woodchucker Meetup"
-                    className="w-full px-3 py-2 text-sm border rounded-xl font-semibold outline-none"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-stone-700 mb-1">Meetup Notes &amp; Theme (Optional)</label>
-                <input
-                  type="text"
-                  value={eventNotes}
-                  onChange={(e) => setEventNotes(e.target.value)}
-                  placeholder="e.g. Wear orange/brown for Turkey Trot warmup!"
-                  className="w-full px-3 py-2 text-sm border rounded-xl outline-none"
-                />
-              </div>
-
-              {/* ROUTE DEFINITIONS */}
-              <div className="space-y-3 pt-2">
-                <span className="block text-xs font-extrabold text-stone-800 uppercase tracking-wider">
-                  Active Routes For Tonight (At least one required):
-                </span>
-
-                {/* 1-MILE ROUTE */}
-                <div className={`p-4 rounded-xl border transition ${has1Mi ? 'bg-stone-50 border-stone-300' : 'bg-stone-100/50 border-stone-200 opacity-60'}`}>
-                  <label className="flex items-center gap-2 cursor-pointer font-bold text-xs text-stone-900 mb-2">
-                    <input
-                      type="checkbox"
-                      checked={has1Mi}
-                      onChange={(e) => setHas1Mi(e.target.checked)}
-                      className="rounded text-amber-600 focus:ring-amber-500"
-                    />
-                    <span>[✓] 1-Mile Option Active</span>
-                  </label>
-                  {has1Mi && (
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
-                      {routes && routes.length > 0 && (
-                        <div className="sm:col-span-3 pb-1">
-                          <select
-                            onChange={(e) => {
-                              const r = routes.find((x) => x.id === e.target.value);
-                              if (r) {
-                                setName1Mi(r.name);
-                                setMiles1Mi(r.distanceMiles);
-                                setUrl1Mi(r.externalLinks?.stravaUrl || r.externalLinks?.garminUrl || r.externalLinks?.rungoUrl || '');
-                                if (r.directions && r.directions.length > 0) {
-                                  setDir1Mi(r.directions.map((d) => `${d.step}. ${d.instruction_concise}`).join(' | '));
-                                }
-                              }
-                            }}
-                            className="text-xs px-2.5 py-1.5 border border-woodland-300 rounded-lg bg-woodland-50 text-woodland-900 font-semibold w-full"
-                          >
-                            <option value="">⚡ Autofill 1-Mile from Route Library...</option>
-                            {routes.map((r) => (
-                              <option key={r.id} value={r.id}>{r.name} ({r.distanceMiles} mi)</option>
-                            ))}
-                          </select>
-                        </div>
-                      )}
-                      <input
-                        type="text"
-                        value={name1Mi}
-                        onChange={(e) => setName1Mi(e.target.value)}
-                        placeholder="Route Name (e.g. Downtown Stroll)"
-                        className="px-2.5 py-1.5 border rounded-lg bg-white"
-                      />
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={miles1Mi}
-                        onChange={(e) => setMiles1Mi(parseFloat(e.target.value) || 1.0)}
-                        placeholder="Actual GPS Miles (e.g. 1.15)"
-                        className="px-2.5 py-1.5 border rounded-lg bg-white font-mono font-bold"
-                      />
-                      <input
-                        type="text"
-                        value={url1Mi}
-                        onChange={(e) => setUrl1Mi(e.target.value)}
-                        placeholder="Strava/Garmin Link"
-                        className="px-2.5 py-1.5 border rounded-lg bg-white"
-                      />
-                      <div className="sm:col-span-3">
-                        <textarea
-                          rows={2}
-                          value={dir1Mi}
-                          onChange={(e) => setDir1Mi(e.target.value)}
-                          placeholder="Turn-by-turn directions..."
-                          className="w-full px-2.5 py-1.5 border rounded-lg bg-white"
-                        />
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* 3-MILE ROUTE */}
-                <div className={`p-4 rounded-xl border transition ${has3Mi ? 'bg-stone-50 border-stone-300' : 'bg-stone-100/50 border-stone-200 opacity-60'}`}>
-                  <label className="flex items-center gap-2 cursor-pointer font-bold text-xs text-stone-900 mb-2">
-                    <input
-                      type="checkbox"
-                      checked={has3Mi}
-                      onChange={(e) => setHas3Mi(e.target.checked)}
-                      className="rounded text-amber-600 focus:ring-amber-500"
-                    />
-                    <span>[✓] 3-Mile Option Active</span>
-                  </label>
-                  {has3Mi && (
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
-                      {routes && routes.length > 0 && (
-                        <div className="sm:col-span-3 pb-1">
-                          <select
-                            onChange={(e) => {
-                              const r = routes.find((x) => x.id === e.target.value);
-                              if (r) {
-                                setName3Mi(r.name);
-                                setMiles3Mi(r.distanceMiles);
-                                setUrl3Mi(r.externalLinks?.stravaUrl || r.externalLinks?.garminUrl || r.externalLinks?.rungoUrl || '');
-                                if (r.directions && r.directions.length > 0) {
-                                  setDir3Mi(r.directions.map((d) => `${d.step}. ${d.instruction_concise}`).join(' | '));
-                                }
-                              }
-                            }}
-                            className="text-xs px-2.5 py-1.5 border border-woodland-300 rounded-lg bg-woodland-50 text-woodland-900 font-semibold w-full"
-                          >
-                            <option value="">⚡ Autofill 3-Mile from Route Library...</option>
-                            {routes.map((r) => (
-                              <option key={r.id} value={r.id}>{r.name} ({r.distanceMiles} mi)</option>
-                            ))}
-                          </select>
-                        </div>
-                      )}
-                      <input
-                        type="text"
-                        value={name3Mi}
-                        onChange={(e) => setName3Mi(e.target.value)}
-                        placeholder="Route Name (e.g. Heritage Park Loop)"
-                        className="px-2.5 py-1.5 border rounded-lg bg-white"
-                      />
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={miles3Mi}
-                        onChange={(e) => setMiles3Mi(parseFloat(e.target.value) || 3.0)}
-                        placeholder="Actual GPS Miles (e.g. 3.22)"
-                        className="px-2.5 py-1.5 border rounded-lg bg-white font-mono font-bold"
-                      />
-                      <input
-                        type="text"
-                        value={url3Mi}
-                        onChange={(e) => setUrl3Mi(e.target.value)}
-                        placeholder="Strava/Garmin Link"
-                        className="px-2.5 py-1.5 border rounded-lg bg-white"
-                      />
-                      <div className="sm:col-span-3">
-                        <textarea
-                          rows={2}
-                          value={dir3Mi}
-                          onChange={(e) => setDir3Mi(e.target.value)}
-                          placeholder="Turn-by-turn directions..."
-                          className="w-full px-2.5 py-1.5 border rounded-lg bg-white"
-                        />
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* 5-MILE ROUTE */}
-                <div className={`p-4 rounded-xl border transition ${has5Mi ? 'bg-stone-50 border-stone-300' : 'bg-stone-100/50 border-stone-200 opacity-60'}`}>
-                  <label className="flex items-center gap-2 cursor-pointer font-bold text-xs text-stone-900 mb-2">
-                    <input
-                      type="checkbox"
-                      checked={has5Mi}
-                      onChange={(e) => setHas5Mi(e.target.checked)}
-                      className="rounded text-amber-600 focus:ring-amber-500"
-                    />
-                    <span>[✓] 5-Mile Option Active</span>
-                  </label>
-                  {has5Mi && (
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
-                      {routes && routes.length > 0 && (
-                        <div className="sm:col-span-3 pb-1">
-                          <select
-                            onChange={(e) => {
-                              const r = routes.find((x) => x.id === e.target.value);
-                              if (r) {
-                                setName5Mi(r.name);
-                                setMiles5Mi(r.distanceMiles);
-                                setUrl5Mi(r.externalLinks?.stravaUrl || r.externalLinks?.garminUrl || r.externalLinks?.rungoUrl || '');
-                                if (r.directions && r.directions.length > 0) {
-                                  setDir5Mi(r.directions.map((d) => `${d.step}. ${d.instruction_concise}`).join(' | '));
-                                }
-                              }
-                            }}
-                            className="text-xs px-2.5 py-1.5 border border-woodland-300 rounded-lg bg-woodland-50 text-woodland-900 font-semibold w-full"
-                          >
-                            <option value="">⚡ Autofill 5-Mile from Route Library...</option>
-                            {routes.map((r) => (
-                              <option key={r.id} value={r.id}>{r.name} ({r.distanceMiles} mi)</option>
-                            ))}
-                          </select>
-                        </div>
-                      )}
-                      <input
-                        type="text"
-                        value={name5Mi}
-                        onChange={(e) => setName5Mi(e.target.value)}
-                        placeholder="Route Name (e.g. Spring Lake Trek)"
-                        className="px-2.5 py-1.5 border rounded-lg bg-white"
-                      />
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={miles5Mi}
-                        onChange={(e) => setMiles5Mi(parseFloat(e.target.value) || 5.0)}
-                        placeholder="Actual GPS Miles (e.g. 5.12)"
-                        className="px-2.5 py-1.5 border rounded-lg bg-white font-mono font-bold"
-                      />
-                      <input
-                        type="text"
-                        value={url5Mi}
-                        onChange={(e) => setUrl5Mi(e.target.value)}
-                        placeholder="Strava/Garmin Link"
-                        className="px-2.5 py-1.5 border rounded-lg bg-white"
-                      />
-                      <div className="sm:col-span-3">
-                        <textarea
-                          rows={2}
-                          value={dir5Mi}
-                          onChange={(e) => setDir5Mi(e.target.value)}
-                          placeholder="Turn-by-turn directions..."
-                          className="w-full px-2.5 py-1.5 border rounded-lg bg-white"
-                        />
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="pt-3 flex justify-end">
-                <button
-                  type="submit"
-                  className="px-6 py-2.5 bg-amber-500 hover:bg-amber-600 font-black text-stone-950 text-xs rounded-xl shadow-md transition font-display uppercase tracking-wider"
-                >
-                  Save Scheduled Meetup
-                </button>
-              </div>
-            </form>
+            {onOpenNewRun && (
+              <button
+                type="button"
+                onClick={onOpenNewRun}
+                className="flex items-center gap-2 px-4 py-2.5 bg-woodland-700 hover:bg-woodland-800 text-white font-bold text-xs rounded-xl transition"
+              >
+                <Plus className="w-4 h-4" />
+                <span>New Run</span>
+              </button>
+            )}
           </div>
 
           {/* Right: Scheduled Events Roster */}

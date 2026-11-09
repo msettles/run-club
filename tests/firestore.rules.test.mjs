@@ -15,6 +15,8 @@ const memberKeyFor = (email) =>
   createHash('sha256').update(`woodchuckers:${email.toLowerCase()}`).digest('hex');
 
 const DATE = '2026-11-11';
+const RUN = 'run-1';
+const codeKey = (date, word) => createHash('sha256').update(`${date}:${word.trim().toUpperCase()}`).digest('hex');
 const ALICE = 'alice@example.com';
 const BOB = 'bob@example.com';
 const ORGANIZER = 'org@example.com';
@@ -57,7 +59,8 @@ const memberFromUser = (u) => ({
 });
 
 const checkIn = (email, extra = {}) => ({
-  id: `${DATE}_${email}`,
+  id: `${RUN}_${email}`,
+  runId: RUN,
   date: DATE,
   time: '18:05:00',
   userEmail: email,
@@ -94,12 +97,13 @@ async function seed({ windowOpen = true } = {}) {
   await env.withSecurityRulesDisabled(async (c) => {
     const db = c.firestore();
     const now = Date.now();
-    await setDoc(doc(db, 'meetup_events', DATE), {
-      id: DATE, date: DATE, title: 'Wed', activeDistances: [], routes: {},
+    await setDoc(doc(db, 'meetup_events', RUN), {
+      id: RUN, runId: RUN, date: DATE, title: 'Wed', activeDistances: [], routes: {},
       checkInOpensAt: Timestamp.fromMillis(windowOpen ? now - 3600e3 : now + 3600e3),
       checkInClosesAt: Timestamp.fromMillis(now + 7200e3),
     });
-    await setDoc(doc(db, 'meetup_secrets', DATE), { codeWord: 'ACORN' });
+    await setDoc(doc(db, 'meetup_secrets', RUN), { codeWord: 'ACORN' });
+    await setDoc(doc(db, 'meetup_codes', codeKey(DATE, 'ACORN')), { runId: RUN, date: DATE });
     await setDoc(doc(db, 'users', ALICE), baseUser(ALICE));
     await setDoc(doc(db, 'users', BOB), baseUser(BOB));
     await setDoc(doc(db, 'users', ORGANIZER), baseUser(ORGANIZER, { role: 'organizer' }));
@@ -116,16 +120,17 @@ function checkInBatch(db, email, { codeWord = 'ACORN', bump = 1, milestone = fal
     runCount: user.runCount + bump,
     totalMiles: user.totalMiles + 3.1,
     lastCheckInDate: DATE,
+    lastCheckInRunId: RUN,
   };
   const batch = writeBatch(db);
-  batch.set(doc(db, 'checkins', `${DATE}_${email}`), checkIn(email, { codeWord }));
+  batch.set(doc(db, 'checkins', `${RUN}_${email}`), checkIn(email, { codeWord }));
   batch.set(doc(db, 'users', email), updated);
   batch.set(doc(db, 'members', memberKeyFor(email)), memberFromUser(updated));
   if (milestone) {
     batch.set(doc(db, 'milestone_alerts', `m${updated.totalRuns}_${email}`), {
       id: `m${updated.totalRuns}_${email}`, userEmail: email, runnerName: updated.displayName,
       shirtSize: 'M', milestoneRuns: updated.totalRuns, milestoneName: '5 Runs', reward: 'Shirt',
-      perks: '', date: DATE, time: '18:05:00', fulfilled: false,
+      perks: '', date: DATE, time: '18:05:00', fulfilled: false, runId: RUN,
     });
   }
   return batch.commit();
@@ -149,8 +154,8 @@ test('public cannot read private collections', async () => {
   await assertFails(getDocs(collection(anon, 'users')));
   await assertFails(getDocs(collection(anon, 'checkins')));
   await assertFails(getDocs(collection(anon, 'milestone_alerts')));
-  await assertFails(getDoc(doc(anon, 'meetup_secrets', DATE)));
-  await assertSucceeds(getDoc(doc(anon, 'meetup_events', DATE)));
+  await assertFails(getDoc(doc(anon, 'meetup_secrets', RUN)));
+  await assertSucceeds(getDoc(doc(anon, 'meetup_events', RUN)));
   await assertSucceeds(getDocs(collection(anon, 'members')));
 });
 
@@ -159,7 +164,7 @@ test('runner reads only their own profile and check-ins', async () => {
   await assertSucceeds(getDoc(doc(alice, 'users', ALICE)));
   await assertFails(getDoc(doc(alice, 'users', BOB)));
   await assertFails(getDocs(collection(alice, 'users')));
-  await assertFails(getDoc(doc(alice, 'meetup_secrets', DATE)));
+  await assertFails(getDoc(doc(alice, 'meetup_secrets', RUN)));
   await assertSucceeds(getDocs(query(collection(alice, 'checkins'), where('userEmail', '==', ALICE))));
   await assertFails(getDocs(collection(alice, 'checkins')));
 });
@@ -167,7 +172,7 @@ test('runner reads only their own profile and check-ins', async () => {
 test('organizer role on users doc grants staff access', async () => {
   const org = ctx(ORGANIZER);
   await assertSucceeds(getDocs(collection(org, 'users')));
-  await assertSucceeds(getDoc(doc(org, 'meetup_secrets', DATE)));
+  await assertSucceeds(getDoc(doc(org, 'meetup_secrets', RUN)));
 });
 
 test('runner cannot change their own role or legacy totals', async () => {
@@ -186,7 +191,7 @@ test('runner cannot create a profile with a staff role', async () => {
 test('runner cannot bump stats without a check-in', async () => {
   const alice = ctx(ALICE);
   await assertFails(updateDoc(doc(alice, 'users', ALICE), { totalRuns: 999 }));
-  await assertFails(updateDoc(doc(alice, 'users', ALICE), { totalRuns: 5, loggedRuns: 5, runCount: 5, lastCheckInDate: DATE }));
+  await assertFails(updateDoc(doc(alice, 'users', ALICE), { totalRuns: 5, loggedRuns: 5, runCount: 5, lastCheckInDate: DATE, lastCheckInRunId: RUN }));
 });
 
 test('check-in with the right code word inside the window succeeds', async () => {
@@ -209,7 +214,7 @@ test('check-in cannot add more than one run', async () => {
 
 test('runner cannot check in as someone else', async () => {
   const alice = ctx(ALICE);
-  await assertFails(setDoc(doc(alice, 'checkins', `${DATE}_${BOB}`), checkIn(BOB)));
+  await assertFails(setDoc(doc(alice, 'checkins', `${RUN}_${BOB}`), checkIn(BOB)));
 });
 
 test('leaderboard row must mirror the user doc', async () => {
@@ -224,7 +229,7 @@ test('milestone alert only alongside the qualifying check-in, once', async () =>
   const alice = ctx(ALICE);
   await assertFails(setDoc(doc(alice, 'milestone_alerts', `m5_${ALICE}`), {
     id: `m5_${ALICE}`, userEmail: ALICE, runnerName: 'a', shirtSize: 'M', milestoneRuns: 5,
-    milestoneName: '5', reward: 'Shirt', perks: '', date: DATE, time: 'x', fulfilled: false,
+    milestoneName: '5', reward: 'Shirt', perks: '', date: DATE, time: 'x', fulfilled: false, runId: RUN,
   }));
   await assertSucceeds(checkInBatch(alice, ALICE, { milestone: true }));
 });
@@ -242,18 +247,18 @@ test('runner can toggle only their own RSVP', async () => {
 
 test('staff cannot put the code word on the public meetup doc', async () => {
   const org = ctx(ORGANIZER);
-  await assertFails(setDoc(doc(org, 'meetup_events', DATE), { id: DATE, date: DATE, codeWord: 'ACORN' }));
+  await assertFails(setDoc(doc(org, 'meetup_events', RUN), { id: RUN, date: DATE, codeWord: 'ACORN' }));
   // Tonight's check-in is open, so its code word is locked (see the code word lock test)
-  await assertFails(setDoc(doc(org, 'meetup_secrets', DATE), { codeWord: 'OAK' }));
+  await assertFails(setDoc(doc(org, 'meetup_secrets', RUN), { codeWord: 'OAK' }));
 });
 
 test('same-night edit keeps run count and needs the code word', async () => {
   const alice = ctx(ALICE);
   await assertSucceeds(checkInBatch(alice, ALICE));
-  const after1 = { ...baseUser(ALICE), totalRuns: 5, loggedRuns: 5, runCount: 5, totalMiles: 15.1, lastCheckInDate: DATE };
+  const after1 = { ...baseUser(ALICE), totalRuns: 5, loggedRuns: 5, runCount: 5, totalMiles: 15.1, lastCheckInDate: DATE, lastCheckInRunId: RUN };
   const edit = (codeWord, totalRuns) => {
     const b = writeBatch(alice);
-    b.set(doc(alice, 'checkins', `${DATE}_${ALICE}`), checkIn(ALICE, { codeWord, actualMiles: 5.2, updatedAt: '2026-11-11T18:30:00.000Z' }));
+    b.set(doc(alice, 'checkins', `${RUN}_${ALICE}`), checkIn(ALICE, { codeWord, actualMiles: 5.2, updatedAt: '2026-11-11T18:30:00.000Z' }));
     const u = { ...after1, totalRuns, loggedRuns: totalRuns, runCount: totalRuns, totalMiles: 17.2 };
     b.set(doc(alice, 'users', ALICE), u);
     b.set(doc(alice, 'members', memberKeyFor(ALICE)), memberFromUser(u));
@@ -310,7 +315,7 @@ test('organizer cannot edit or delete other profiles, or write others\' leaderbo
 
 test('organizer keeps event-night powers but not badges or settings', async () => {
   const org = ctx(ORGANIZER);
-  await assertSucceeds(getDoc(doc(org, 'meetup_secrets', DATE)));
+  await assertSucceeds(getDoc(doc(org, 'meetup_secrets', RUN)));
   await assertSucceeds(getDocs(collection(org, 'users')));
   await assertSucceeds(updateDoc(doc(org, 'runs', 'run-1'), { title: 'Renamed' }));
   await assertFails(setDoc(doc(org, 'badges', 'b1'), { name: 'x' }));
@@ -348,7 +353,7 @@ test('a former owner email is a normal admin: demotable, and cannot self-create 
   // The club owner can demote them to organizer
   await assertSucceeds(updateDoc(doc(ctx(BOOTSTRAP), 'users', MATT), { role: 'organizer' }));
   await assertFails(updateDoc(doc(ctx(MATT), 'users', ALICE), { role: 'member' }));
-  await assertSucceeds(getDoc(doc(ctx(MATT), 'meetup_secrets', DATE)));
+  await assertSucceeds(getDoc(doc(ctx(MATT), 'meetup_secrets', RUN)));
   // Without a profile, it can't sign up as admin any more
   await env.withSecurityRulesDisabled(async (c) => {
     await deleteDoc(doc(c.firestore(), 'users', MATT));
@@ -457,14 +462,14 @@ test('admin can delete a runner with their check-ins, row and claims; organizer 
   await seedLegacy();
   await assertSucceeds(claimBatch(ctx(ALICE), ALICE, [LP]).commit());
   await env.withSecurityRulesDisabled(async (c) => {
-    await setDoc(doc(c.firestore(), 'checkins', `${DATE}_${ALICE}`), checkIn(ALICE));
+    await setDoc(doc(c.firestore(), 'checkins', `${RUN}_${ALICE}`), checkIn(ALICE));
   });
   await assertFails(deleteDoc(doc(ctx(ORGANIZER), 'users', ALICE)));
   await assertFails(deleteDoc(doc(ctx(ORGANIZER), 'members', memberKeyFor(ALICE))));
 
   const admin = ctx(BOOTSTRAP);
   const b = writeBatch(admin);
-  b.delete(doc(admin, 'checkins', `${DATE}_${ALICE}`));
+  b.delete(doc(admin, 'checkins', `${RUN}_${ALICE}`));
   b.update(doc(admin, 'legacy_profiles', LP.id), { claimedBy: null, claimedAt: null });
   b.delete(doc(admin, 'members', memberKeyFor(ALICE)));
   b.delete(doc(admin, 'users', ALICE));
@@ -490,9 +495,102 @@ test('code word can change before check-in opens, and is locked after', async ()
   // Not open yet: can change
   await assertSucceeds(setDoc(doc(org, 'meetup_secrets', FUTURE), { codeWord: 'PINECONE' }));
   // Tonight's event (seeded with an open window): locked, but re-saving the same word is fine
-  await assertFails(setDoc(doc(org, 'meetup_secrets', DATE), { codeWord: 'CHANGED' }));
-  await assertSucceeds(setDoc(doc(org, 'meetup_secrets', DATE), { codeWord: 'ACORN' }));
-  await assertFails(setDoc(doc(ctx(BOOTSTRAP), 'meetup_secrets', DATE), { codeWord: 'CHANGED' }));
+  await assertFails(setDoc(doc(org, 'meetup_secrets', RUN), { codeWord: 'CHANGED' }));
+  await assertSucceeds(setDoc(doc(org, 'meetup_secrets', RUN), { codeWord: 'ACORN' }));
+  await assertFails(setDoc(doc(ctx(BOOTSTRAP), 'meetup_secrets', RUN), { codeWord: 'CHANGED' }));
   // Runners can't touch it at all
   await assertFails(setDoc(doc(ctx(ALICE), 'meetup_secrets', FUTURE), { codeWord: 'X' }));
+});
+
+// ---- One check-in per runner per run; the code word picks the run ----
+
+async function seedSecondRun(word = 'PINECONE') {
+  await env.withSecurityRulesDisabled(async (c) => {
+    const db = c.firestore();
+    const now = Date.now();
+    await setDoc(doc(db, 'runs', 'run-2'), { ...run, id: 'run-2', time: '07:00 AM' });
+    await setDoc(doc(db, 'meetup_events', 'run-2'), {
+      id: 'run-2', runId: 'run-2', date: DATE, title: 'Morning', activeDistances: [], routes: {},
+      checkInOpensAt: Timestamp.fromMillis(now - 3600e3),
+      checkInClosesAt: Timestamp.fromMillis(now + 7200e3),
+    });
+    await setDoc(doc(db, 'meetup_secrets', 'run-2'), { codeWord: word });
+    await setDoc(doc(db, 'meetup_codes', codeKey(DATE, word)), { runId: 'run-2', date: DATE });
+  });
+}
+
+function checkInToRun(db, email, runId, codeWord, prev = baseUser(email)) {
+  const updated = { ...prev, totalRuns: prev.totalRuns + 1, loggedRuns: prev.loggedRuns + 1, runCount: prev.runCount + 1, totalMiles: prev.totalMiles + 3.1, lastCheckInDate: DATE, lastCheckInRunId: runId };
+  const b = writeBatch(db);
+  b.set(doc(db, 'checkins', `${runId}_${email}`), checkIn(email, { id: `${runId}_${email}`, runId, codeWord }));
+  b.set(doc(db, 'users', email), updated);
+  b.set(doc(db, 'members', memberKeyFor(email)), memberFromUser(updated));
+  return { batch: b, updated };
+}
+
+test('the code word picks the run: another run\'s word is rejected', async () => {
+  await seedSecondRun();
+  const alice = ctx(ALICE);
+  await assertFails(checkInToRun(alice, ALICE, 'run-2', 'ACORN').batch.commit());
+  await assertSucceeds(checkInToRun(alice, ALICE, 'run-2', 'PINECONE').batch.commit());
+});
+
+test('two runs on one day: one check-in per run, each counts', async () => {
+  await seedSecondRun();
+  const alice = ctx(ALICE);
+  const first = checkInToRun(alice, ALICE, RUN, 'ACORN');
+  await assertSucceeds(first.batch.commit());
+  await assertSucceeds(checkInToRun(alice, ALICE, 'run-2', 'PINECONE', first.updated).batch.commit());
+});
+
+test('a code word can only be used once per day', async () => {
+  await seedSecondRun();
+  const org = ctx(ORGANIZER);
+  // ACORN is already run-1's word today
+  await assertFails(setDoc(doc(org, 'meetup_codes', codeKey(DATE, 'ACORN')), { runId: 'run-2', date: DATE }));
+  // A fresh word for a run that hasn't opened yet is fine
+  await env.withSecurityRulesDisabled(async (c) => {
+    await setDoc(doc(c.firestore(), 'meetup_events', 'run-3'), {
+      id: 'run-3', runId: 'run-3', date: '2099-01-07', title: 'Later', activeDistances: [], routes: {},
+      checkInOpensAt: Timestamp.fromMillis(Date.now() + 86400e3), checkInClosesAt: Timestamp.fromMillis(Date.now() + 2 * 86400e3),
+    });
+  });
+  await assertSucceeds(setDoc(doc(org, 'meetup_codes', codeKey('2099-01-07', 'ACORN')), { runId: 'run-3', date: '2099-01-07' }));
+  // ...but not once that run's check-in is open
+  await assertFails(deleteDoc(doc(org, 'meetup_codes', codeKey(DATE, 'ACORN'))));
+});
+
+test('runners can look up a code word key but not list them', async () => {
+  const alice = ctx(ALICE);
+  await assertSucceeds(getDoc(doc(alice, 'meetup_codes', codeKey(DATE, 'ACORN'))));
+  await assertFails(getDocs(collection(alice, 'meetup_codes')));
+  await assertFails(getDoc(doc(env.unauthenticatedContext().firestore(), 'meetup_codes', codeKey(DATE, 'ACORN'))));
+  await assertFails(setDoc(doc(alice, 'meetup_codes', codeKey(DATE, 'MINE')), { runId: RUN, date: DATE }));
+});
+
+test('deleting a run with check-ins: admin rolls back runners; organizer cannot', async () => {
+  // Alice checked into run-1 (check-in open, so the code word key is locked for organizers)
+  const first = checkInToRun(ctx(ALICE), ALICE, RUN, 'ACORN');
+  await assertSucceeds(first.batch.commit());
+
+  // Organizer can't rewrite Alice's stats
+  const org = ctx(ORGANIZER);
+  const ob = writeBatch(org);
+  ob.delete(doc(org, 'checkins', `${RUN}_${ALICE}`));
+  ob.set(doc(org, 'users', ALICE), baseUser(ALICE));
+  await assertFails(ob.commit());
+
+  // Admin: per-runner rollback, then the run, its event, code key and secret
+  const admin = ctx(BOOTSTRAP);
+  const b = writeBatch(admin);
+  b.delete(doc(admin, 'checkins', `${RUN}_${ALICE}`));
+  b.set(doc(admin, 'users', ALICE), baseUser(ALICE));
+  b.set(doc(admin, 'members', memberKeyFor(ALICE)), memberFromUser(baseUser(ALICE)));
+  await assertSucceeds(b.commit());
+  const b2 = writeBatch(admin);
+  b2.delete(doc(admin, 'runs', RUN));
+  b2.delete(doc(admin, 'meetup_events', RUN));
+  b2.delete(doc(admin, 'meetup_codes', codeKey(DATE, 'ACORN')));
+  b2.delete(doc(admin, 'meetup_secrets', RUN));
+  await assertSucceeds(b2.commit());
 });

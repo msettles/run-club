@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import confetti from 'canvas-confetti';
-import { MeetupEvent, UserProfile, RouteOption, ActivityType, DistanceChoice, CheckInRecord, LegacyMember, Badge, GPXRoute } from '../types';
+import { RunEvent, MeetupEvent, UserProfile, RouteOption, ActivityType, DistanceChoice, CheckInRecord, LegacyMember, Badge, GPXRoute } from '../types';
 import { CLUB_MILESTONES } from '../data/initialData';
 import { calculateAge } from '../utils/dateUtils';
 import { isStaffProfile } from '../utils/roles';
@@ -29,13 +29,16 @@ interface CheckInModalProps {
   isOpen: boolean;
   onClose: () => void;
   meetupEvents: MeetupEvent[];
-  eventDate?: string; // Date of the run being checked into (never falls back to another night)
+  eventId?: string; // The run being checked into (never falls back to another run)
+  candidateEventIds?: string[]; // Several runs open at once: the code word picks one
+  runs?: RunEvent[]; // For showing day, time and start location of candidate runs
+  onResolveCodeWord?: (date: string, codeWord: string) => Promise<string | null>;
   currentUser: UserProfile;
   routes?: GPXRoute[];
   checkins?: CheckInRecord[];
   initialMode?: 'checkin' | 'register';
   onCheckInRunner: (params: {
-    eventDate: string;
+    eventId: string;
     userEmail: string;
     codeWordEntered: string;
     activity: ActivityType;
@@ -89,7 +92,10 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
   isOpen,
   onClose,
   meetupEvents,
-  eventDate,
+  eventId,
+  candidateEventIds,
+  runs = [],
+  onResolveCodeWord,
   currentUser,
   routes,
   checkins,
@@ -99,12 +105,19 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
   onSearchLegacy,
   onOpenAuthModal,
 }) => {
-  // The check-in event for exactly this run's date. Never fall back to another
-  // night's event: that showed the wrong routes and the server rejected the check-in.
-  const matchedEvent = eventDate ? meetupEvents.find((e) => e.date === eventDate) : undefined;
+  // The check-in event for exactly this run. Never fall back to another run:
+  // that showed the wrong routes and the server rejected the check-in.
+  // When several runs are open, the runner's code word picks the run.
+  const [resolvedEventId, setResolvedEventId] = useState<string | null>(null);
+  const [chooserWord, setChooserWord] = useState<string>('');
+  const [chooserError, setChooserError] = useState<string | null>(null);
+  const [isResolving, setIsResolving] = useState<boolean>(false);
+  const selectedEventId = resolvedEventId || eventId || (candidateEventIds?.length === 1 ? candidateEventIds[0] : undefined);
+  const isChoosingRun = !selectedEventId && (candidateEventIds?.length || 0) > 1;
+  const matchedEvent = selectedEventId ? meetupEvents.find((e) => e.id === selectedEventId) : undefined;
   const activeEvent: MeetupEvent = matchedEvent || {
-    id: eventDate || '',
-    date: eventDate || '',
+    id: selectedEventId || '',
+    date: '',
     title: 'Check-in',
     codeWord: '',
     activeDistances: [],
@@ -119,8 +132,8 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
   const existingCheckIn = useMemo(() => {
     if (!currentUser.email || !checkins) return null;
     const cleanEmail = currentUser.email.toLowerCase().trim();
-    return checkins.find((c) => c.date === activeEvent.date && c.userEmail.toLowerCase().trim() === cleanEmail) || null;
-  }, [checkins, activeEvent.date, currentUser.email]);
+    return checkins.find((c) => c.id === `${activeEvent.id}_${cleanEmail}`) || null;
+  }, [checkins, activeEvent.id, currentUser.email]);
 
   const [isEditingCheckIn, setIsEditingCheckIn] = useState<boolean>(false);
   const modalBodyRef = useRef<HTMLDivElement>(null);
@@ -282,6 +295,97 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
 
   if (!isOpen) return null;
 
+  // Several runs open right now: the code word decides which run this is.
+  if (viewMode === 'checkin' && isChoosingRun) {
+    const candidates = (candidateEventIds || [])
+      .map((id) => meetupEvents.find((e) => e.id === id))
+      .filter((e): e is MeetupEvent => Boolean(e));
+    const findRun = async (e: React.FormEvent) => {
+      e.preventDefault();
+      setChooserError(null);
+      const word = chooserWord.trim().toUpperCase();
+      if (!word) {
+        setChooserError("Enter your run's code word.");
+        return;
+      }
+      setIsResolving(true);
+      try {
+        let found: string | null = null;
+        for (const date of [...new Set(candidates.map((c) => c.date))]) {
+          const rid = onResolveCodeWord ? await onResolveCodeWord(date, word) : null;
+          if (rid && candidates.some((c) => c.id === rid)) {
+            found = rid;
+            break;
+          }
+        }
+        if (!found) {
+          setChooserError("That code word doesn't match any run open right now. Double-check the word the organizer announced.");
+          return;
+        }
+        setCodeWordInput(word);
+        setResolvedEventId(found);
+      } catch (err) {
+        console.error('Code word lookup failed:', err);
+        setChooserError('Could not check the code word. Please check your connection and try again.');
+      } finally {
+        setIsResolving(false);
+      }
+    };
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/80 backdrop-blur-sm p-4" role="dialog" aria-modal="true" aria-labelledby="choose-run-title">
+        <form onSubmit={findRun} className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl border border-stone-200 p-6 space-y-4">
+          <button type="button" onClick={onClose} aria-label="Close" className="absolute top-4 right-4 p-2 text-stone-400 hover:text-stone-700 rounded-full hover:bg-stone-100 transition">
+            <X className="w-5 h-5" />
+          </button>
+          <div className="text-center space-y-1">
+            <div className="text-4xl" aria-hidden="true">🦫</div>
+            <h3 id="choose-run-title" className="text-lg font-display font-black uppercase tracking-wide text-stone-900">
+              Which run are you doing?
+            </h3>
+            <p className="text-xs text-stone-600">More than one run is open right now. Enter your run&apos;s code word to check in.</p>
+          </div>
+          <ul className="space-y-2">
+            {candidates.map((ev) => {
+              const run = runs.find((r) => r.id === ev.id);
+              const day = new Date(`${ev.date}T12:00:00`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+              return (
+                <li key={ev.id} className="p-3 rounded-xl border border-stone-200 bg-stone-50 text-xs">
+                  <div className="font-bold text-stone-900">{ev.title}</div>
+                  <div className="text-stone-600">
+                    {day}{ev.time ? ` · ${ev.time}` : ''}{run?.locationName ? ` · ${run.locationName}` : ''}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+          <div className="space-y-1.5">
+            <label htmlFor="chooser-code-word" className="block text-xs font-bold text-stone-800 uppercase tracking-wider">
+              Code word
+            </label>
+            <input
+              id="chooser-code-word"
+              type="text"
+              value={chooserWord}
+              onChange={(e) => setChooserWord(e.target.value)}
+              autoFocus
+              autoComplete="off"
+              placeholder="e.g. TURKEY"
+              className="w-full uppercase font-mono tracking-widest text-base font-bold px-4 py-3 rounded-xl border border-stone-300 focus:ring-2 focus:ring-amber-500 outline-none"
+            />
+            {chooserError && <p className="text-xs text-red-600 font-semibold">{chooserError}</p>}
+          </div>
+          <button
+            type="submit"
+            disabled={isResolving}
+            className="w-full py-2.5 bg-woodland-700 hover:bg-woodland-800 disabled:opacity-50 text-white font-bold text-sm rounded-xl transition"
+          >
+            {isResolving ? 'Checking…' : 'Find my run'}
+          </button>
+        </form>
+      </div>
+    );
+  }
+
   // Check-in only while this run's window is open (2 hours before start until midnight).
   if (viewMode === 'checkin' && eventStatus !== 'open') {
     const message = !matchedEvent
@@ -417,7 +521,7 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
       // If user provided code word during first-time signup at check-in time, complete check-in now!
       if (autoCheckInAfterRegister && codeWordInput.trim() && isCheckInUnlocked) {
         const res = await onCheckInRunner({
-          eventDate: activeEvent.date,
+          eventId: activeEvent.id,
           userEmail: newUser.email,
           codeWordEntered: codeWordInput,
           activity: selectedActivity,
@@ -465,10 +569,28 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
       return;
     }
 
+    // The code word identifies the run; catch a word that belongs to a different run.
+    if (!existingCheckIn && onResolveCodeWord) {
+      try {
+        const rid = await onResolveCodeWord(activeEvent.date, effectiveCodeWord);
+        if (rid && rid !== activeEvent.id) {
+          const other = meetupEvents.find((e) => e.id === rid);
+          setErrorMsg(`That code word is for another run${other ? `: ${other.title}${other.time ? ` at ${other.time}` : ''}` : ''}. Check you're checking into the right run.`);
+          return;
+        }
+        if (!rid) {
+          setErrorMsg("That code word doesn't match this run. Double-check the word the organizer announced.");
+          return;
+        }
+      } catch (err) {
+        console.warn('Code word lookup failed; letting the server decide:', err);
+      }
+    }
+
     setIsSubmitting(true);
     try {
       const res = await onCheckInRunner({
-        eventDate: activeEvent.date,
+        eventId: activeEvent.id,
         userEmail: currentUser.email,
         codeWordEntered: effectiveCodeWord,
         activity: selectedActivity,

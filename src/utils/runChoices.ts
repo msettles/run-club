@@ -80,7 +80,7 @@ export function routeOptionFromRoute(route: GPXRoute): RouteOption {
  * Keeps an existing event's code word and notes unless a new code word is given.
  */
 export function buildMeetupFromRun(
-  run: Pick<RunEvent, 'date' | 'time' | 'title' | 'specialEvent' | 'routeChoices' | 'routeId'>,
+  run: Pick<RunEvent, 'id' | 'date' | 'time' | 'title' | 'specialEvent' | 'routeChoices' | 'routeId'>,
   routes: GPXRoute[],
   codeWord: string,
   existing?: MeetupEvent
@@ -101,7 +101,8 @@ export function buildMeetupFromRun(
 
   return {
     ...(existing || {}),
-    id: run.date,
+    id: run.id,
+    runId: run.id,
     date: run.date,
     time: run.time,
     title: run.title,

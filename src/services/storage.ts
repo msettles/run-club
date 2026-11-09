@@ -59,8 +59,8 @@ import {
   deleteField,
   Timestamp,
 } from 'firebase/firestore';
-import { memberKeyFor } from '../utils/memberKey';
-import { ADMIN_EMAILS } from '../utils/roles';
+import { codeKeyFor, memberKeyFor } from '../utils/memberKey';
+import { ADMIN_EMAILS, isAdminProfile } from '../utils/roles';
 import { 
   ClubNotification, 
   getStoredNotifications, 
@@ -660,13 +660,73 @@ export function useClubStore() {
         setMilestoneAlerts((prev) => [...remoteAlerts, ...prev.filter((a) => !remoteIds.has(a.id))]);
       }
 
-      // Code words: read secrets, and migrate any code word still stored on the public doc.
+      // Code words (staff), keyed by run ID.
       const secretsSnap = await getDocs(collection(currentDb, 'meetup_secrets'));
       const codeWords: Record<string, string> = {};
       secretsSnap.docs.forEach((d) => {
         const cw = d.data().codeWord;
         if (typeof cw === 'string') codeWords[d.id] = cw;
       });
+
+      // One-time migration (admins): check-in events and check-ins used to be keyed
+      // by date. Re-key each to its run (one check-in per runner per run) and add
+      // the code word lookup key. Dates with no run, or more than one, are skipped.
+      let migrated = false;
+      if (isAdmin) {
+        const DATE_ID = /^\d{4}-\d{2}-\d{2}$/;
+        const [evSnap, runsSnap] = await Promise.all([
+          getDocs(collection(currentDb, 'meetup_events')),
+          getDocs(collection(currentDb, 'runs')),
+        ]);
+        const allRuns = runsSnap.docs.map((d) => d.data() as RunEvent);
+        for (const d of evSnap.docs) {
+          if (!DATE_ID.test(d.id)) continue;
+          const data = d.data();
+          const date: string = data.date || d.id;
+          const matches = allRuns.filter((r) => r.date === date);
+          if (matches.length !== 1) {
+            console.warn(`Not migrating check-in event ${d.id}: ${matches.length} runs on that date.`);
+            continue;
+          }
+          const runId = matches[0].id;
+          const word = (codeWords[d.id] || (typeof data.codeWord === 'string' ? data.codeWord : '')).trim().toUpperCase();
+          const win = computeCheckInWindow(date, data.time);
+          const { codeWord: _legacyWord, ...rest } = data;
+          try {
+            const batch = writeBatch(currentDb);
+            batch.set(doc(currentDb, 'meetup_events', runId), {
+              ...rest,
+              id: runId,
+              runId,
+              date,
+              checkInOpensAt: data.checkInOpensAt instanceof Timestamp ? data.checkInOpensAt : Timestamp.fromDate(win.opensAt),
+              checkInClosesAt: data.checkInClosesAt instanceof Timestamp ? data.checkInClosesAt : Timestamp.fromDate(win.closesAt),
+            });
+            if (word) {
+              batch.set(doc(currentDb, 'meetup_secrets', runId), { codeWord: word });
+              batch.set(doc(currentDb, 'meetup_codes', await codeKeyFor(date, word)), { runId, date });
+            }
+            const ciSnap = await getDocs(query(collection(currentDb, 'checkins'), where('date', '==', date)));
+            for (const c of ciSnap.docs) {
+              const cd = c.data() as CheckInRecord;
+              if (cd.runId) continue;
+              const newId = `${runId}_${cd.userEmail}`;
+              batch.set(doc(currentDb, 'checkins', newId), { ...cd, id: newId, runId });
+              batch.delete(c.ref);
+            }
+            batch.delete(d.ref);
+            if (codeWords[d.id] !== undefined) batch.delete(doc(currentDb, 'meetup_secrets', d.id));
+            await batch.commit();
+            if (word) codeWords[runId] = word;
+            delete codeWords[d.id];
+            migrated = true;
+          } catch (err) {
+            console.warn(`Migrating check-in event ${d.id} failed:`, err);
+          }
+        }
+      }
+
+      // Older migration: code word left on a public doc, or no check-in window yet.
       const publicSnap = await getDocs(collection(currentDb, 'meetup_events'));
       for (const d of publicSnap.docs) {
         const data = d.data();
@@ -684,7 +744,16 @@ export function useClubStore() {
           checkInClosesAt: Timestamp.fromDate(new Date(start.getFullYear(), start.getMonth(), start.getDate(), 23, 59, 59)),
         });
       }
-      setMeetupEvents((prev) => prev.map((e) => (codeWords[e.date] ? { ...e, codeWord: codeWords[e.date] } : e)));
+      const freshEvents = migrated
+        ? (await getDocs(collection(currentDb, 'meetup_events'))).docs.map((d) => meetupFromPublicDoc(d.data()))
+        : null;
+      setMeetupEvents((prev) =>
+        (freshEvents || prev).map((e) => (codeWords[e.id] ? { ...e, codeWord: codeWords[e.id] } : e))
+      );
+      if (migrated) {
+        const ciSnap = await getDocs(collection(currentDb, 'checkins'));
+        setCheckins(ciSnap.docs.map((d) => d.data() as CheckInRecord));
+      }
 
       // Make sure every profile has an up-to-date hashed leaderboard row.
       // Only admins may write other people's rows.
@@ -1115,7 +1184,7 @@ export function useClubStore() {
    * Check in a runner to a scheduled meetup event
    */
   const checkInRunner = async (params: {
-    eventDate: string;
+    eventId: string; // the run's ID
     userEmail: string;
     codeWordEntered: string;
     activity: ActivityType;
@@ -1131,14 +1200,15 @@ export function useClubStore() {
     newBadges?: Badge[];
     milestoneAlert?: MilestoneAlert;
   }> => {
-    const { eventDate, userEmail, codeWordEntered, activity, distanceChoice, loops, withPet } = params;
+    const { eventId, userEmail, codeWordEntered, activity, distanceChoice, loops, withPet } = params;
     const cleanEmail = userEmail.trim().toLowerCase();
 
-    // 1. Locate the event for exactly this date (never fall back to another night's event)
-    const event = meetupEvents.find((e) => e.date === eventDate);
+    // 1. Locate exactly this run's check-in event (never fall back to another run)
+    const event = meetupEvents.find((e) => e.id === eventId);
     if (!event) {
-      return { success: false, message: 'No check-in event is scheduled for this date.' };
+      return { success: false, message: "Check-in isn't set up for this run." };
     }
+    const eventDate = event.date;
 
     // 2. Validate Code Word. With Firebase the code word is secret and the
     //    Firestore rules verify it; locally we compare against the stored one.
@@ -1196,8 +1266,9 @@ export function useClubStore() {
     }
 
     // 5. Check if runner already has a check-in for this event date (allow updates!)
-    const checkinId = `${eventDate}_${cleanEmail}`;
-    const existingCheckIn = checkins.find((c) => c.date === eventDate && c.userEmail.toLowerCase() === cleanEmail);
+    // One check-in per runner per run
+    const checkinId = `${eventId}_${cleanEmail}`;
+    const existingCheckIn = checkins.find((c) => c.id === checkinId);
     const isUpdate = Boolean(existingCheckIn);
 
     const now = new Date();
@@ -1207,6 +1278,7 @@ export function useClubStore() {
     const newCheckIn: CheckInRecord = {
       ...(existingCheckIn || {}),
       id: checkinId,
+      runId: eventId,
       date: eventDate,
       time: timeStr,
       userEmail: cleanEmail,
@@ -1393,6 +1465,7 @@ export function useClubStore() {
       unlockedBadgeIds: unlocked,
       badgeCounts: counts,
       lastCheckInDate: eventDate,
+      lastCheckInRunId: eventId,
       currentStreakWeeks: streaks.current,
       longestStreakWeeks: streaks.longest,
     };
@@ -1417,6 +1490,7 @@ export function useClubStore() {
           perks: milestoneBadge ? (milestoneBadge.triggerConfig?.perks || '$1 off draft beers at Blue Note') : mDef!.perks,
           date: eventDate,
           time: timeStr,
+          runId: eventId,
           fulfilled: false,
         };
       }
@@ -1440,7 +1514,7 @@ export function useClubStore() {
         return {
           success: false,
           message: err?.code === 'permission-denied'
-            ? "Check-in wasn't accepted. Double-check tonight's code word — check-in opens 2 hours before the run."
+            ? "Check-in wasn't accepted. Double-check this run's code word — check-in opens 2 hours before the run."
             : 'Could not reach the club server. Please check your connection and try again.',
         };
       }
@@ -1449,7 +1523,7 @@ export function useClubStore() {
     // 9. Server accepted it (or local mode): update local state
     setCheckins((prev) => [
       newCheckIn,
-      ...prev.filter((c) => !(c.date === eventDate && c.userEmail.toLowerCase() === cleanEmail)),
+      ...prev.filter((c) => c.id !== checkinId),
     ]);
     setUsers((prev) => {
       const exists = prev.some((x) => x.email.toLowerCase() === cleanEmail);
@@ -1497,39 +1571,68 @@ export function useClubStore() {
    */
   const saveMeetupEvent = async (event: MeetupEvent) => {
     const win = computeCheckInWindow(event.date, event.time);
-    event = { ...event, checkInOpensAt: win.opensAt.toISOString(), checkInClosesAt: win.closesAt.toISOString() };
-    setMeetupEvents((prev) => {
-      const exists = prev.some((e) => e.date === event.date);
-      if (exists) {
-        return prev.map((e) => (e.date === event.date ? event : e));
-      }
-      return [event, ...prev];
-    });
+    const runId = event.runId || event.id;
+    event = { ...event, id: runId, runId, checkInOpensAt: win.opensAt.toISOString(), checkInClosesAt: win.closesAt.toISOString() };
+    const previous = meetupEvents.find((e) => e.id === runId);
+    const newWord = (event.codeWord || '').trim().toUpperCase();
+    const oldWord = (previous?.codeWord || '').trim().toUpperCase();
+    const wordOrDateChanged = Boolean(newWord) && (newWord !== oldWord || previous?.date !== event.date);
+
+    // Code words must be unique within a day: they decide which run a runner checks into.
+    // (The database enforces this too; this gives a clearer message first.)
+    if (wordOrDateChanged && meetupEvents.some((e) => e.id !== runId && e.date === event.date && (e.codeWord || '').toUpperCase() === newWord)) {
+      throw Object.assign(new Error(`The code word ${newWord} is already used by another run on ${event.date}. Pick a different word.`), {
+        code: 'duplicate-code-word',
+      });
+    }
+
     if (isFirebaseConfigured && db) {
       // Public doc: everything except the code word, plus the check-in window the rules enforce
       // (opens 2 hours before the start, closes at midnight).
-      const { codeWord, checkInOpensAt: _o, checkInClosesAt: _c, ...publicEvent } = event;
-      const { opensAt, closesAt } = win;
-      try {
-        await setDoc(
-          doc(db, 'meetup_events', event.date),
-          {
-            ...cleanFirestoreData(publicEvent),
-            codeWord: deleteField(),
-            checkInOpensAt: Timestamp.fromDate(opensAt),
-            checkInClosesAt: Timestamp.fromDate(closesAt),
-          },
-          { merge: true }
-        );
-        const cleanCodeWord = (codeWord || '').trim().toUpperCase();
-        if (cleanCodeWord) {
-          await setDoc(doc(db, 'meetup_secrets', event.date), { codeWord: cleanCodeWord });
+      const { codeWord: _cw, checkInOpensAt: _o, checkInClosesAt: _c, ...publicEvent } = event;
+      await setDoc(
+        doc(db, 'meetup_events', runId),
+        {
+          ...cleanFirestoreData(publicEvent),
+          codeWord: deleteField(),
+          checkInOpensAt: Timestamp.fromDate(win.opensAt),
+          checkInClosesAt: Timestamp.fromDate(win.closesAt),
+        },
+        { merge: true }
+      );
+      if (wordOrDateChanged) {
+        // New lookup key first: creating it fails if the word is taken that day.
+        try {
+          await setDoc(doc(db, 'meetup_codes', await codeKeyFor(event.date, newWord)), { runId, date: event.date });
+        } catch (err: any) {
+          if (err?.code === 'permission-denied' && !(previous && win.opensAt <= new Date())) {
+            throw Object.assign(new Error(`The code word ${newWord} is already used by another run on ${event.date}. Pick a different word.`), {
+              code: 'duplicate-code-word',
+            });
+          }
+          throw err;
         }
-      } catch (err) {
-        console.error('Failed to save meetup event:', err);
-        throw err;
+        if (previous && oldWord) {
+          await deleteDoc(doc(db, 'meetup_codes', await codeKeyFor(previous.date, oldWord))).catch((err) =>
+            console.warn('Old code word key not removed:', err)
+          );
+        }
+        await setDoc(doc(db, 'meetup_secrets', runId), { codeWord: newWord });
       }
     }
+
+    setMeetupEvents((prev) => (prev.some((e) => e.id === runId) ? prev.map((e) => (e.id === runId ? event : e)) : [event, ...prev]));
+  };
+
+  /** Which run a code word belongs to on a date (signed-in lookup; never lists code words). */
+  const resolveRunByCodeWord = async (date: string, codeWord: string): Promise<string | null> => {
+    const word = codeWord.trim().toUpperCase();
+    if (!word) return null;
+    if (!isFirebaseConfigured || !db) {
+      return meetupEvents.find((e) => e.date === date && (e.codeWord || '').toUpperCase() === word)?.id || null;
+    }
+    const snap = await getDoc(doc(db, 'meetup_codes', await codeKeyFor(date, word)));
+    return snap.exists() ? ((snap.data().runId as string) || null) : null;
   };
 
   /**
@@ -1772,10 +1875,11 @@ export function useClubStore() {
       ],
     };
 
-    setRuns((prev) => [run, ...prev]);
     if (isFirebaseConfigured && db) {
-      setDoc(doc(db, 'runs', id), cleanFirestoreData(run)).catch(console.error);
+      await setDoc(doc(db, 'runs', id), cleanFirestoreData(run));
     }
+    setRuns((prev) => [run, ...prev]);
+    return run;
   };
 
   /**
@@ -1846,11 +1950,108 @@ export function useClubStore() {
   /**
    * Delete a run (Admin)
    */
-  const deleteRun = async (runId: string) => {
-    setRuns((prev) => prev.filter((r) => r.id !== runId));
-    if (isFirebaseConfigured && db) {
-      deleteDoc(doc(db, 'runs', runId)).catch(console.error);
+  /** Undo one check-in's effect on a runner's totals (badges/streaks are recomputed separately). */
+  const rollBackCheckIn = (u: UserProfile, c: CheckInRecord): UserProfile => {
+    const dist: Record<string, number> = { ...(u.distanceCounts || {}) };
+    const m = c.actualMiles || 0;
+    const rounded = (Math.round(m * 10) / 10).toFixed(1);
+    for (const key of [m <= 2.0 ? '1' : m <= 4.0 ? '3' : '5', rounded, `${rounded} mi`]) {
+      if (dist[key]) dist[key] = Math.max(0, dist[key] - 1);
     }
+    return {
+      ...u,
+      totalRuns: Math.max(0, u.totalRuns - 1),
+      loggedRuns: Math.max(0, u.loggedRuns - 1),
+      runCount: c.activity === 'running' ? Math.max(0, u.runCount - 1) : u.runCount,
+      walkCount: c.activity === 'walking' ? Math.max(0, u.walkCount - 1) : u.walkCount,
+      petRunCount: c.withPet ? Math.max(0, (u.petRunCount || 0) - 1) : u.petRunCount,
+      totalMiles: Math.max(0, Math.round((u.totalMiles - m) * 100) / 100),
+      distanceCounts: dist,
+    };
+  };
+
+  /** How many runners checked into a run (server count in Firebase mode). */
+  const countRunCheckIns = async (runId: string): Promise<number> => {
+    if (isFirebaseConfigured && db) {
+      const snap = await getDocs(query(collection(db, 'checkins'), where('runId', '==', runId)));
+      return snap.size;
+    }
+    return checkins.filter((c) => c.runId === runId).length;
+  };
+
+  /**
+   * Delete a run, its check-in event and code word. If runners checked in, their
+   * check-ins are removed too and each runner's runs, miles, badges, streaks and
+   * unfulfilled gear alerts from that run are rolled back (admins only: it rewrites
+   * other runners' stats). Each runner is one atomic write, so a retry after a
+   * partial failure carries on safely.
+   */
+  const deleteRun = async (runId: string) => {
+    const ev = meetupEvents.find((e) => e.id === runId);
+    const remainingEvents = meetupEvents.filter((e) => e.id !== runId);
+
+    if (isFirebaseConfigured && db) {
+      const currentDb = db;
+      const [ciSnap, alertSnap] = await Promise.all([
+        getDocs(query(collection(currentDb, 'checkins'), where('runId', '==', runId))),
+        getDocs(query(collection(currentDb, 'milestone_alerts'), where('runId', '==', runId))),
+      ]);
+      if (!ciSnap.empty && !isAdminProfile(currentUser)) {
+        throw Object.assign(
+          new Error(`${ciSnap.size} runner${ciSnap.size === 1 ? ' has' : 's have'} checked into this run. Only an admin can delete it, because their run counts and miles are adjusted.`),
+          { code: 'needs-admin' }
+        );
+      }
+
+      const touchedUsers: UserProfile[] = [];
+      for (const cDoc of ciSnap.docs) {
+        const c = cDoc.data() as CheckInRecord;
+        const email = c.userEmail.toLowerCase();
+        const batch = writeBatch(currentDb);
+        batch.delete(cDoc.ref);
+        alertSnap.docs
+          .filter((a) => (a.data().userEmail || '').toLowerCase() === email && !a.data().fulfilled)
+          .forEach((a) => batch.delete(a.ref));
+
+        const userSnap = await getDoc(doc(currentDb, 'users', email));
+        if (userSnap.exists()) {
+          const rolled = rollBackCheckIn(userSnap.data() as UserProfile, c);
+          const legacy = await fetchLegacyEvents(rolled.linkedLegacyIds || []);
+          const remaining = checkins.filter((x) => x.userEmail.toLowerCase() === email && x.id !== c.id);
+          const final: UserProfile = { ...rolled, ...recomputeBadges(rolled, badges, datedEventsFrom(legacy, remaining, remainingEvents)) };
+          const key = await memberKeyFor(email);
+          batch.set(doc(currentDb, 'users', email), cleanFirestoreData(final));
+          batch.set(doc(currentDb, 'members', key), toPublicMember(final, key));
+          touchedUsers.push(final);
+        }
+        await batch.commit();
+      }
+
+      await deleteDoc(doc(currentDb, 'runs', runId));
+      // Remove its check-in event so the QR code can't open a deleted run.
+      await deleteDoc(doc(currentDb, 'meetup_events', runId)).catch((err) => console.warn('Check-in event not removed:', err));
+      if (ev?.codeWord) {
+        await deleteDoc(doc(currentDb, 'meetup_codes', await codeKeyFor(ev.date, ev.codeWord))).catch(() => {});
+      }
+      if (isAdminProfile(currentUser)) {
+        await deleteDoc(doc(currentDb, 'meetup_secrets', runId)).catch(() => {});
+      }
+
+      if (touchedUsers.length) {
+        const byEmail = new Map(touchedUsers.map((u) => [u.email.toLowerCase(), u]));
+        setUsers((prev) => prev.map((u) => byEmail.get(u.email.toLowerCase()) || u));
+        const keyed = await Promise.all(touchedUsers.map(async (u) => [await memberKeyFor(u.email), u] as const));
+        setMembers((prev) => [
+          ...keyed.map(([key, u]) => memberFromUser(u, key)),
+          ...prev.filter((m) => !keyed.some(([key]) => key === m.id)),
+        ]);
+      }
+    }
+
+    setCheckins((prev) => prev.filter((c) => c.runId !== runId));
+    setMilestoneAlerts((prev) => prev.filter((a) => !(a.runId === runId && !a.fulfilled)));
+    setRuns((prev) => prev.filter((r) => r.id !== runId));
+    setMeetupEvents((prev) => prev.filter((e) => e.id !== runId));
   };
 
   /**
@@ -1937,6 +2138,8 @@ export function useClubStore() {
     registerUser,
     checkInRunner,
     saveMeetupEvent,
+    resolveRunByCodeWord,
+    countRunCheckIns,
     searchLegacyMatches,
     switchCurrentUser,
     milestoneAlerts,
