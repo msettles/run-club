@@ -355,6 +355,11 @@ export const INITIAL_ROUTES: GPXRoute[] = [
     surface: 'Trail',
     difficulty: 'Moderate',
     points: generateLoopPoints(BASE_LAT, BASE_LON, 0.85, 48, 22, 28),
+    externalLinks: {
+      stravaUrl: 'https://www.strava.com/routes/3081829424823901',
+      garminUrl: 'https://connect.garmin.com/modern/course/12345678',
+      rungoUrl: 'https://routes.rungoapp.com/route/woodland-river',
+    },
     createdAt: '2026-03-01T12:00:00Z',
   },
   {
@@ -366,6 +371,11 @@ export const INITIAL_ROUTES: GPXRoute[] = [
     surface: 'Pavement',
     difficulty: 'Easy',
     points: generateLoopPoints(BASE_LAT, BASE_LON, 0.5, 36, 18, 12),
+    externalLinks: {
+      stravaUrl: 'https://www.strava.com/routes/31203',
+      garminUrl: 'https://connect.garmin.com/modern/course/12345679',
+      rungoUrl: 'https://routes.rungoapp.com/route/woodland-5k',
+    },
     createdAt: '2026-03-01T12:00:00Z',
   },
   {
@@ -377,6 +387,11 @@ export const INITIAL_ROUTES: GPXRoute[] = [
     surface: 'Mixed',
     difficulty: 'Challenging',
     points: generateLoopPoints(BASE_LAT, BASE_LON, 1.35, 64, 25, 85),
+    externalLinks: {
+      stravaUrl: 'https://www.strava.com/routes/31205',
+      garminUrl: 'https://connect.garmin.com/modern/course/12345680',
+      rungoUrl: 'https://routes.rungoapp.com/route/woodland-timberline',
+    },
     createdAt: '2026-03-01T12:00:00Z',
   },
 ];
@@ -590,34 +605,64 @@ export const INITIAL_MEETUP_EVENTS: MeetupEvent[] = [
         name: 'Downtown Blue Note Stroll',
         actualMiles: 1.15,
         routeUrl: 'https://www.strava.com/routes/31201',
+        externalLinks: {
+          stravaUrl: 'https://www.strava.com/routes/31201',
+          garminUrl: 'https://connect.garmin.com/modern/course/12345678',
+          rungoUrl: 'https://routes.rungoapp.com/route/woodland-123',
+        },
         directions: 'Start at Blue Note Brewing heading East on Main St. Turn Right on 2nd St, loop down to Court St, and back to the brewery patio.',
       },
       '3.2': {
         name: 'Heritage Park Greenbelt Loop',
         actualMiles: 3.22,
         routeUrl: 'https://www.strava.com/routes/31203',
+        externalLinks: {
+          stravaUrl: 'https://www.strava.com/routes/31203',
+          garminUrl: 'https://connect.garmin.com/modern/course/12345679',
+          rungoUrl: 'https://routes.rungoapp.com/route/woodland-heritage',
+        },
         directions: 'East on Main St, Left on 3rd St, cut through Heritage Park greenbelt trail, return West via Court St back to Blue Note.',
       },
       '5.1': {
         name: 'Spring Lake Trek',
         actualMiles: 5.12,
         routeUrl: 'https://www.strava.com/routes/31205',
+        externalLinks: {
+          stravaUrl: 'https://www.strava.com/routes/31205',
+          garminUrl: 'https://connect.garmin.com/modern/course/12345680',
+          rungoUrl: 'https://routes.rungoapp.com/route/woodland-springlake',
+        },
         directions: 'South on East St to Farmers Central Rd, complete perimeter loop of Spring Lake Park, and return North via 6th St.',
       },
       '1': {
         name: 'Downtown Blue Note Stroll',
         actualMiles: 1.15,
         routeUrl: 'https://www.strava.com/routes/31201',
+        externalLinks: {
+          stravaUrl: 'https://www.strava.com/routes/31201',
+          garminUrl: 'https://connect.garmin.com/modern/course/12345678',
+          rungoUrl: 'https://routes.rungoapp.com/route/woodland-123',
+        },
       },
       '3': {
         name: 'Heritage Park Greenbelt Loop',
         actualMiles: 3.22,
         routeUrl: 'https://www.strava.com/routes/31203',
+        externalLinks: {
+          stravaUrl: 'https://www.strava.com/routes/31203',
+          garminUrl: 'https://connect.garmin.com/modern/course/12345679',
+          rungoUrl: 'https://routes.rungoapp.com/route/woodland-heritage',
+        },
       },
       '5': {
         name: 'Spring Lake Trek',
         actualMiles: 5.12,
         routeUrl: 'https://www.strava.com/routes/31205',
+        externalLinks: {
+          stravaUrl: 'https://www.strava.com/routes/31205',
+          garminUrl: 'https://connect.garmin.com/modern/course/12345680',
+          rungoUrl: 'https://routes.rungoapp.com/route/woodland-springlake',
+        },
       },
     },
     notes: 'Thanksgiving warm-up run! Wear orange or brown for extra festive cheer.',

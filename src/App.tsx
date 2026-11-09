@@ -672,6 +672,7 @@ export function App() {
           eventDate={selectedRunForCheckIn.date}
           currentUser={currentUser}
           users={users}
+          routes={routes}
           initialMode={checkInInitialMode}
           onCheckInRunner={checkInRunner}
           onRegisterUser={registerUser}

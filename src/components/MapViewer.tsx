@@ -18,6 +18,8 @@ interface MapViewerProps {
   showElevationProfile?: boolean;
   onEditRoute?: (route: GPXRoute) => void;
   canEdit?: boolean;
+  hideHeader?: boolean;
+  hideActionBar?: boolean;
 }
 
 export const MapViewer: React.FC<MapViewerProps> = ({
@@ -26,6 +28,8 @@ export const MapViewer: React.FC<MapViewerProps> = ({
   showElevationProfile = true,
   onEditRoute,
   canEdit = false,
+  hideHeader = false,
+  hideActionBar = false,
 }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
@@ -177,6 +181,16 @@ export const MapViewer: React.FC<MapViewerProps> = ({
       // Fit bounds
       map.fitBounds(polyline.getBounds(), { padding: [35, 35] });
 
+      // Invalidate size shortly after mount to ensure crisp display when inside modals
+      const resizeTimer = setTimeout(() => {
+        if (mapInstanceRef.current) {
+          mapInstanceRef.current.invalidateSize();
+          if (polylineRef.current) {
+            mapInstanceRef.current.fitBounds(polylineRef.current.getBounds(), { padding: [35, 35] });
+          }
+        }
+      }, 150);
+
       // Hover marker for elevation profile scrub
       const hoverMarker = L.circleMarker(startPt, {
         radius: 7,
@@ -186,6 +200,15 @@ export const MapViewer: React.FC<MapViewerProps> = ({
         fillOpacity: 1,
       });
       hoverMarkerRef.current = hoverMarker;
+
+      return () => {
+        clearTimeout(resizeTimer);
+        if (watchIdRef.current !== null) {
+          navigator.geolocation.clearWatch(watchIdRef.current);
+        }
+        map.remove();
+        mapInstanceRef.current = null;
+      };
     }
 
     return () => {
@@ -323,110 +346,114 @@ export const MapViewer: React.FC<MapViewerProps> = ({
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-stone-200 overflow-hidden space-y-0">
       {/* Route Header & Metrics */}
-      <div className="p-4 bg-stone-50 border-b border-stone-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-        <div>
-          <div className="flex items-center gap-2">
-            <h3 className="font-extrabold text-base text-stone-900 font-display">{route.name}</h3>
-            <span className="px-2 py-0.5 bg-stone-200 text-stone-800 rounded-full text-[10px] font-bold">
-              {route.customDistanceLabel || `${route.distanceMiles} mi`}
-            </span>
-            <span className="px-2 py-0.5 bg-amber-100 text-amber-900 rounded-full text-[10px] font-bold">
-              {route.surface}
-            </span>
-          </div>
-          {route.notes && (
-            <p className="text-xs text-stone-500 mt-1 max-w-xl leading-relaxed">
-              <strong>Notes:</strong> {route.notes}
-            </p>
-          )}
-        </div>
-
-        {/* Action Controls & External Links */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <div className="flex items-center gap-1.5 font-bold text-xs text-woodland-900 bg-woodland-50 border border-woodland-200 px-2.5 py-1.5 rounded-xl">
-            <Navigation className="w-3.5 h-3.5 text-woodland-600" />
-            <span>{route.distanceMiles} mi</span>
-          </div>
-          <div className="flex items-center gap-1.5 font-bold text-xs text-amber-900 bg-amber-50 border border-amber-200 px-2.5 py-1.5 rounded-xl">
-            <Mountain className="w-3.5 h-3.5 text-amber-600" />
-            <span>+{route.elevationGainFt} ft</span>
+      {!hideHeader && (
+        <div className="p-4 bg-stone-50 border-b border-stone-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <h3 className="font-extrabold text-base text-stone-900 font-display">{route.name}</h3>
+              <span className="px-2 py-0.5 bg-stone-200 text-stone-800 rounded-full text-[10px] font-bold">
+                {route.customDistanceLabel || `${route.distanceMiles} mi`}
+              </span>
+              <span className="px-2 py-0.5 bg-amber-100 text-amber-900 rounded-full text-[10px] font-bold">
+                {route.surface}
+              </span>
+            </div>
+            {route.notes && (
+              <p className="text-xs text-stone-500 mt-1 max-w-xl leading-relaxed">
+                <strong>Notes:</strong> {route.notes}
+              </p>
+            )}
           </div>
 
-          {canEdit && onEditRoute && (
-            <button
-              onClick={() => onEditRoute(route)}
-              className="flex items-center gap-1 px-3 py-1.5 bg-stone-900 hover:bg-stone-800 text-white rounded-xl text-xs font-bold transition shadow-xs"
-            >
-              <Edit3 className="w-3.5 h-3.5 text-amber-300" />
-              <span>Edit Route</span>
-            </button>
-          )}
+          {/* Action Controls & External Links */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-1.5 font-bold text-xs text-woodland-900 bg-woodland-50 border border-woodland-200 px-2.5 py-1.5 rounded-xl">
+              <Navigation className="w-3.5 h-3.5 text-woodland-600" />
+              <span>{route.distanceMiles} mi</span>
+            </div>
+            <div className="flex items-center gap-1.5 font-bold text-xs text-amber-900 bg-amber-50 border border-amber-200 px-2.5 py-1.5 rounded-xl">
+              <Mountain className="w-3.5 h-3.5 text-amber-600" />
+              <span>+{route.elevationGainFt} ft</span>
+            </div>
+
+            {canEdit && onEditRoute && (
+              <button
+                onClick={() => onEditRoute(route)}
+                className="flex items-center gap-1 px-3 py-1.5 bg-stone-900 hover:bg-stone-800 text-white rounded-xl text-xs font-bold transition shadow-xs"
+              >
+                <Edit3 className="w-3.5 h-3.5 text-amber-300" />
+                <span>Edit Route</span>
+              </button>
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* External Resource Action Bar (Strava, Garmin, RunGo, GPX) */}
-      <div className="px-4 py-2 bg-stone-100/70 border-b border-stone-200 flex flex-wrap items-center justify-between gap-2 text-xs">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wider">
-            Apps:
-          </span>
+      {!hideActionBar && (
+        <div className="px-4 py-2 bg-stone-100/70 border-b border-stone-200 flex flex-wrap items-center justify-between gap-2 text-xs">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wider">
+              Apps:
+            </span>
 
-          {route.externalLinks?.stravaUrl && (
-            <a
-              href={route.externalLinks.stravaUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-1 px-2.5 py-1 bg-orange-50 hover:bg-orange-100 text-orange-800 font-bold rounded-lg border border-orange-300 transition shadow-2xs"
+            {route.externalLinks?.stravaUrl && (
+              <a
+                href={route.externalLinks.stravaUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1 px-2.5 py-1 bg-orange-50 hover:bg-orange-100 text-orange-800 font-bold rounded-lg border border-orange-300 transition shadow-2xs"
+              >
+                <span>🟠</span> Strava
+              </a>
+            )}
+
+            {route.externalLinks?.garminUrl && (
+              <a
+                href={route.externalLinks.garminUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1 px-2.5 py-1 bg-cyan-50 hover:bg-cyan-100 text-cyan-900 font-bold rounded-lg border border-cyan-300 transition shadow-2xs"
+              >
+                <span>🔵</span> Garmin
+              </a>
+            )}
+
+            {route.externalLinks?.rungoUrl && (
+              <a
+                href={route.externalLinks.rungoUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1 px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 font-bold rounded-lg border border-emerald-300 transition shadow-2xs"
+              >
+                <span>🟢</span> RunGo Nav
+              </a>
+            )}
+
+            <button
+              onClick={() => downloadGPXFile(route)}
+              title="Download GPX file for watches and phones"
+              className="flex items-center gap-1 px-2.5 py-1 bg-white hover:bg-stone-50 text-stone-700 font-bold rounded-lg border border-stone-300 transition shadow-2xs"
             >
-              <span>🟠</span> Strava
-            </a>
-          )}
+              <Download className="w-3 h-3 text-stone-500" />
+              <span>Download GPX</span>
+            </button>
+          </div>
 
-          {route.externalLinks?.garminUrl && (
-            <a
-              href={route.externalLinks.garminUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-1 px-2.5 py-1 bg-cyan-50 hover:bg-cyan-100 text-cyan-900 font-bold rounded-lg border border-cyan-300 transition shadow-2xs"
-            >
-              <span>🔵</span> Garmin
-            </a>
-          )}
-
-          {route.externalLinks?.rungoUrl && (
-            <a
-              href={route.externalLinks.rungoUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-1 px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 font-bold rounded-lg border border-emerald-300 transition shadow-2xs"
-            >
-              <span>🟢</span> RunGo Nav
-            </a>
-          )}
-
+          {/* GPS Live Tracking Button */}
           <button
-            onClick={() => downloadGPXFile(route)}
-            title="Download GPX file for watches and phones"
-            className="flex items-center gap-1 px-2.5 py-1 bg-white hover:bg-stone-50 text-stone-700 font-bold rounded-lg border border-stone-300 transition shadow-2xs"
+            onClick={toggleLocationTracking}
+            className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold transition shadow-2xs ${
+              isTrackingLocation
+                ? 'bg-blue-600 text-white'
+                : 'bg-white text-stone-700 border border-stone-300 hover:bg-stone-50'
+            }`}
           >
-            <Download className="w-3 h-3 text-stone-500" />
-            <span>Download GPX</span>
+            <Locate className={`w-3.5 h-3.5 ${isTrackingLocation ? 'animate-spin' : ''}`} />
+            <span>{isTrackingLocation ? 'Tracking Location' : 'Show My Location'}</span>
           </button>
         </div>
-
-        {/* GPS Live Tracking Button */}
-        <button
-          onClick={toggleLocationTracking}
-          className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold transition shadow-2xs ${
-            isTrackingLocation
-              ? 'bg-blue-600 text-white'
-              : 'bg-white text-stone-700 border border-stone-300 hover:bg-stone-50'
-          }`}
-        >
-          <Locate className={`w-3.5 h-3.5 ${isTrackingLocation ? 'animate-spin' : ''}`} />
-          <span>{isTrackingLocation ? 'Tracking Location' : 'Show My Location'}</span>
-        </button>
-      </div>
+      )}
 
       {locationError && (
         <div className="px-4 py-1.5 bg-red-50 text-red-700 text-xs border-b border-red-200">
@@ -437,6 +464,22 @@ export const MapViewer: React.FC<MapViewerProps> = ({
       {/* Map View */}
       <div className="relative">
         <div ref={mapContainerRef} style={{ height }} className="w-full z-0" />
+
+        {/* Floating GPS Location Button */}
+        <div className="absolute top-3 left-3 z-[400]">
+          <button
+            onClick={toggleLocationTracking}
+            title={isTrackingLocation ? 'Tracking your live location' : 'Show My Location'}
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-bold transition shadow-md border ${
+              isTrackingLocation
+                ? 'bg-blue-600 text-white border-blue-700 animate-pulse'
+                : 'bg-white/95 backdrop-blur-xs text-stone-700 border-stone-200 hover:bg-stone-50'
+            }`}
+          >
+            <Locate className={`w-3.5 h-3.5 ${isTrackingLocation ? 'animate-spin' : ''}`} />
+            <span className="hidden sm:inline">{isTrackingLocation ? 'Tracking' : 'My Location'}</span>
+          </button>
+        </div>
 
         {/* Layer Toggle Floating Button */}
         <div className="absolute top-3 right-3 z-[400] flex gap-1 bg-white/95 backdrop-blur-xs rounded-xl shadow-md border border-stone-200 p-1">
@@ -492,7 +535,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
       )}
 
       {/* TURN-BY-TURN CUE SHEET SECTION */}
-      {route.directions && route.directions.length > 0 && (
+      {route.directions && route.directions.length > 0 ? (
         <div className="p-4 bg-stone-50 border-t border-stone-200 space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -560,7 +603,56 @@ export const MapViewer: React.FC<MapViewerProps> = ({
             })}
           </div>
         </div>
-      )}
+      ) : (route.description || route.notes) ? (
+        <div className="p-4 bg-stone-50 border-t border-stone-200 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Compass className="w-4 h-4 text-woodland-600" />
+              <h4 className="font-extrabold text-sm text-stone-900 font-display">
+                Turn-by-Turn Directions
+              </h4>
+            </div>
+
+            {/* Concise / Verbose Mode Toggle */}
+            <div className="bg-stone-200 p-0.5 rounded-xl flex items-center text-xs font-bold">
+              <button
+                onClick={() => setDirectionsMode('concise')}
+                className={`px-2.5 py-1 rounded-lg transition ${
+                  directionsMode === 'concise' ? 'bg-white text-stone-900 shadow-xs' : 'text-stone-600'
+                }`}
+              >
+                📱 Concise
+              </button>
+              <button
+                onClick={() => setDirectionsMode('verbose')}
+                className={`px-2.5 py-1 rounded-lg transition ${
+                  directionsMode === 'verbose' ? 'bg-white text-stone-900 shadow-xs' : 'text-stone-600'
+                }`}
+              >
+                📖 Narrative
+              </button>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-xl p-3 border border-stone-200 text-xs text-stone-700">
+            {directionsMode === 'verbose' ? (
+              <p className="leading-relaxed whitespace-pre-line font-sans">{route.description || route.notes}</p>
+            ) : (
+              <ol className="space-y-1.5 list-decimal list-inside font-medium text-stone-900">
+                {(route.description || route.notes || '')
+                  .split(/(?:\. |\n|; |, and |, then )/)
+                  .map((s) => s.trim().replace(/^\d+\.\s*/, ''))
+                  .filter((s) => s.length > 2)
+                  .map((cue, idx) => (
+                    <li key={idx} className="leading-snug">
+                      {cue}
+                    </li>
+                  ))}
+              </ol>
+            )}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 };

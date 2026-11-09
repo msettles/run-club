@@ -1,7 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import confetti from 'canvas-confetti';
-import { MeetupEvent, UserProfile, RouteOption, ActivityType, DistanceChoice, CheckInRecord, LegacyMember, Badge } from '../types';
+import { MeetupEvent, UserProfile, RouteOption, ActivityType, DistanceChoice, CheckInRecord, LegacyMember, Badge, GPXRoute } from '../types';
 import { CLUB_MILESTONES } from '../data/initialData';
+import { MapViewer } from './MapViewer';
+import { downloadGPXFile } from '../utils/gpxParser';
 import { 
   Check,
   CheckCircle, 
@@ -15,7 +17,9 @@ import {
   Compass,
   Clock,
   Lock,
-  Unlock
+  Unlock,
+  Download,
+  ArrowLeft
 } from 'lucide-react';
 
 interface CheckInModalProps {
@@ -25,6 +29,7 @@ interface CheckInModalProps {
   eventDate?: string; // Date of the run being checked into; falls back to the latest event
   currentUser: UserProfile;
   users: UserProfile[];
+  routes?: GPXRoute[];
   initialMode?: 'checkin' | 'register';
   onCheckInRunner: (params: {
     eventDate: string;
@@ -84,6 +89,7 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
   eventDate,
   currentUser,
   users,
+  routes,
   initialMode = 'checkin',
   onCheckInRunner,
   onRegisterUser,
@@ -166,6 +172,66 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
     newBadges?: Badge[];
   } | null>(null);
 
+  const [postCheckInStep, setPostCheckInStep] = useState<'run_info' | 'rewards'>('run_info');
+
+  const matchedGpxRoute: GPXRoute = useMemo(() => {
+    const optRoute = successResult?.route || selectedOption?.route;
+    let found: GPXRoute | undefined;
+    if (optRoute?.routeId && routes) {
+      found = routes.find((r) => r.id === optRoute.routeId);
+    }
+    if (!found && optRoute && routes) {
+      found = routes.find(
+        (r) => r.name.toLowerCase() === optRoute.name.toLowerCase()
+      );
+    }
+    if (!found && optRoute && routes) {
+      found = routes.find(
+        (r) => Math.abs(r.distanceMiles - optRoute.actualMiles) < 0.2
+      );
+    }
+    if (!found && routes && routes.length > 0) {
+      found = routes[0];
+    }
+
+    const extLinks = {
+      stravaUrl: found?.externalLinks?.stravaUrl || optRoute?.externalLinks?.stravaUrl || (optRoute?.routeUrl?.includes('strava') ? optRoute.routeUrl : undefined),
+      garminUrl: found?.externalLinks?.garminUrl || optRoute?.externalLinks?.garminUrl || (optRoute?.routeUrl?.includes('garmin') ? optRoute.routeUrl : undefined),
+      rungoUrl: found?.externalLinks?.rungoUrl || optRoute?.externalLinks?.rungoUrl || (optRoute?.routeUrl?.includes('rungo') ? optRoute.routeUrl : undefined),
+    };
+
+    if (found) {
+      return {
+        ...found,
+        name: optRoute?.name || found.name,
+        distanceMiles: optRoute?.actualMiles || found.distanceMiles,
+        description: optRoute?.directions || found.description,
+        externalLinks: extLinks,
+        directions: (found.directions && found.directions.length > 0) ? found.directions : (optRoute?.directionsList || found.directions),
+      };
+    }
+
+    return {
+      id: 'default-route',
+      name: optRoute?.name || 'Woodland Woodchuckers Route',
+      description: optRoute?.directions || 'Start and finish at Blue Note Brewing Co.',
+      distanceMiles: optRoute?.actualMiles || creditedMiles || 3.1,
+      elevationGainFt: 25,
+      surface: 'Pavement',
+      difficulty: 'Easy',
+      points: [
+        { lat: 38.6781, lon: -121.7712 },
+        { lat: 38.6785, lon: -121.7680 },
+        { lat: 38.6820, lon: -121.7682 },
+        { lat: 38.6818, lon: -121.7715 },
+        { lat: 38.6781, lon: -121.7712 },
+      ],
+      externalLinks: extLinks,
+      directions: optRoute?.directionsList,
+      createdAt: new Date().toISOString(),
+    };
+  }, [successResult, selectedOption, routes, creditedMiles]);
+
   // New runner onboarding state
   const [regEmail, setRegEmail] = useState<string>(currentUser.email || '');
   const [regFirstName, setRegFirstName] = useState<string>(currentUser.firstName !== 'Guest' ? currentUser.firstName : '');
@@ -243,6 +309,7 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
           origin: { y: 0.6 },
           colors: ['#f59e0b', '#2a859e', '#13495d', '#10b981'],
         });
+        setPostCheckInStep('run_info');
         setSuccessResult(res);
       } else {
         setViewMode('checkin');
@@ -293,6 +360,7 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
         colors: ['#f59e0b', '#2a859e', '#13495d', '#10b981'],
       });
 
+      setPostCheckInStep('run_info');
       setSuccessResult(res);
     } catch (err: any) {
       setErrorMsg(err.message || 'Error during check-in.');
@@ -316,11 +384,11 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
     : null;
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-stone-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="relative w-full max-w-lg bg-white rounded-3xl shadow-2xl border border-stone-200 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-stone-950/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
+      <div className="relative w-full max-w-xl max-h-[92vh] flex flex-col bg-white rounded-3xl shadow-2xl border border-stone-200 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
         
         {/* Top Header */}
-        <div className="bg-gradient-to-r from-woodland-950 via-woodland-900 to-[#13495d] px-6 py-5 text-white flex items-center justify-between">
+        <div className="shrink-0 bg-gradient-to-r from-woodland-950 via-woodland-900 to-[#13495d] px-6 py-5 text-white flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-amber-400 text-stone-950 flex items-center justify-center font-bold text-xl shadow-md">
               🦫
@@ -343,7 +411,7 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
         </div>
 
         {/* Modal Body */}
-        <div className="p-6">
+        <div className="p-4 sm:p-6 overflow-y-auto flex-1">
           {/* Error Alert */}
           {errorMsg && (
             <div className="mb-5 flex items-start gap-3 p-3.5 bg-red-50 border border-red-200 text-red-800 rounded-xl text-xs sm:text-sm">
@@ -352,152 +420,293 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
             </div>
           )}
 
-          {/* VIEW 1: SUCCESS CELEBRATION */}
+          {/* VIEW 1: SUCCESS POST-CHECK-IN FLOW */}
           {successResult ? (
-            <div className="text-center py-2 space-y-5 animate-in fade-in duration-300">
-              <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto shadow-inner">
-                <CheckCircle className="w-9 h-9" />
-              </div>
-
-              <div>
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-100 text-amber-900 text-xs font-bold uppercase tracking-wider mb-2">
-                  <Sparkles className="w-3.5 h-3.5 text-amber-600" />
-                  Checked In!
-                </span>
-                <h3 className="text-2xl font-black text-stone-900 font-display">
-                  Boom, {currentUser.firstName}! 🎉
-                </h3>
-                <p className="text-sm text-stone-600 mt-1">
-                  You're all set for <strong className="text-stone-900">{successResult.checkIn?.routeName || successResult.route?.name || selectedOption.route.name}</strong> ({successResult.checkIn?.actualMiles || creditedMiles} mi {selectedActivity}).
-                </p>
-              </div>
-
-              {/* Badge Unlock Celebration Card */}
-              {successResult.newBadges && successResult.newBadges.length > 0 && (
-                <div className="bg-gradient-to-r from-amber-500/15 via-emerald-500/10 to-amber-500/15 border-2 border-amber-400/80 rounded-2xl p-4 text-left space-y-2.5 shadow-sm animate-in zoom-in-95">
-                  <div className="flex items-center justify-between">
-                    <span className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-amber-900">
-                      <Sparkles className="w-4 h-4 text-amber-600" />
-                      <span>{successResult.newBadges.length === 1 ? 'New Badge Unlocked!' : 'New Badges Unlocked!'} 🏅</span>
-                    </span>
-                    <span className="text-[10px] font-bold bg-amber-400 text-stone-950 px-2 py-0.5 rounded-full">
-                      +{successResult.newBadges.length} Badge{successResult.newBadges.length > 1 ? 's' : ''}
-                    </span>
-                  </div>
-                  <div className="space-y-2">
-                    {successResult.newBadges.map((badge) => {
-                      const count = successResult.user?.badgeCounts?.[badge.id] || 1;
-                      return (
-                        <div key={badge.id} className="flex items-center gap-3 bg-white/95 p-2.5 rounded-xl border border-amber-200/90 shadow-xs">
-                          <span className="text-2xl shrink-0">{badge.emoji}</span>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              <span className="font-extrabold text-sm text-stone-900 truncate">{badge.name}</span>
-                              {badge.isIncremental && count > 1 && (
-                                <span className="px-1.5 py-0.2 bg-amber-400 text-stone-950 font-black text-[10px] rounded-full shrink-0">
-                                  x{badge.maxMultiplier && count >= badge.maxMultiplier ? `${badge.maxMultiplier}+` : count}
-                                </span>
-                              )}
-                            </div>
-                            <p className="text-xs text-stone-600 line-clamp-1">{badge.description}</p>
-                          </div>
-                        </div>
-                      );
-                    })}
+            postCheckInStep === 'run_info' ? (
+              /* PAGE 1: RUN INFORMATION (APPS, MAP, TURN-BY-TURN) */
+              <div className="text-left space-y-4 animate-in fade-in duration-200">
+                {/* Check-In Success Header Banner */}
+                <div className="bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-50 border border-emerald-200/90 rounded-2xl p-4 flex items-start justify-between gap-3 shadow-xs">
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-sm">
+                      <CheckCircle className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-black uppercase tracking-wider">
+                          <Check className="w-3 h-3 stroke-[3]" />
+                          Checked In!
+                        </span>
+                        {successResult.newBadges && successResult.newBadges.length > 0 && (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-400 text-stone-950 text-[10px] font-black uppercase tracking-wider animate-pulse">
+                            <Sparkles className="w-3 h-3" />
+                            +{successResult.newBadges.length} Badge{successResult.newBadges.length > 1 ? 's' : ''} Earned!
+                          </span>
+                        )}
+                      </div>
+                      <h3 className="text-lg font-black text-stone-900 font-display mt-0.5">
+                        Boom, {currentUser.firstName}! 🎉
+                      </h3>
+                      <p className="text-xs text-stone-600">
+                        Registered for <strong className="text-stone-900">{matchedGpxRoute.name}</strong> ({successResult.checkIn?.actualMiles || creditedMiles} mi {selectedActivity}{currentLoops > 1 ? ` • ${currentLoops} loops` : ''}).
+                      </p>
+                    </div>
                   </div>
                 </div>
-              )}
 
-              {/* Milestone & Mileage Progress Box */}
-              <div className="bg-stone-50 border border-stone-200 rounded-2xl p-4 text-left space-y-3">
-                {/* Instant Milestone Alert Callout if runner just unlocked 5, 50, 100, 200 */}
-                {justUnlockedMilestone && (
-                  <div className="bg-gradient-to-r from-amber-500 to-amber-400 text-stone-950 rounded-xl p-3.5 shadow-md border border-amber-600 space-y-1.5 animate-in zoom-in-95">
-                    <div className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-stone-950">
-                      <Sparkles className="w-4 h-4 text-stone-950 shrink-0" />
-                      <span>🎉 Major Milestone Unlocked!</span>
+                {/* 1) Click on Strava / Garmin / RunGo / GPX */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-xs font-bold text-stone-700 px-0.5">
+                    <span className="flex items-center gap-1.5 uppercase tracking-wider text-[11px] text-stone-600">
+                      <span>📱</span> 1. Follow On Phone or Watch:
+                    </span>
+                    <span className="text-[10px] text-stone-400 font-normal">Tap to launch app or download</span>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {/* Strava */}
+                    {matchedGpxRoute.externalLinks?.stravaUrl ? (
+                      <a
+                        href={matchedGpxRoute.externalLinks.stravaUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex flex-col items-center justify-center p-2.5 rounded-xl bg-orange-50 hover:bg-orange-100 border border-orange-200/90 text-orange-950 font-bold transition shadow-2xs group text-center"
+                      >
+                        <span className="text-lg group-hover:scale-110 transition-transform">🟠</span>
+                        <span className="text-xs font-extrabold mt-0.5">Strava</span>
+                        <span className="text-[10px] text-orange-700 flex items-center gap-0.5">
+                          Open Route <ExternalLink className="w-2.5 h-2.5" />
+                        </span>
+                      </a>
+                    ) : (
+                      <div className="flex flex-col items-center justify-center p-2.5 rounded-xl bg-stone-100/60 border border-stone-200 text-stone-400 font-bold text-center opacity-60">
+                        <span className="text-lg">🟠</span>
+                        <span className="text-xs font-extrabold mt-0.5">Strava</span>
+                        <span className="text-[10px]">Not linked</span>
+                      </div>
+                    )}
+
+                    {/* Garmin */}
+                    {matchedGpxRoute.externalLinks?.garminUrl ? (
+                      <a
+                        href={matchedGpxRoute.externalLinks.garminUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex flex-col items-center justify-center p-2.5 rounded-xl bg-cyan-50 hover:bg-cyan-100 border border-cyan-200/90 text-cyan-950 font-bold transition shadow-2xs group text-center"
+                      >
+                        <span className="text-lg group-hover:scale-110 transition-transform">🔵</span>
+                        <span className="text-xs font-extrabold mt-0.5">Garmin</span>
+                        <span className="text-[10px] text-cyan-700 flex items-center gap-0.5">
+                          Send to Watch <ExternalLink className="w-2.5 h-2.5" />
+                        </span>
+                      </a>
+                    ) : (
+                      <div className="flex flex-col items-center justify-center p-2.5 rounded-xl bg-stone-100/60 border border-stone-200 text-stone-400 font-bold text-center opacity-60">
+                        <span className="text-lg">🔵</span>
+                        <span className="text-xs font-extrabold mt-0.5">Garmin</span>
+                        <span className="text-[10px]">Not linked</span>
+                      </div>
+                    )}
+
+                    {/* RunGo */}
+                    {matchedGpxRoute.externalLinks?.rungoUrl ? (
+                      <a
+                        href={matchedGpxRoute.externalLinks.rungoUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex flex-col items-center justify-center p-2.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/90 text-emerald-950 font-bold transition shadow-2xs group text-center"
+                      >
+                        <span className="text-lg group-hover:scale-110 transition-transform">🟢</span>
+                        <span className="text-xs font-extrabold mt-0.5">RunGo</span>
+                        <span className="text-[10px] text-emerald-700 flex items-center gap-0.5">
+                          Voice Nav <ExternalLink className="w-2.5 h-2.5" />
+                        </span>
+                      </a>
+                    ) : (
+                      <div className="flex flex-col items-center justify-center p-2.5 rounded-xl bg-stone-100/60 border border-stone-200 text-stone-400 font-bold text-center opacity-60">
+                        <span className="text-lg">🟢</span>
+                        <span className="text-xs font-extrabold mt-0.5">RunGo</span>
+                        <span className="text-[10px]">Not linked</span>
+                      </div>
+                    )}
+
+                    {/* Download GPX */}
+                    <button
+                      type="button"
+                      onClick={() => downloadGPXFile(matchedGpxRoute)}
+                      className="flex flex-col items-center justify-center p-2.5 rounded-xl bg-stone-900 hover:bg-stone-800 text-white font-bold transition shadow-xs group text-center cursor-pointer"
+                    >
+                      <span className="text-lg group-hover:scale-110 transition-transform">📥</span>
+                      <span className="text-xs font-extrabold mt-0.5">GPX File</span>
+                      <span className="text-[10px] text-stone-300 flex items-center gap-0.5">
+                        Download <Download className="w-2.5 h-2.5" />
+                      </span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* 2) Map of the run & 3) Turn by turn instructions */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-xs font-bold text-stone-700 px-0.5">
+                    <span className="flex items-center gap-1.5 uppercase tracking-wider text-[11px] text-stone-600">
+                      <Compass className="w-3.5 h-3.5 text-woodland-600" /> 2. Interactive Map &amp; Turn-by-Turn:
+                    </span>
+                    <span className="text-[10px] text-stone-500 font-semibold">Blue Note Brewing (Start/End)</span>
+                  </div>
+
+                  <MapViewer
+                    route={matchedGpxRoute}
+                    height="260px"
+                    showElevationProfile={false}
+                    hideHeader={true}
+                    hideActionBar={true}
+                  />
+                </div>
+
+                {/* Next Page Navigation Button */}
+                <div className="pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      confetti({
+                        particleCount: 50,
+                        spread: 60,
+                        origin: { y: 0.7 },
+                        colors: ['#f59e0b', '#2a859e', '#13495d'],
+                      });
+                      setPostCheckInStep('rewards');
+                    }}
+                    className="w-full py-3.5 bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 hover:from-amber-600 hover:to-amber-500 text-stone-950 font-black text-sm rounded-xl transition shadow-md flex items-center justify-center gap-2 font-display uppercase tracking-wider cursor-pointer"
+                  >
+                    <span>Next: View Badges &amp; Milestones</span>
+                    <ChevronRight className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+            ) : (
+              /* PAGE 2: BADGES, MILESTONES & REWARDS CELEBRATION */
+              <div className="text-center py-2 space-y-5 animate-in fade-in duration-200">
+                <div className="w-16 h-16 bg-amber-100 text-amber-700 rounded-full flex items-center justify-center mx-auto shadow-inner border border-amber-200">
+                  <Sparkles className="w-9 h-9" />
+                </div>
+
+                <div>
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-100 text-amber-900 text-xs font-bold uppercase tracking-wider mb-2">
+                    <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+                    Milestones &amp; Badges
+                  </span>
+                  <h3 className="text-2xl font-black text-stone-900 font-display">
+                    Achievements, {currentUser.firstName}! 🎉
+                  </h3>
+                  <p className="text-sm text-stone-600 mt-1">
+                    Here is your updated club progress for tonight's run.
+                  </p>
+                </div>
+
+                {/* Badge Unlock Celebration Card */}
+                {successResult.newBadges && successResult.newBadges.length > 0 && (
+                  <div className="bg-gradient-to-r from-amber-500/15 via-emerald-500/10 to-amber-500/15 border-2 border-amber-400/80 rounded-2xl p-4 text-left space-y-2.5 shadow-sm animate-in zoom-in-95">
+                    <div className="flex items-center justify-between">
+                      <span className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-amber-900">
+                        <Sparkles className="w-4 h-4 text-amber-600" />
+                        <span>{successResult.newBadges.length === 1 ? 'New Badge Unlocked!' : 'New Badges Unlocked!'} 🏅</span>
+                      </span>
+                      <span className="text-[10px] font-bold bg-amber-400 text-stone-950 px-2 py-0.5 rounded-full">
+                        +{successResult.newBadges.length} Badge{successResult.newBadges.length > 1 ? 's' : ''}
+                      </span>
                     </div>
-                    <div className="font-extrabold text-sm sm:text-base font-display uppercase tracking-tight">
-                      {justUnlockedMilestone.name}: {justUnlockedMilestone.reward}
+                    <div className="space-y-2">
+                      {successResult.newBadges.map((badge) => {
+                        const count = successResult.user?.badgeCounts?.[badge.id] || 1;
+                        return (
+                          <div key={badge.id} className="flex items-center gap-3 bg-white/95 p-2.5 rounded-xl border border-amber-200/90 shadow-xs">
+                            <span className="text-2xl shrink-0">{badge.emoji}</span>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="font-extrabold text-sm text-stone-900 truncate">{badge.name}</span>
+                                {badge.isIncremental && count > 1 && (
+                                  <span className="px-1.5 py-0.2 bg-amber-400 text-stone-950 font-black text-[10px] rounded-full shrink-0">
+                                    x{badge.maxMultiplier && count >= badge.maxMultiplier ? `${badge.maxMultiplier}+` : count}
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-xs text-stone-600 line-clamp-1">{badge.description}</p>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
-                    <p className="text-xs text-stone-900 font-medium leading-snug">
-                      Tonight's run organizer has been alerted with your shirt size (<strong className="font-bold">{successResult.user?.shirtSize || currentUser.shirtSize}</strong>). Pick up your gear at the organizer table, and show your phone for {justUnlockedMilestone.perks}!
-                    </p>
                   </div>
                 )}
 
-                <div className="flex items-center justify-between text-xs font-semibold">
-                  <span className="text-stone-600 flex items-center gap-1.5">
-                    <Shirt className="w-4 h-4 text-amber-500" />
-                    Milestone Progress
-                  </span>
-                  <span className="text-amber-700 font-bold">
-                    {activeUserRuns} / {nextMilestone ? nextMilestone.runsRequired : 200} Runs
-                  </span>
-                </div>
-                <div className="w-full bg-stone-200 rounded-full h-3 overflow-hidden">
-                  <div
-                    className="bg-gradient-to-r from-amber-500 to-emerald-500 h-full rounded-full transition-all duration-1000"
-                    style={{ width: `${progressPct}%` }}
-                  />
-                </div>
-                <p className="text-[11px] text-stone-500">
-                  {nextMilestone && runsRemaining > 0
-                    ? `Only ${runsRemaining} more run${runsRemaining > 1 ? 's' : ''} until you unlock your ${nextMilestone.reward}!`
-                    : `Congratulations! You have reached Double Century Legend status (200+ runs)!`}
-                </p>
-
-                <div className="pt-2 border-t border-stone-200 flex items-center justify-between text-xs">
-                  <span className="text-stone-600">Lifetime Club Mileage:</span>
-                  <span className="font-extrabold text-stone-900">
-                    {successResult.user?.totalMiles || currentUser.totalMiles} Miles
-                  </span>
-                </div>
-              </div>
-
-              {/* ROUTE DISPLAY CARD (STUBBED FOR NOW) */}
-              {successResult.route && (
-                <div className="bg-woodland-50 border border-woodland-200 rounded-2xl p-4 text-left space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="inline-flex items-center gap-1.5 text-xs font-bold text-woodland-900">
-                      <Compass className="w-4 h-4 text-woodland-600" />
-                      Your Selected Route: {successResult.route.name}
-                    </span>
-                    <span className="px-2 py-0.5 bg-woodland-200/60 text-woodland-900 font-bold text-xs rounded-full">
-                      {successResult.route.actualMiles} mi
-                    </span>
-                  </div>
-
-                  {successResult.route.directions && (
-                    <div className="bg-white/80 rounded-xl p-3 text-xs text-stone-700 border border-woodland-100 space-y-1">
-                      <div className="font-semibold text-stone-900 text-[11px] uppercase tracking-wider">
-                        Turn-by-Turn Directions:
+                {/* Milestone & Mileage Progress Box */}
+                <div className="bg-stone-50 border border-stone-200 rounded-2xl p-4 text-left space-y-3">
+                  {/* Instant Milestone Alert Callout if runner just unlocked 5, 50, 100, 200 */}
+                  {justUnlockedMilestone && (
+                    <div className="bg-gradient-to-r from-amber-500 to-amber-400 text-stone-950 rounded-xl p-3.5 shadow-md border border-amber-600 space-y-1.5 animate-in zoom-in-95">
+                      <div className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-stone-950">
+                        <Sparkles className="w-4 h-4 text-stone-950 shrink-0" />
+                        <span>🎉 Major Milestone Unlocked!</span>
                       </div>
-                      <p className="leading-relaxed font-sans">{successResult.route.directions}</p>
+                      <div className="font-extrabold text-sm sm:text-base font-display uppercase tracking-tight">
+                        {justUnlockedMilestone.name}: {justUnlockedMilestone.reward}
+                      </div>
+                      <p className="text-xs text-stone-900 font-medium leading-snug">
+                        Tonight's run organizer has been alerted with your shirt size (<strong className="font-bold">{successResult.user?.shirtSize || currentUser.shirtSize}</strong>). Pick up your gear at the organizer table, and show your phone for {justUnlockedMilestone.perks}!
+                      </p>
                     </div>
                   )}
 
-                  {successResult.route.routeUrl && (
-                    <a
-                      href={successResult.route.routeUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="w-full flex items-center justify-center gap-2 py-2 bg-woodland-700 hover:bg-woodland-800 text-white rounded-xl text-xs font-bold transition shadow-xs"
-                    >
-                      <span>Open Route (Strava / Garmin / Watch)</span>
-                      <ExternalLink className="w-3.5 h-3.5" />
-                    </a>
-                  )}
-                </div>
-              )}
+                  <div className="flex items-center justify-between text-xs font-semibold">
+                    <span className="text-stone-600 flex items-center gap-1.5">
+                      <Shirt className="w-4 h-4 text-amber-500" />
+                      Milestone Progress
+                    </span>
+                    <span className="text-amber-700 font-bold">
+                      {activeUserRuns} / {nextMilestone ? nextMilestone.runsRequired : 200} Runs
+                    </span>
+                  </div>
+                  <div className="w-full bg-stone-200 rounded-full h-3 overflow-hidden">
+                    <div
+                      className="bg-gradient-to-r from-amber-500 to-emerald-500 h-full rounded-full transition-all duration-1000"
+                      style={{ width: `${progressPct}%` }}
+                    />
+                  </div>
+                  <p className="text-[11px] text-stone-500">
+                    {nextMilestone && runsRemaining > 0
+                      ? `Only ${runsRemaining} more run${runsRemaining > 1 ? 's' : ''} until you unlock your ${nextMilestone.reward}!`
+                      : `Congratulations! You have reached Double Century Legend status (200+ runs)!`}
+                  </p>
 
-              <button
-                onClick={onClose}
-                className="w-full py-3 bg-stone-900 hover:bg-stone-800 text-white font-bold text-sm rounded-xl transition shadow-md"
-              >
-                Done • Have a Great Run!
-              </button>
-            </div>
+                  <div className="pt-2 border-t border-stone-200 flex items-center justify-between text-xs">
+                    <span className="text-stone-600">Lifetime Club Mileage:</span>
+                    <span className="font-extrabold text-stone-900">
+                      {successResult.user?.totalMiles || currentUser.totalMiles} Miles
+                    </span>
+                  </div>
+                </div>
+
+                {/* Buttons: Done and Back to Run Info */}
+                <div className="space-y-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    className="w-full py-3.5 bg-stone-900 hover:bg-stone-800 text-white font-bold text-sm rounded-xl transition shadow-md font-display uppercase tracking-wider cursor-pointer"
+                  >
+                    Done • Let's Run! 🦫
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setPostCheckInStep('run_info')}
+                    className="w-full py-2.5 bg-stone-100 hover:bg-stone-200 text-stone-700 font-bold text-xs rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <ArrowLeft className="w-4 h-4" />
+                    <span>Back to Run Map &amp; Directions</span>
+                  </button>
+                </div>
+              </div>
+            )
           ) : viewMode === 'checkin' ? (
             /* VIEW 2: CHECK-IN OR TIME-GATE LOCKED */
             !isCheckInUnlocked ? (
@@ -796,45 +1005,6 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
                                 </button>
                               </div>
                             </div>
-                          </div>
-                        )}
-
-                        {/* External App Links */}
-                        {opt.route.externalLinks && (
-                          <div className="flex items-center gap-1.5 pt-2 flex-wrap">
-                            {opt.route.externalLinks.stravaUrl && (
-                              <a
-                                href={opt.route.externalLinks.stravaUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                onClick={(e) => e.stopPropagation()}
-                                className="px-2 py-0.5 bg-orange-100 text-orange-800 text-[10px] font-bold rounded hover:bg-orange-200 transition"
-                              >
-                                🟠 Strava
-                              </a>
-                            )}
-                            {opt.route.externalLinks.garminUrl && (
-                              <a
-                                href={opt.route.externalLinks.garminUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                onClick={(e) => e.stopPropagation()}
-                                className="px-2 py-0.5 bg-cyan-100 text-cyan-900 text-[10px] font-bold rounded hover:bg-cyan-200 transition"
-                              >
-                                🔵 Garmin
-                              </a>
-                            )}
-                            {opt.route.externalLinks.rungoUrl && (
-                              <a
-                                href={opt.route.externalLinks.rungoUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                onClick={(e) => e.stopPropagation()}
-                                className="px-2 py-0.5 bg-emerald-100 text-emerald-900 text-[10px] font-bold rounded hover:bg-emerald-200 transition"
-                              >
-                                🟢 RunGo
-                              </a>
-                            )}
                           </div>
                         )}
                       </div>
