@@ -8,7 +8,7 @@ import {
   assertSucceeds,
 } from '@firebase/rules-unit-testing';
 import {
-  doc, getDoc, getDocs, setDoc, updateDoc, collection, query, where, writeBatch, Timestamp,
+  doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, collection, query, where, writeBatch, Timestamp,
 } from 'firebase/firestore';
 
 const memberKeyFor = (email) =>
@@ -264,4 +264,72 @@ test('duplicate milestone alert is rejected', async () => {
   const alice = ctx(ALICE);
   await assertSucceeds(checkInBatch(alice, ALICE, { milestone: true }));
   await assertFails(setDoc(doc(alice, 'milestone_alerts', `m5_${ALICE}`), { fulfilled: false }, { merge: true }));
+});
+
+// ---- Roles: promote / demote ----
+
+const ADMIN = 'admin2@example.com';
+const BOOTSTRAP = 'mattsettles@gmail.com';
+
+async function seedAdmin() {
+  await env.withSecurityRulesDisabled(async (c) => {
+    await setDoc(doc(c.firestore(), 'users', ADMIN), baseUser(ADMIN, { role: 'admin' }));
+  });
+}
+
+test('admin can promote a runner to organizer and admin, and demote back', async () => {
+  await seedAdmin();
+  const admin = ctx(ADMIN);
+  await assertSucceeds(updateDoc(doc(admin, 'users', ALICE), { role: 'organizer' }));
+  await assertSucceeds(updateDoc(doc(admin, 'users', ALICE), { role: 'admin' }));
+  await assertSucceeds(updateDoc(doc(admin, 'users', ALICE), { role: 'member' }));
+  await assertSucceeds(updateDoc(doc(admin, 'users', ORGANIZER), { role: 'member' }));
+});
+
+test('bootstrap admin email can change roles without a profile role', async () => {
+  const boot = ctx(BOOTSTRAP);
+  await assertSucceeds(updateDoc(doc(boot, 'users', ALICE), { role: 'organizer' }));
+});
+
+test('organizer cannot change anyone\'s role, including their own', async () => {
+  const org = ctx(ORGANIZER);
+  await assertFails(updateDoc(doc(org, 'users', ALICE), { role: 'organizer' }));
+  await assertFails(updateDoc(doc(org, 'users', ORGANIZER), { role: 'admin' }));
+});
+
+test('organizer cannot edit or delete other profiles, or write others\' leaderboard rows', async () => {
+  const org = ctx(ORGANIZER);
+  await assertFails(updateDoc(doc(org, 'users', ALICE), { totalRuns: 999 }));
+  await assertFails(deleteDoc(doc(org, 'users', ALICE)));
+  await assertFails(setDoc(doc(org, 'members', memberKeyFor(ALICE)), memberFromUser({ ...baseUser(ALICE), totalRuns: 999 })));
+});
+
+test('organizer keeps event-night powers but not badges or settings', async () => {
+  const org = ctx(ORGANIZER);
+  await assertSucceeds(getDoc(doc(org, 'meetup_secrets', DATE)));
+  await assertSucceeds(getDocs(collection(org, 'users')));
+  await assertSucceeds(updateDoc(doc(org, 'runs', 'run-1'), { title: 'Renamed' }));
+  await assertFails(setDoc(doc(org, 'badges', 'b1'), { name: 'x' }));
+  await assertFails(setDoc(doc(org, 'settings', 's1'), { x: 1 }));
+});
+
+test('admin cannot change their own role or delete themselves', async () => {
+  await seedAdmin();
+  const admin = ctx(ADMIN);
+  await assertFails(updateDoc(doc(admin, 'users', ADMIN), { role: 'member' }));
+  await assertFails(deleteDoc(doc(admin, 'users', ADMIN)));
+  await assertSucceeds(updateDoc(doc(admin, 'users', ADMIN), { shirtSize: 'L' }));
+});
+
+test('demoted admin loses admin rights', async () => {
+  await seedAdmin();
+  await assertSucceeds(updateDoc(doc(ctx(BOOTSTRAP), 'users', ADMIN), { role: 'member' }));
+  await assertFails(updateDoc(doc(ctx(ADMIN), 'users', ALICE), { role: 'organizer' }));
+  await assertFails(getDocs(collection(ctx(ADMIN), 'users')));
+});
+
+test('only bootstrap emails may self-create an admin profile', async () => {
+  await assertSucceeds(setDoc(doc(ctx(BOOTSTRAP), 'users', BOOTSTRAP), baseUser(BOOTSTRAP, { role: 'admin' })));
+  const carol = 'carol@example.com';
+  await assertFails(setDoc(doc(ctx(carol), 'users', carol), baseUser(carol, { role: 'admin' })));
 });
