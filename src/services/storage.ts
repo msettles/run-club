@@ -173,7 +173,19 @@ export function useClubStore() {
     const missing = INITIAL_ROUTES.filter((r) => !existingIds.has(r.id)).map(hydrateRouteFromFirestore);
     return [...stored, ...missing];
   });
-  const [members, setMembers] = useState<Member[]>(() => loadFromStorage(STORAGE_KEYS.MEMBERS, INITIAL_MEMBERS));
+  const [members, setMembers] = useState<Member[]>(() => {
+    const stored = loadFromStorage<Member[]>(STORAGE_KEYS.MEMBERS, INITIAL_MEMBERS);
+    const existingEmails = new Set(stored.map((m) => m.email.toLowerCase()));
+    const missing = INITIAL_MEMBERS.filter((m) => !existingEmails.has(m.email.toLowerCase()));
+    const updated = stored.map((m) => {
+      const match = INITIAL_MEMBERS.find((init) => init.email.toLowerCase() === m.email.toLowerCase());
+      if (match && m.totalRuns < match.totalRuns) {
+        return { ...m, ...match };
+      }
+      return m;
+    });
+    return [...updated, ...missing];
+  });
   const [currentMemberId, setCurrentMemberId] = useState<string>(() =>
     loadFromStorage(STORAGE_KEYS.CURRENT_USER_ID, INITIAL_MEMBERS[0].id)
   );
@@ -193,10 +205,36 @@ export function useClubStore() {
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
 
   // New Relational Collections state (local testing / offline first)
-  const [users, setUsers] = useState<UserProfile[]>(() => loadFromStorage(STORAGE_KEYS.USERS, INITIAL_USERS));
+  const [users, setUsers] = useState<UserProfile[]>(() => {
+    const stored = loadFromStorage<UserProfile[]>(STORAGE_KEYS.USERS, INITIAL_USERS);
+    const existingEmails = new Set(stored.map((u) => u.email.toLowerCase()));
+    const missing = INITIAL_USERS.filter((u) => !existingEmails.has(u.email.toLowerCase()));
+    const updated = stored.map((u) => {
+      const match = INITIAL_USERS.find((init) => init.email.toLowerCase() === u.email.toLowerCase());
+      if (match && u.totalRuns < match.totalRuns) {
+        return { ...u, ...match };
+      }
+      return u;
+    });
+    return [...updated, ...missing];
+  });
   const [meetupEvents, setMeetupEvents] = useState<MeetupEvent[]>(() => loadFromStorage(STORAGE_KEYS.MEETUP_EVENTS, INITIAL_MEETUP_EVENTS));
-  const [checkins, setCheckins] = useState<CheckInRecord[]>(() => loadFromStorage(STORAGE_KEYS.CHECKINS, INITIAL_CHECKINS));
-  const [legacyMembers, setLegacyMembers] = useState<LegacyMember[]>(() => loadFromStorage(STORAGE_KEYS.LEGACY_MEMBERS, INITIAL_LEGACY_MEMBERS));
+  const [checkins, setCheckins] = useState<CheckInRecord[]>(() => {
+    const stored = loadFromStorage<CheckInRecord[]>(STORAGE_KEYS.CHECKINS, INITIAL_CHECKINS);
+    const existingIds = new Set(stored.map((c) => c.id));
+    const missing = INITIAL_CHECKINS.filter((c) => !existingIds.has(c.id));
+    return [...stored, ...missing];
+  });
+  const [legacyMembers, setLegacyMembers] = useState<LegacyMember[]>(() => {
+    const stored = loadFromStorage<LegacyMember[]>(STORAGE_KEYS.LEGACY_MEMBERS, INITIAL_LEGACY_MEMBERS);
+    const existingNames = new Set(stored.map((m) => m.name.toUpperCase()));
+    const missing = INITIAL_LEGACY_MEMBERS.filter((m) => !existingNames.has(m.name.toUpperCase()));
+    const updated = stored.map((m) => {
+      const match = INITIAL_LEGACY_MEMBERS.find((init) => init.name.toUpperCase() === m.name.toUpperCase());
+      return match ? { ...m, ...match } : m;
+    });
+    return [...updated, ...missing];
+  });
   const [currentUserEmail, setCurrentUserEmail] = useState<string>(() =>
     loadFromStorage(STORAGE_KEYS.CURRENT_USER_EMAIL, INITIAL_USERS[0].email)
   );
