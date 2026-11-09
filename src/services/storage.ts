@@ -1051,6 +1051,63 @@ export function useClubStore() {
   };
 
   /**
+   * Admin only: delete a runner so the email can sign up fresh. Removes their
+   * profile, leaderboard row, check-ins, gear alerts and RSVPs, and unclaims
+   * any old-app names they linked. Their sign-in account itself is untouched.
+   */
+  const adminDeleteRunner = async (email: string): Promise<void> => {
+    const cleanEmail = email.trim().toLowerCase();
+    if (cleanEmail === currentUserEmail.toLowerCase()) throw new Error("You can't delete your own profile.");
+    const key = await memberKeyFor(cleanEmail);
+    const user = users.find((u) => u.email.toLowerCase() === cleanEmail);
+    const legacyIds = new Set([
+      ...(user?.linkedLegacyIds || []),
+      ...legacyPool.filter((m) => m.claimedBy === key).map((m) => m.id),
+    ]);
+
+    if (isFirebaseConfigured && db) {
+      const currentDb = db;
+      type Op = (b: ReturnType<typeof writeBatch>) => void;
+      const ops: Op[] = [];
+      // Query the server too, so nothing is missed if local state is partial.
+      const [ciSnap, alertSnap, claimSnap] = await Promise.all([
+        getDocs(query(collection(currentDb, 'checkins'), where('userEmail', '==', cleanEmail))),
+        getDocs(query(collection(currentDb, 'milestone_alerts'), where('userEmail', '==', cleanEmail))),
+        getDocs(query(collection(currentDb, 'legacy_profiles'), where('claimedBy', '==', key))),
+      ]);
+      ciSnap.docs.forEach((d) => ops.push((b) => b.delete(d.ref)));
+      alertSnap.docs.forEach((d) => ops.push((b) => b.delete(d.ref)));
+      claimSnap.docs.forEach((d) => legacyIds.add(d.id));
+      legacyIds.forEach((id) =>
+        ops.push((b) => b.update(doc(currentDb, 'legacy_profiles', id), { claimedBy: null, claimedAt: null }))
+      );
+      for (const run of runs) {
+        if (run.attendees.some((a) => a.memberId === key)) {
+          ops.push((b) =>
+            b.update(doc(currentDb, 'runs', run.id), { attendees: run.attendees.filter((a) => a.memberId !== key) })
+          );
+        }
+      }
+      ops.push((b) => b.delete(doc(currentDb, 'members', key)));
+      ops.push((b) => b.delete(doc(currentDb, 'users', cleanEmail)));
+      for (let i = 0; i < ops.length; i += 400) {
+        const batch = writeBatch(currentDb);
+        ops.slice(i, i + 400).forEach((op) => op(batch));
+        await batch.commit();
+      }
+    }
+
+    setUsers((prev) => prev.filter((u) => u.email.toLowerCase() !== cleanEmail));
+    setMembers((prev) => prev.filter((m) => m.id !== key));
+    setCheckins((prev) => prev.filter((c) => c.userEmail.toLowerCase() !== cleanEmail));
+    setMilestoneAlerts((prev) => prev.filter((a) => a.userEmail.toLowerCase() !== cleanEmail));
+    setRuns((prev) => prev.map((r) => ({ ...r, attendees: r.attendees.filter((a) => a.memberId !== key) })));
+    setLegacyMembers((prev) =>
+      prev.map((m) => (legacyIds.has(m.id) ? { ...m, claimedBy: null, claimedByEmail: null, claimedAt: null } : m))
+    );
+  };
+
+  /**
    * Admin only: change another runner's role (member / organizer / admin).
    * The rules reject role changes by non-admins and on your own profile.
    */
@@ -1871,6 +1928,7 @@ export function useClubStore() {
     syncPrivateData,
     clearPrivateData,
     setUserRole,
+    adminDeleteRunner,
     loadLegacyPool,
     claimLegacyProfile,
     adminSetLegacyClaim,

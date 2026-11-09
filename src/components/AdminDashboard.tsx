@@ -72,6 +72,7 @@ interface AdminDashboardProps {
   onSendBroadcast: (title: string, body: string) => void;
   onSetUserRole?: (email: string, role: AssignableRole) => Promise<void>;
   onSetLegacyClaim?: (legacyId: string, toEmail: string | null) => Promise<void>;
+  onDeleteRunner?: (email: string) => Promise<void>;
   onImportLegacyData?: (
     totalsCsv: string,
     checkinsCsv: string,
@@ -120,6 +121,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onSendBroadcast,
   onSetUserRole,
   onSetLegacyClaim,
+  onDeleteRunner,
   onImportLegacyData,
   onReloadLegacyPool,
 }) => {
@@ -280,6 +282,30 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     },
     { member: 0, organizer: 0, admin: 0 }
   );
+
+  const [deletingEmail, setDeletingEmail] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<{ email: string; message: string } | null>(null);
+
+  const handleDeleteRunner = async (u: UserProfile) => {
+    if (!onDeleteRunner) return;
+    const runnerCheckins = checkins.filter((c) => c.userEmail.toLowerCase() === u.email.toLowerCase()).length;
+    const names = u.linkedLegacyNames || [];
+    const checkinText = `${runnerCheckins} check-in${runnerCheckins === 1 ? '' : 's'}`;
+    const unclaimText = names.length ? ` Their old names (${names.join(', ')}) become unclaimed.` : '';
+    if (!window.confirm(`Delete ${u.displayName} (${u.email})?\n\nThis removes their profile, leaderboard row, ${checkinText}, gear alerts and RSVPs.${unclaimText} It can't be undone. They can sign up again with the same email.`)) {
+      return;
+    }
+    setDeletingEmail(u.email);
+    setDeleteError(null);
+    try {
+      await onDeleteRunner(u.email);
+    } catch (err: any) {
+      console.error('Delete runner failed:', err);
+      setDeleteError({ email: u.email, message: err?.message?.startsWith('You') ? err.message : 'Could not delete. Only admins can delete runners.' });
+    } finally {
+      setDeletingEmail(null);
+    }
+  };
 
   const handleRoleChange = async (u: UserProfile, next: AssignableRole) => {
     if (!onSetUserRole || next === effectiveRole(u)) return;
@@ -2069,6 +2095,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     <th className="py-2.5 px-3">Lifetime Miles</th>
                     <th className="py-2.5 px-3">Run/Walk Split</th>
                     <th className="py-2.5 px-3">Claimed Past Aliases</th>
+                    {onDeleteRunner && <th className="py-2.5 px-3"><span className="sr-only">Actions</span></th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-stone-100">
@@ -2141,6 +2168,29 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           <span className="text-stone-300 italic text-[11px]">None linked</span>
                         )}
                       </td>
+                      {onDeleteRunner && (
+                        <td className="py-2.5 px-3">
+                          {ADMIN_EMAILS.includes(u.email.toLowerCase()) ||
+                          currentUser?.email?.toLowerCase() === u.email.toLowerCase() ? null : (
+                            <div className="space-y-1">
+                              <button
+                                type="button"
+                                disabled={deletingEmail === u.email}
+                                onClick={() => handleDeleteRunner(u)}
+                                aria-label={`Delete ${u.displayName}`}
+                                title="Delete runner"
+                                className="flex items-center gap-1 px-2 py-1 text-[11px] font-bold text-red-700 hover:bg-red-50 rounded-lg disabled:opacity-50"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                                <span>{deletingEmail === u.email ? 'Deleting…' : 'Delete'}</span>
+                              </button>
+                              {deleteError?.email === u.email && (
+                                <div className="text-[10px] text-red-600 font-semibold max-w-[160px]">{deleteError.message}</div>
+                              )}
+                            </div>
+                          )}
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
