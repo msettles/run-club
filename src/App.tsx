@@ -1,6 +1,6 @@
 import { useState, useEffect, lazy, Suspense } from 'react';
 import { useClubStore } from './services/storage';
-import { RunEvent, GPXRoute } from './types';
+import { RunEvent, GPXRoute, UserProfile } from './types';
 import { buildMeetupFromRun, getRunChoices, resolveChoices } from './utils/runChoices';
 import { Navbar } from './components/Navbar';
 import { RunCard } from './components/RunCard';
@@ -12,6 +12,8 @@ import { MilestonesPage } from './components/MilestonesPage';
 import { FULL_VERSION } from './utils/version';
 import { onAuthChange, logoutUser, checkAndCompleteEmailLinkSignIn } from './services/authService';
 import { User as FirebaseUser } from 'firebase/auth';
+import { db } from './services/firebase';
+import { doc, getDoc } from 'firebase/firestore';
 import { downloadGPXFile } from './utils/gpxParser';
 
 // Lazy-loaded heavy components & modals (saves >60% initial mobile bundle size)
@@ -60,6 +62,7 @@ export function App() {
     isFirebaseConfigured,
     // V2 Relational props
     users,
+    setUsers,
     meetupEvents,
     checkins,
     legacyMembers,
@@ -112,9 +115,26 @@ export function App() {
   const isOrganizerOrAdmin = isUserLoggedIn && (isAdmin || currentUser.role === 'organizer');
 
   // Handle post-auth check: if user has a profile, switch to them; if new, launch onboarding
-  const handleUserAuthenticated = (email: string, displayName?: string | null) => {
+  const handleUserAuthenticated = async (email: string, displayName?: string | null) => {
     const cleanEmail = email.trim().toLowerCase();
-    const existingProfile = users.find((u) => u.email.toLowerCase() === cleanEmail);
+    
+    let existingProfile = users.find((u) => u.email.toLowerCase() === cleanEmail);
+    if (isFirebaseConfigured && db) {
+      try {
+        const snap = await getDoc(doc(db, 'users', cleanEmail));
+        if (snap.exists()) {
+          existingProfile = snap.data() as UserProfile;
+          setUsers((prev) => [existingProfile!, ...prev.filter((u) => u.email.toLowerCase() !== cleanEmail)]);
+        } else {
+          // Document does not exist in Firestore: ensure stale local cache is pruned
+          existingProfile = undefined;
+          setUsers((prev) => prev.filter((u) => u.email.toLowerCase() !== cleanEmail));
+        }
+      } catch (err) {
+        console.warn('Firestore user check error:', err);
+      }
+    }
+
     if (existingProfile) {
       switchCurrentUser(cleanEmail);
       if (pendingCheckInRun) {

@@ -173,6 +173,52 @@ const REMOVED_TEST_EMAILS = new Set([
   'matt.settles@example.com',
 ]);
 
+// One-time client-side purge for mattsettles@gmail.com to enable fresh onboarding test
+const PURGE_KEY = 'woodland_woodchuckers_purged_mattsettles_v1';
+if (typeof window !== 'undefined' && !localStorage.getItem(PURGE_KEY)) {
+  try {
+    const rawUsers = localStorage.getItem(STORAGE_KEYS.USERS);
+    if (rawUsers) {
+      const parsed = JSON.parse(rawUsers);
+      const cleaned = parsed.filter((u: any) => u.email?.toLowerCase() !== 'mattsettles@gmail.com');
+      localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(cleaned));
+    }
+    const rawMembers = localStorage.getItem(STORAGE_KEYS.MEMBERS);
+    if (rawMembers) {
+      const parsed = JSON.parse(rawMembers);
+      const cleaned = parsed.filter((m: any) => m.email?.toLowerCase() !== 'mattsettles@gmail.com');
+      localStorage.setItem(STORAGE_KEYS.MEMBERS, JSON.stringify(cleaned));
+    }
+    const currentEmail = localStorage.getItem(STORAGE_KEYS.CURRENT_USER_EMAIL);
+    if (currentEmail && currentEmail.toLowerCase() === 'mattsettles@gmail.com') {
+      localStorage.removeItem(STORAGE_KEYS.CURRENT_USER_EMAIL);
+    }
+    const currentId = localStorage.getItem(STORAGE_KEYS.CURRENT_USER_ID);
+    if (currentId && currentId.toLowerCase() === 'mattsettles@gmail.com') {
+      localStorage.removeItem(STORAGE_KEYS.CURRENT_USER_ID);
+    }
+    const rawLegacy = localStorage.getItem(STORAGE_KEYS.LEGACY_MEMBERS);
+    if (rawLegacy) {
+      const parsed = JSON.parse(rawLegacy);
+      const cleaned = parsed.map((m: any) => 
+        m.claimedByEmail?.toLowerCase() === 'mattsettles@gmail.com'
+          ? { ...m, claimedByEmail: null, claimedAt: null }
+          : m
+      );
+      localStorage.setItem(STORAGE_KEYS.LEGACY_MEMBERS, JSON.stringify(cleaned));
+    }
+    const rawCheckins = localStorage.getItem(STORAGE_KEYS.CHECKINS);
+    if (rawCheckins) {
+      const parsed = JSON.parse(rawCheckins);
+      const cleaned = parsed.filter((c: any) => c.userEmail?.toLowerCase() !== 'mattsettles@gmail.com');
+      localStorage.setItem(STORAGE_KEYS.CHECKINS, JSON.stringify(cleaned));
+    }
+    localStorage.setItem(PURGE_KEY, 'true');
+  } catch (e) {
+    console.warn('One-time client purge error:', e);
+  }
+}
+
 export function useClubStore() {
   // Legacy / existing state
   const [runs, setRuns] = useState<RunEvent[]>(() => loadFromStorage(STORAGE_KEYS.RUNS, INITIAL_RUNS));
@@ -1405,6 +1451,7 @@ export function useClubStore() {
   return {
     // V2 Relational Collections
     users,
+    setUsers,
     meetupEvents,
     checkins,
     legacyMembers,
