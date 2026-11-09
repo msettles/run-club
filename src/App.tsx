@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { useClubStore } from './services/storage';
 import { RunEvent, GPXRoute, UserProfile } from './types';
-import { buildMeetupFromRun, getRunChoices, resolveChoices } from './utils/runChoices';
+import { buildMeetupFromRun, deleteRunConfirmMessage, getRunChoices, resolveChoices } from './utils/runChoices';
 import { Navbar } from './components/Navbar';
 import { RunCard } from './components/RunCard';
 import { MapViewer } from './components/MapViewer';
@@ -287,9 +287,7 @@ export function App() {
   // Past runs can't be edited; admins can still delete one (check-ins are rolled back).
   const confirmDeletePastRun = (run: RunEvent) => {
     const count = checkins.filter((c) => c.runId === run.id).length;
-    const message = count > 0
-      ? `Delete "${run.title}"?\n\n${count} runner${count === 1 ? '' : 's'} checked in. Their check-ins will be removed and their run counts, miles, badges and streaks adjusted. Gear alerts from this run that haven't been handed out yet are removed. This can't be undone.`
-      : `Delete "${run.title}"? This can't be undone.`;
+    const message = deleteRunConfirmMessage(run.title, count);
     if (window.confirm(message)) handleDeleteRun(run.id);
   };
 

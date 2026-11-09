@@ -112,3 +112,17 @@ export function buildMeetupFromRun(
     routes: routeMap,
   };
 }
+
+/** Confirmation text for deleting a run (Edit Run and the past-run Delete button). */
+export function deleteRunConfirmMessage(title: string, checkInCount: number): string {
+  const who =
+    checkInCount === 0
+      ? 'No runners have checked in yet.'
+      : `${checkInCount} runner${checkInCount === 1 ? ' has' : 's have'} checked in.`;
+  return (
+    `Delete "${title}"?\n\n` +
+    `${who} All check-ins for this run will be removed, and each runner's run count, miles, badges and streaks adjusted. ` +
+    `Gear alerts from this run that haven't been handed out yet are removed.\n\n` +
+    `This can't be undone.`
+  );
+}
