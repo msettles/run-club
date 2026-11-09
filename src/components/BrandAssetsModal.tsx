@@ -68,8 +68,8 @@ export const BrandAssetsModal: React.FC<BrandAssetsModalProps> = ({ isOpen, onCl
         {/* Header */}
         <div className="px-6 py-5 bg-gradient-to-r from-woodland-950 via-woodland-900 to-woodland-800 text-white flex items-center justify-between shrink-0 border-b border-woodland-700/50">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-white/10 backdrop-blur border border-white/20 p-1 flex items-center justify-center overflow-hidden">
-              <img src="/Woodchucker2026.png" alt="2026 Logo" className="w-full h-full object-contain filter drop-shadow-sm" />
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-300 via-woodchuck-500 to-amber-600 border border-amber-300/80 p-1 flex items-center justify-center overflow-hidden shadow-xs">
+              <img src="/Woodchucker2026.png" alt="2026 Logo" className="w-full h-full object-contain filter drop-shadow-xs" />
             </div>
             <div>
               <div className="flex items-center gap-2">

@@ -33,7 +33,7 @@ export const VersionModal: React.FC<VersionModalProps> = ({ isOpen, onClose }) =
         {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-woodland-700 to-woodland-950 p-1 flex items-center justify-center shadow-md border border-woodland-600/40">
+            <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-amber-300 via-woodchuck-500 to-amber-600 p-1 flex items-center justify-center shadow-md border border-amber-300/80">
               <img
                 src="/Woodchucker2026.png"
                 alt="Woodchuck Mascot"

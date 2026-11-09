@@ -70,11 +70,11 @@ export const Navbar: React.FC<NavbarProps> = ({
             onClick={() => setActiveTab('runs')}
             className="flex items-center gap-2 sm:gap-2.5 cursor-pointer select-none shrink-0 group"
           >
-            <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl bg-gradient-to-br from-woodland-700 via-woodland-800 to-woodland-950 flex items-center justify-center shadow-md p-1 border border-woodland-600/40 group-hover:scale-105 transition shrink-0 overflow-hidden">
+            <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl bg-gradient-to-br from-amber-300 via-woodchuck-500 to-amber-600 flex items-center justify-center shadow-md p-1 border border-amber-300/80 group-hover:scale-105 transition shrink-0 overflow-hidden">
               <img
                 src="/Woodchucker2026.png"
                 alt="Woodland Woodchuckers 2026 Mascot"
-                className="w-full h-full object-contain filter drop-shadow-sm invert sm:invert-0 brightness-110"
+                className="w-full h-full object-contain filter drop-shadow-xs"
               />
             </div>
             <div>
