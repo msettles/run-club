@@ -1596,8 +1596,9 @@ export function useClubStore() {
         {
           ...cleanFirestoreData(publicEvent),
           codeWord: deleteField(),
-          // Live only once its code word is saved; a change that fails below leaves it not live.
-          codeWordSet: !wordOrDateChanged && Boolean(oldWord || previous?.codeWordSet),
+          // A live run stays live while its word changes (a refused change keeps the old word);
+          // a run without a word only goes live once the word below is saved.
+          codeWordSet: Boolean(previous && previous.codeWordSet !== false && oldWord) || (!wordOrDateChanged && Boolean(oldWord)),
           checkInOpensAt: Timestamp.fromDate(win.opensAt),
           checkInClosesAt: Timestamp.fromDate(win.closesAt),
         },
