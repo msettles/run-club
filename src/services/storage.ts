@@ -1,30 +1,9 @@
 import { useEffect } from 'react';
-import { 
-  RunEvent, 
-  Badge, 
-} from '../types';
-import { 
-  INITIAL_RUNS, 
-  INITIAL_ROUTES, 
-  INITIAL_MEMBERS, 
-  INITIAL_USERS,
-  INITIAL_MEETUP_EVENTS,
-  INITIAL_CHECKINS,
-  INITIAL_LEGACY_MEMBERS,
-} from '../data/initialData';
+import { RunEvent, Badge, SpecialEventDefinition } from '../types';
+import { INITIAL_ROUTES, INITIAL_BADGES, INITIAL_SPECIAL_EVENTS } from '../data/initialData';
 import { isFirebaseConfigured, db } from './firebase';
-import {
-  collection,
-  getDocs,
-  orderBy,
-  limit,
-  onSnapshot,
-  query,
-} from 'firebase/firestore';
-import { 
-  ClubNotification, 
-  showLocalNotification 
-} from './notifications';
+import { collection, getDocs, orderBy, limit, onSnapshot, query } from 'firebase/firestore';
+import { ClubNotification, showLocalNotification } from './notifications';
 import { useStoreState } from './store/state';
 import { createLegacyOps } from './store/legacy';
 import { createPrivateSyncOps } from './store/privateSync';
@@ -34,113 +13,78 @@ import { createEventOps } from './store/events';
 import { createBadgeOps } from './store/badges';
 import { createRunOps } from './store/runs';
 import { createAnnouncementOps } from './store/announcements';
-import { STORAGE_KEYS, hydrateRouteFromFirestore, meetupFromPublicDoc, memberFromPublicDoc } from './store/helpers';
+import { hydrateRouteFromFirestore, meetupFromPublicDoc, memberFromPublicDoc } from './store/helpers';
 // Re-exported for existing importers.
 export { cleanFirestoreData, formatRouteForFirestore, hydrateRouteFromFirestore, toPublicMember, RECENT_CHECKIN_DAYS } from './store/helpers';
 
+/** Built-in catalog entries plus the ones saved in Firestore (saved copies win). */
+function withCatalog<T extends { id: string }>(remote: T[], builtIn: T[]): T[] {
+  const ids = new Set(remote.map((x) => x.id));
+  return [...builtIn.filter((x) => !ids.has(x.id)), ...remote];
+}
 
 export function useClubStore() {
   const s = useStoreState();
   const {
-    runs,
     setRuns,
-    routes,
     setRoutes,
-    members,
     setMembers,
-    currentMemberId,
-    setCurrentMemberId,
-    badges,
     setBadges,
-    specialEvents,
-    notifications,
+    setSpecialEvents,
     setNotifications,
-    isSyncing,
     setIsSyncing,
-    users,
-    setUsers,
-    meetupEvents,
     setMeetupEvents,
-    scheduleLoaded,
     setScheduleLoaded,
-    checkins,
-    setCheckins,
-    setLegacyMembers,
-    currentUserEmail,
-    setCurrentUserEmail,
-    milestoneAlerts,
-    bellItems,
-    legacyMembers,
-    currentUser,
-    currentMember,
+    staffCodeWords,
   } = s;
 
-  const legacyOps = createLegacyOps({ ...s });
-  const { searchLegacyMatches, loadLegacyPool, refreshDerivedStats, claimLegacyProfile, adminSetLegacyClaim, importLegacyData } = legacyOps;
-  const privateSyncOps = createPrivateSyncOps({ ...s, ...legacyOps });
-  const { syncPrivateData, clearPrivateData } = privateSyncOps;
-  const membersOps = createMemberOps({ ...s, ...legacyOps, ...privateSyncOps });
-  const { registerUser, adminDeleteRunner, setUserRole, switchCurrentUser } = membersOps;
-  const checkInOps = createCheckInOps({ ...s, ...legacyOps, ...privateSyncOps, ...membersOps });
-  const { checkInRunner, markMilestoneFulfilled } = checkInOps;
-  const eventsOps = createEventOps({ ...s, ...legacyOps, ...privateSyncOps, ...membersOps, ...checkInOps });
-  const { saveMeetupEvent, countPushDevices, resolveRunByCodeWord } = eventsOps;
-  const badgesOps = createBadgeOps({ ...s, ...legacyOps, ...privateSyncOps, ...membersOps, ...checkInOps, ...eventsOps });
-  const { createBadge, deleteBadge, createSpecialEvent, deleteSpecialEvent } = badgesOps;
-  const runsOps = createRunOps({ ...s, ...legacyOps, ...privateSyncOps, ...membersOps, ...checkInOps, ...eventsOps, ...badgesOps });
-  const { toggleRSVP, createRunWithCheckIn, addRoute, updateRoute, deleteRoute, updateRun, countRunCheckIns, deleteRun } = runsOps;
-  const announcementsOps = createAnnouncementOps({ ...s, ...legacyOps, ...privateSyncOps, ...membersOps, ...checkInOps, ...eventsOps, ...badgesOps, ...runsOps });
-  const { sendPushAnnouncement, deleteAnnouncement } = announcementsOps;
+  // Each group of operations can use the state and every group created before it.
+  const c1 = { ...s, ...createLegacyOps(s) };
+  const c2 = { ...c1, ...createPrivateSyncOps(c1) };
+  const c3 = { ...c2, ...createMemberOps(c2) };
+  const c4 = { ...c3, ...createCheckInOps(c3) };
+  const c5 = { ...c4, ...createEventOps(c4) };
+  const c6 = { ...c5, ...createBadgeOps(c5) };
+  const c7 = { ...c6, ...createRunOps(c6) };
+  const store = { ...c7, ...createAnnouncementOps(c7) };
 
-
-  // If Firebase is configured, fetch collections on initial load
+  // If Firebase is configured, fetch the public collections on initial load
   useEffect(() => {
     if (!isFirebaseConfigured || !db) return;
+    const currentDb = db;
 
     async function syncFromFirestore() {
-      if (!db) return;
-      const currentDb = db;
       setIsSyncing(true);
       try {
-        const runsSnap = await getDocs(collection(currentDb, 'runs'));
+        const [runsSnap, routesSnap, membersSnap, badgesSnap, specialSnap, meetupsSnap] = await Promise.all(
+          ['runs', 'routes', 'members', 'badges', 'special_events', 'meetup_events'].map((name) =>
+            getDocs(collection(currentDb, name))
+          )
+        );
         setRuns(runsSnap.docs.map((d) => d.data() as RunEvent));
 
-        // Routes: read only. Show what's saved plus any official club route that
-        // isn't saved yet (staff save those when they sign in; see syncPrivateData).
-        const routesSnap = await getDocs(collection(currentDb, 'routes'));
+        // Routes: what's saved plus any official club route that isn't saved yet
+        // (staff save those when they sign in; see syncPrivateData).
         const remoteRoutes = routesSnap.docs.map((d) => hydrateRouteFromFirestore(d.data()));
-        const remoteIds = new Set(remoteRoutes.map((r) => r.id));
-        setRoutes([...remoteRoutes, ...INITIAL_ROUTES.filter((r) => !remoteIds.has(r.id))]);
+        const remoteRouteIds = new Set(remoteRoutes.map((r) => r.id));
+        setRoutes([...remoteRoutes, ...INITIAL_ROUTES.filter((r) => !remoteRouteIds.has(r.id)).map(hydrateRouteFromFirestore)]);
 
         // Public leaderboard projection (keyed by hashed email, no PII).
         // Ignore any old email-keyed docs left over from the previous schema.
-        const membersSnap = await getDocs(collection(currentDb, 'members'));
-        if (!membersSnap.empty) {
-          const remoteMembers = membersSnap.docs
-            .filter((d) => !d.id.includes('@'))
-            .map((d) => memberFromPublicDoc(d.data()));
-          setMembers(remoteMembers);
-        }
+        setMembers(membersSnap.docs.filter((d) => !d.id.includes('@')).map((d) => memberFromPublicDoc(d.data())));
 
-        // Sync badges
-        const badgesSnap = await getDocs(collection(currentDb, 'badges'));
-        if (!badgesSnap.empty) {
-          const remoteBadges = badgesSnap.docs.map((d) => d.data() as Badge);
-          const remoteIds = new Set(remoteBadges.map((b) => b.id));
-          setBadges((prev) => {
-            const localOnly = prev.filter((b) => !remoteIds.has(b.id));
-            return [...remoteBadges, ...localOnly];
-          });
-        }
+        setBadges(withCatalog(badgesSnap.docs.map((d) => d.data() as Badge), INITIAL_BADGES));
+        setSpecialEvents(withCatalog(specialSnap.docs.map((d) => d.data() as SpecialEventDefinition), INITIAL_SPECIAL_EVENTS));
 
-        // Sync meetup events (public part only; code words live in meetup_secrets)
-        const meetupsSnap = await getDocs(collection(currentDb, 'meetup_events'));
+        // Public part only; code words live in meetup_secrets. Keep code words
+        // already loaded for staff (whichever sync finished first).
         const remoteMeetups = meetupsSnap.docs.map((d) => meetupFromPublicDoc(d.data()));
-        // Keep code words already loaded for staff (they come from meetup_secrets).
         setMeetupEvents((prev) =>
-          remoteMeetups.map((m) => ({ ...m, codeWord: prev.find((p) => p.date === m.date)?.codeWord || '' }))
+          remoteMeetups.map((m) => ({
+            ...m,
+            codeWord: prev.find((p) => p.id === m.id)?.codeWord || staffCodeWords.current[m.id] || '',
+          }))
         );
-        setScheduleLoaded(true);
       } catch (err) {
         console.warn('Firestore initial fetch skipped or failed:', err);
       } finally {
@@ -156,7 +100,7 @@ export function useClubStore() {
     try {
       let firstSnapshot = true;
       unsubscribeAnnouncements = onSnapshot(
-        query(collection(db, 'announcements'), orderBy('timestamp', 'desc'), limit(30)),
+        query(collection(currentDb, 'announcements'), orderBy('timestamp', 'desc'), limit(30)),
         (snap) => {
           // Replace the feed with the server's list (never append), so nothing shows twice.
           setNotifications(snap.docs.map((d) => ({ ...(d.data() as ClubNotification), kind: 'announcement' as const })));
@@ -179,89 +123,73 @@ export function useClubStore() {
     return () => {
       unsubscribeAnnouncements?.();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /**
-   * Reset local state to defaults
-   */
-  const resetToDefaults = () => {
-    setRuns(INITIAL_RUNS);
-    setRoutes(INITIAL_ROUTES);
-    setMembers(INITIAL_MEMBERS);
-    setCurrentMemberId('');
-    setUsers(INITIAL_USERS);
-    setMeetupEvents(INITIAL_MEETUP_EVENTS);
-    setCheckins(INITIAL_CHECKINS);
-    setLegacyMembers(INITIAL_LEGACY_MEMBERS);
-    setCurrentUserEmail('');
-
-    localStorage.removeItem(STORAGE_KEYS.RUNS);
-    localStorage.removeItem(STORAGE_KEYS.ROUTES);
-    localStorage.removeItem(STORAGE_KEYS.MEMBERS);
-    localStorage.removeItem(STORAGE_KEYS.CURRENT_USER_ID);
-    localStorage.removeItem(STORAGE_KEYS.USERS);
-    localStorage.removeItem(STORAGE_KEYS.MEETUP_EVENTS);
-    localStorage.removeItem(STORAGE_KEYS.CHECKINS);
-    localStorage.removeItem(STORAGE_KEYS.LEGACY_MEMBERS);
-    localStorage.removeItem(STORAGE_KEYS.CURRENT_USER_EMAIL);
-  };
-
   return {
-    // V2 Relational Collections
-    syncPrivateData,
-    clearPrivateData,
-    setUserRole,
-    adminDeleteRunner,
-    loadLegacyPool,
-    claimLegacyProfile,
-    adminSetLegacyClaim,
-    importLegacyData,
-    refreshDerivedStats,
-    users,
-    setUsers,
-    meetupEvents,
-    checkins,
-    legacyMembers,
-    currentUser,
-    currentUserEmail,
-    registerUser,
-    checkInRunner,
-    saveMeetupEvent,
-    resolveRunByCodeWord,
-    countPushDevices,
-    countRunCheckIns,
-    searchLegacyMatches,
-    switchCurrentUser,
-    milestoneAlerts,
-    markMilestoneFulfilled,
-    specialEvents,
-    createBadge,
-    deleteBadge,
-    createSpecialEvent,
-    deleteSpecialEvent,
-
-    // V1 / Shared
-    runs,
-    routes,
-    members,
-    badges,
-    notifications,
-    currentMember,
-    currentMemberId,
-    setCurrentMemberId,
-    toggleRSVP,
-    createRunWithCheckIn,
-    updateRun,
-    deleteRun,
-    sendPushAnnouncement,
-    deleteAnnouncement,
-    bellItems,
-    addRoute,
-    updateRoute,
-    deleteRoute,
-    resetToDefaults,
-    isSyncing,
-    scheduleLoaded,
+    // State
+    runs: store.runs,
+    routes: store.routes,
+    members: store.members,
+    badges: store.badges,
+    notifications: store.notifications,
+    bellItems: store.bellItems,
+    users: store.users,
+    setUsers: store.setUsers,
+    meetupEvents: store.meetupEvents,
+    checkins: store.checkins,
+    legacyMembers: store.legacyMembers,
+    milestoneAlerts: store.milestoneAlerts,
+    specialEvents: store.specialEvents,
+    currentUser: store.currentUser,
+    currentUserEmail: store.currentUserEmail,
+    currentMember: store.currentMember,
+    isSyncing: store.isSyncing,
+    scheduleLoaded: store.scheduleLoaded,
     isFirebaseConfigured,
+
+    // Sign-in and private data
+    syncPrivateData: store.syncPrivateData,
+    clearPrivateData: store.clearPrivateData,
+    switchCurrentUser: store.switchCurrentUser,
+    registerUser: store.registerUser,
+
+    // Runners
+    setUserRole: store.setUserRole,
+    adminDeleteRunner: store.adminDeleteRunner,
+
+    // Legacy (old app) names
+    loadLegacyPool: store.loadLegacyPool,
+    claimLegacyProfile: store.claimLegacyProfile,
+    adminSetLegacyClaim: store.adminSetLegacyClaim,
+    importLegacyData: store.importLegacyData,
+    refreshDerivedStats: store.refreshDerivedStats,
+
+    // Check-ins and gear
+    checkInRunner: store.checkInRunner,
+    markMilestoneFulfilled: store.markMilestoneFulfilled,
+
+    // Runs and check-in events
+    saveMeetupEvent: store.saveMeetupEvent,
+    resolveRunByCodeWord: store.resolveRunByCodeWord,
+    countPushDevices: store.countPushDevices,
+    countRunCheckIns: store.countRunCheckIns,
+    toggleRSVP: store.toggleRSVP,
+    createRunWithCheckIn: store.createRunWithCheckIn,
+    updateRun: store.updateRun,
+    deleteRun: store.deleteRun,
+
+    // Routes
+    addRoute: store.addRoute,
+    updateRoute: store.updateRoute,
+    deleteRoute: store.deleteRoute,
+
+    // Badges and special events
+    createBadge: store.createBadge,
+    deleteBadge: store.deleteBadge,
+
+    // Announcements
+    sendPushAnnouncement: store.sendPushAnnouncement,
+    deleteAnnouncement: store.deleteAnnouncement,
   };
 }

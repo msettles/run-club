@@ -9,7 +9,10 @@ import {
   MilestoneAlert,
 } from '../../types';
 import {
-  computeStreaks,
+  adjustDistanceCounts,
+  datedEventsFrom,
+  recomputeBadges,
+  type LegacyEvent,
 } from '../../utils/legacy';
 import { 
   CLUB_MILESTONES,
@@ -24,10 +27,8 @@ import { memberKeyFor } from '../../utils/memberKey';
 import { cleanFirestoreData, memberFromUser, toPublicMember } from './helpers';
 import type { StoreState } from './state';
 import type { createLegacyOps } from './legacy';
-import type { createPrivateSyncOps } from './privateSync';
-import type { createMemberOps } from './members';
 
-export function createCheckInOps(ctx: StoreState & ReturnType<typeof createLegacyOps> & ReturnType<typeof createPrivateSyncOps> & ReturnType<typeof createMemberOps>) {
+export function createCheckInOps(ctx: StoreState & ReturnType<typeof createLegacyOps>) {
   const {
     setMembers,
     badges,
@@ -41,6 +42,8 @@ export function createCheckInOps(ctx: StoreState & ReturnType<typeof createLegac
     milestoneAlerts,
     setMilestoneAlerts,
     currentUser,
+    fetchLegacyEvents,
+    fetchRunnerCheckins,
   } = ctx;
 
   /**
@@ -128,10 +131,23 @@ export function createCheckInOps(ctx: StoreState & ReturnType<typeof createLegac
       return { success: false, message: 'No runner profile found for this email. Please join the club first.' };
     }
 
-    // 5. Check if runner already has a check-in for this event date (allow updates!)
-    // One check-in per runner per run
+    // 5. The runner's full history from the server: whether this is an edit of
+    //    tonight's check-in, and the dated runs that streaks and badges come from.
+    //    (Staff only load recent check-ins, and sign-in loading may still be running.)
     const checkinId = `${eventId}_${cleanEmail}`;
-    const existingCheckIn = checkins.find((c) => c.id === checkinId);
+    let history: CheckInRecord[];
+    let legacyEvents: LegacyEvent[];
+    try {
+      const isSelf = cleanEmail === currentUserEmail.toLowerCase();
+      [history, legacyEvents] = await Promise.all([
+        fetchRunnerCheckins(cleanEmail),
+        isSelf && ownLegacyEvents.length ? Promise.resolve(ownLegacyEvents) : fetchLegacyEvents(u.linkedLegacyIds || []),
+      ]);
+    } catch (err) {
+      console.error('Loading runner history failed:', err);
+      return { success: false, message: 'Could not reach the club server. Please check your connection and try again.' };
+    }
+    const existingCheckIn = history.find((c) => c.id === checkinId) || checkins.find((c) => c.id === checkinId);
     const isUpdate = Boolean(existingCheckIn);
 
     const now = new Date();
@@ -158,196 +174,67 @@ export function createCheckInOps(ctx: StoreState & ReturnType<typeof createLegac
       updatedAt: nowIso,
     };
 
-    // 6. Compute updated totals & badges (pure: no React state updaters involved)
-    const earnedBadges: Badge[] = [];
-
-    const newTotalRuns = isUpdate ? u.totalRuns : u.totalRuns + 1;
-    const newLoggedRuns = isUpdate ? u.loggedRuns : u.loggedRuns + 1;
+    // 6. Updated totals (an edit swaps the old check-in's numbers for the new ones)
     const oldMiles = existingCheckIn ? existingCheckIn.actualMiles : 0;
-    const newTotalMiles = Math.round((u.totalMiles - oldMiles + computedActualMiles) * 100) / 100;
-
-    let newRunCount = u.runCount;
-    let newWalkCount = u.walkCount;
-    if (!isUpdate) {
-      if (activity === 'running') newRunCount++;
-      if (activity === 'walking') newWalkCount++;
-    } else if (existingCheckIn && existingCheckIn.activity !== activity) {
-      if (activity === 'running') {
-        newRunCount++;
-        newWalkCount = Math.max(0, newWalkCount - 1);
-      } else {
-        newWalkCount++;
-        newRunCount = Math.max(0, newRunCount - 1);
-      }
+    let runCount = u.runCount;
+    let walkCount = u.walkCount;
+    let petRunCount = u.petRunCount || 0;
+    let distanceCounts = u.distanceCounts || {};
+    if (existingCheckIn) {
+      if (existingCheckIn.activity === 'running') runCount = Math.max(0, runCount - 1);
+      if (existingCheckIn.activity === 'walking') walkCount = Math.max(0, walkCount - 1);
+      if (existingCheckIn.withPet) petRunCount = Math.max(0, petRunCount - 1);
+      distanceCounts = adjustDistanceCounts(distanceCounts, existingCheckIn.actualMiles, -1);
     }
+    if (activity === 'running') runCount++;
+    if (activity === 'walking') walkCount++;
+    if (withPet) petRunCount++;
+    distanceCounts = adjustDistanceCounts(distanceCounts, computedActualMiles, 1);
 
-    let newPetRunCount = u.petRunCount || 0;
-    if (!isUpdate) {
-      if (withPet) newPetRunCount++;
-    } else if (existingCheckIn) {
-      if (!existingCheckIn.withPet && withPet) newPetRunCount++;
-      if (existingCheckIn.withPet && !withPet) newPetRunCount = Math.max(0, newPetRunCount - 1);
-    }
-
-    const newDistanceCounts: Record<string, number> = { ...(u.distanceCounts || {}) };
-    if (isUpdate && existingCheckIn) {
-      const oldM = existingCheckIn.actualMiles;
-      const oldLegacyBucket = oldM <= 2.0 ? '1' : oldM <= 4.0 ? '3' : '5';
-      const oldRoundedKey = (Math.round(oldM * 10) / 10).toFixed(1);
-      if (newDistanceCounts[oldLegacyBucket]) newDistanceCounts[oldLegacyBucket] = Math.max(0, newDistanceCounts[oldLegacyBucket] - 1);
-      if (newDistanceCounts[oldRoundedKey]) newDistanceCounts[oldRoundedKey] = Math.max(0, newDistanceCounts[oldRoundedKey] - 1);
-      if (newDistanceCounts[`${oldRoundedKey} mi`]) newDistanceCounts[`${oldRoundedKey} mi`] = Math.max(0, newDistanceCounts[`${oldRoundedKey} mi`] - 1);
-    }
-    const roundedDistKey = (Math.round(computedActualMiles * 10) / 10).toFixed(1);
-    const legacyBucket = computedActualMiles <= 2.0 ? '1' : computedActualMiles <= 4.0 ? '3' : '5';
-    newDistanceCounts[legacyBucket] = (newDistanceCounts[legacyBucket] || 0) + 1;
-    newDistanceCounts[roundedDistKey] = (newDistanceCounts[roundedDistKey] || 0) + 1;
-    newDistanceCounts[`${roundedDistKey} mi`] = (newDistanceCounts[`${roundedDistKey} mi`] || 0) + 1;
-
-    const unlocked = [...(u.unlockedBadgeIds || [])];
-    const counts: Record<string, number> = { ...(u.badgeCounts || {}) };
-
-    // Helper to award / increment an achievement badge
-    const awardBadge = (badgeId: string, customMultiplier?: number) => {
-      const isFirstTime = !unlocked.includes(badgeId);
-      const b = badges.find((x) => x.id === badgeId);
-      if (isFirstTime) {
-        unlocked.push(badgeId);
-        if (b) earnedBadges.push(b);
-      }
-      if (customMultiplier !== undefined) {
-        const prevCount = counts[badgeId] || 0;
-        if (customMultiplier > prevCount && !isFirstTime && b) earnedBadges.push(b);
-        counts[badgeId] = customMultiplier;
-      } else {
-        counts[badgeId] = (counts[badgeId] || 0) + 1;
-        if (!isFirstTime && b) earnedBadges.push(b);
-      }
+    const withTotals: UserProfile = {
+      ...u,
+      totalRuns: isUpdate ? u.totalRuns : u.totalRuns + 1,
+      loggedRuns: isUpdate ? u.loggedRuns : u.loggedRuns + 1,
+      totalMiles: Math.round((u.totalMiles - oldMiles + computedActualMiles) * 100) / 100,
+      runCount,
+      walkCount,
+      petRunCount,
+      distanceCounts,
     };
 
-    // Weekly streaks from every dated run: claimed old-app sign-ins + this app's check-ins
-    const streaks = computeStreaks([
-      ...(cleanEmail === currentUserEmail.toLowerCase() ? ownLegacyEvents.map((e) => e.d) : []),
-      ...checkins.filter((c) => c.userEmail.toLowerCase() === cleanEmail).map((c) => c.date),
-      eventDate,
-    ]);
-
-    // Unified badge evaluation (handles built-in and admin-created custom badges)
-    for (const badge of badges) {
-      const cfg = badge.triggerConfig;
-      if (!cfg) {
-        // Fallback for any badge without triggerConfig
-        if (badge.id === 'first-chuck' && newTotalRuns >= 1) awardBadge(badge.id, 1);
-        if (badge.id === 'milestone-5' && newTotalRuns >= 5) awardBadge(badge.id, Math.floor(newTotalRuns / 5));
-        if (badge.id === 'milestone-50' && newTotalRuns >= 50) awardBadge(badge.id, Math.floor(newTotalRuns / 50));
-        if (badge.id === 'milestone-100' && newTotalRuns >= 100) awardBadge(badge.id, Math.floor(newTotalRuns / 100));
-        if (badge.id === 'milestone-200' && newTotalRuns >= 200) awardBadge(badge.id, Math.floor(newTotalRuns / 200));
-        if (badge.id === 'power-walker' && newWalkCount >= 10) awardBadge(badge.id, Math.floor(newWalkCount / 10));
-        if (badge.id === 'streak-4' && streaks.longest >= 4) awardBadge(badge.id, Math.floor(streaks.longest / 4));
-        if (badge.id === 'streak-10' && streaks.longest >= 10) awardBadge(badge.id, Math.floor(streaks.longest / 10));
-        if (badge.id === 'pet-runner' && newPetRunCount >= 1) awardBadge(badge.id, newPetRunCount);
-        continue;
-      }
-
-      switch (cfg.type) {
-        case 'milestone': {
-          const threshold = cfg.minTotalRuns || 1;
-          if (newTotalRuns >= threshold) {
-            const mult = cfg.isIncremental ? Math.floor(newTotalRuns / (cfg.step || threshold)) : 1;
-            awardBadge(badge.id, Math.max(1, mult));
-          }
-          break;
-        }
-        case 'activity': {
-          const isWalk = cfg.activityType === 'walking';
-          const count = isWalk ? newWalkCount : newRunCount;
-          const threshold = cfg.activityCount || 10;
-          if (count >= threshold) {
-            const mult = cfg.isIncremental ? Math.floor(count / (cfg.step || threshold)) : 1;
-            awardBadge(badge.id, Math.max(1, mult));
-          }
-          break;
-        }
-        case 'distance': {
-          const distKey = (cfg.distanceChoice || cfg.distanceTier || '3.1').toString();
-          const count = newDistanceCounts[distKey] || 0;
-          const threshold = cfg.distanceCount || 1;
-          if (count >= threshold) {
-            const mult = cfg.isIncremental ? Math.floor(count / (cfg.step || threshold)) : 1;
-            awardBadge(badge.id, Math.max(1, mult));
-          }
-          break;
-        }
-        case 'special_event': {
-          // Only credit special-event badges once per night (not again on a same-night edit)
-          if (isUpdate) break;
-          const seId = cfg.specialEventId || badge.id.replace(/^special-/, '');
-          const cw = (event.codeWord || codeWordEntered).toUpperCase();
-          const isMatch = (event.specialEvent && event.specialEvent === seId) ||
-            (seId === 'turkey_trot' && (cw.includes('TURKEY') || event.title.toLowerCase().includes('turkey'))) ||
-            (seId === 'halloween' && (cw.includes('HALLOWEEN') || cw.includes('SPOOKY') || event.title.toLowerCase().includes('halloween'))) ||
-            (seId === 'anniversary' && (cw.includes('ANNIVERSARY') || event.title.toLowerCase().includes('anniversary')));
-          if (isMatch) {
-            awardBadge(badge.id);
-          }
-          break;
-        }
-        case 'streak': {
-          // Consecutive weeks with a run, across claimed legacy history and app check-ins
-          const weeks = cfg.streakWeeks || 4;
-          if (streaks.longest >= weeks) {
-            const mult = cfg.isIncremental ? Math.floor(streaks.longest / weeks) : 1;
-            awardBadge(badge.id, Math.max(1, mult));
-          }
-          break;
-        }
-        case 'pet': {
-          if (newPetRunCount >= 1) {
-            awardBadge(badge.id, newPetRunCount);
-          }
-          break;
-        }
-        case 'attendance': {
-          if (newTotalRuns >= 1) {
-            awardBadge(badge.id, 1);
-          }
-          break;
-        }
-      }
-    }
-
+    // Badges and streaks: the same rules as every other recalculation (recomputeBadges),
+    // over claimed old-app sign-ins plus this app's check-ins with tonight's in place.
+    const derived = recomputeBadges(
+      withTotals,
+      badges,
+      datedEventsFrom(legacyEvents, [...history.filter((c) => c.id !== checkinId), newCheckIn], meetupEvents)
+    );
     const updatedUser: UserProfile = {
-      ...u,
-      totalRuns: newTotalRuns,
-      loggedRuns: newLoggedRuns,
-      totalMiles: newTotalMiles,
-      runCount: newRunCount,
-      walkCount: newWalkCount,
-      petRunCount: newPetRunCount,
-      distanceCounts: newDistanceCounts,
-      unlockedBadgeIds: unlocked,
-      badgeCounts: counts,
+      ...withTotals,
+      ...derived,
       lastCheckInDate: eventDate,
       lastCheckInRunId: eventId,
-      currentStreakWeeks: streaks.current,
-      longestStreakWeeks: streaks.longest,
     };
+
+    // Newly unlocked badges, or ones whose level went up, are celebrated.
+    const before = (id: string) => u.badgeCounts?.[id] ?? ((u.unlockedBadgeIds || []).includes(id) ? 1 : 0);
+    const earnedBadges = badges.filter((b) => (derived.badgeCounts?.[b.id] || 0) > before(b.id));
 
     // 7. Milestone gear alert — only when this check-in is what crossed the milestone
     //    (never on a same-night edit), with a deterministic ID so it can't duplicate.
     let unlockedMilestone: MilestoneAlert | undefined;
     if (!isUpdate) {
       const milestoneBadge = badges.find(
-        (b) => b.category === 'milestone' && Boolean(b.triggerConfig?.reward) && b.triggerConfig?.minTotalRuns === newTotalRuns
+        (b) => b.category === 'milestone' && Boolean(b.triggerConfig?.reward) && b.triggerConfig?.minTotalRuns === updatedUser.totalRuns
       );
-      const mDef = milestoneBadge ? undefined : CLUB_MILESTONES.find((m) => m.runsRequired === newTotalRuns);
+      const mDef = milestoneBadge ? undefined : CLUB_MILESTONES.find((m) => m.runsRequired === updatedUser.totalRuns);
       if (milestoneBadge || mDef) {
         unlockedMilestone = {
-          id: `m${newTotalRuns}_${cleanEmail}`,
+          id: `m${updatedUser.totalRuns}_${cleanEmail}`,
           userEmail: cleanEmail,
           runnerName: updatedUser.displayName,
           shirtSize: updatedUser.shirtSize,
-          milestoneRuns: newTotalRuns,
+          milestoneRuns: updatedUser.totalRuns,
           milestoneName: milestoneBadge ? milestoneBadge.name : mDef!.name,
           reward: milestoneBadge ? milestoneBadge.triggerConfig!.reward! : mDef!.reward,
           perks: milestoneBadge ? (milestoneBadge.triggerConfig?.perks || '$1 off draft beers at Blue Note') : mDef!.perks,

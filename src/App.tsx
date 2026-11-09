@@ -4,7 +4,6 @@ import { RunEvent, GPXRoute, UserProfile } from './types';
 import { buildMeetupFromRun, deleteRunConfirmMessage, getRunChoices, resolveChoices } from './utils/runChoices';
 import { Navbar } from './components/Navbar';
 import { RunCard } from './components/RunCard';
-import { MapViewer } from './components/MapViewer';
 import { Leaderboard } from './components/Leaderboard';
 import { InstallPwaBanner } from './components/InstallPwaBanner';
 import { InstallAppLink } from './components/InstallAppLink';
@@ -20,6 +19,7 @@ import { isAdminProfile, isStaffProfile } from './utils/roles';
 import { formatOpening, nextCheckInEvent, openCheckInEvents, checkInWindow, upcomingRuns, priorRuns, isRunLive } from './utils/checkInWindow';
 
 // Lazy-loaded heavy components & modals (saves >60% initial mobile bundle size)
+const MapViewer = lazy(() => import('./components/MapViewer').then((m) => ({ default: m.MapViewer })));
 const AdminDashboard = lazy(() => import('./components/AdminDashboard').then((m) => ({ default: m.AdminDashboard })));
 const RouteStudioModal = lazy(() => import('./components/RouteStudioModal').then((m) => ({ default: m.RouteStudioModal })));
 const CheckInModal = lazy(() => import('./components/CheckInModal').then((m) => ({ default: m.CheckInModal })));
@@ -86,7 +86,6 @@ export function App() {
     countPushDevices,
     countRunCheckIns,
     scheduleLoaded,
-    searchLegacyMatches,
     switchCurrentUser,
     milestoneAlerts,
     markMilestoneFulfilled,
@@ -237,8 +236,11 @@ export function App() {
       if (user && user.email) {
         handleUserAuthenticated(user.email, user.displayName).finally(() => setAuthReady(true));
       } else {
-        switchCurrentUser('');
-        clearPrivateData();
+        // Local mode has no accounts: the browser's saved runner stays selected.
+        if (isFirebaseConfigured) {
+          switchCurrentUser('');
+          clearPrivateData();
+        }
         setAuthReady(true);
       }
     });
@@ -367,12 +369,17 @@ export function App() {
       alert('Only organizers and club administrators can create or edit routes.');
       return;
     }
-    if (existingId) {
-      const updated = await updateRoute(existingId, routeData);
-      setSelectedRoute(updated);
-    } else {
-      const saved = await addRoute(routeData);
-      setSelectedRoute(saved);
+    // Errors are shown inside the Route Studio, which stays open.
+    try {
+      setSelectedRoute(existingId ? await updateRoute(existingId, routeData) : await addRoute(routeData));
+    } catch (err) {
+      console.error('Saving route failed:', err);
+      const { code, message } = (err || {}) as { code?: string; message?: string };
+      throw new Error(
+        code === 'route-too-large' && message
+          ? message
+          : `Route not saved${code ? ` (${code})` : ''}. Please check your connection and try again.`
+      );
     }
     setIsRouteStudioOpen(false);
     setEditingRoute(null);
@@ -444,7 +451,7 @@ export function App() {
                 <div className="max-w-2xl">
                   <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-woodland-500/20 text-woodland-200 border border-woodland-400/30 text-xs font-semibold mb-3">
                     <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-                    <span>Spring 2026 Season • Blue Note Brewing Co.</span>
+                    <span>Wednesday Night Runs • Blue Note Brewing Co.</span>
                   </div>
                   <h1 className="text-3xl sm:text-5xl font-display font-extrabold tracking-wide uppercase leading-tight">
                     Woodland Woodchuckers
@@ -633,16 +640,20 @@ export function App() {
 
             {/* Selected Route Map Viewer */}
             {selectedRoute && (
-              <MapViewer
-                route={selectedRoute}
-                height="480px"
-                showElevationProfile={true}
-                canEdit={isOrganizerOrAdmin}
-                onEditRoute={(r) => {
-                  setEditingRoute(r);
-                  setIsRouteStudioOpen(true);
-                }}
-              />
+              <Suspense
+                fallback={<div className="h-[480px] rounded-2xl bg-white border border-stone-200 animate-pulse" aria-label="Loading map" />}
+              >
+                <MapViewer
+                  route={selectedRoute}
+                  height="480px"
+                  showElevationProfile={true}
+                  canEdit={isOrganizerOrAdmin}
+                  onEditRoute={(r) => {
+                    setEditingRoute(r);
+                    setIsRouteStudioOpen(true);
+                  }}
+                />
+              </Suspense>
             )}
 
             {/* Route Cards Carousel / Grid */}
@@ -954,8 +965,6 @@ export function App() {
             routes={routes}
             checkins={checkins}
             onCheckInRunner={checkInRunner}
-            onRegisterUser={registerUser}
-            onSearchLegacy={searchLegacyMatches}
             onOpenAuthModal={() => setIsAuthModalOpen(true)}
           />
         )}
@@ -1005,31 +1014,28 @@ export function App() {
           />
         )}
 
-        <FirebaseSetupGuide
-          isOpen={isSetupGuideOpen}
-          onClose={() => setIsSetupGuideOpen(false)}
-          isConfigured={isFirebaseConfigured}
-        />
+        {/* Rendered only while open, so their code downloads on first use, not at startup. */}
+        {isSetupGuideOpen && (
+          <FirebaseSetupGuide
+            isOpen
+            onClose={() => setIsSetupGuideOpen(false)}
+            isConfigured={isFirebaseConfigured}
+          />
+        )}
 
-        <BrandAssetsModal
-          isOpen={isBrandAssetsOpen}
-          onClose={() => setIsBrandAssetsOpen(false)}
-        />
+        {isBrandAssetsOpen && <BrandAssetsModal isOpen onClose={() => setIsBrandAssetsOpen(false)} />}
 
-        <VersionModal
-          isOpen={isVersionModalOpen}
-          onClose={() => setIsVersionModalOpen(false)}
-        />
+        {isVersionModalOpen && <VersionModal isOpen onClose={() => setIsVersionModalOpen(false)} />}
 
-        {/* Passwordless & Google Auth Modal */}
-        <AuthModal
-          isOpen={isAuthModalOpen}
-          onClose={() => setIsAuthModalOpen(false)}
-          onAuthSuccess={(email, displayName) => {
-            setIsAuthModalOpen(false);
-            handleUserAuthenticated(email, displayName);
-          }}
-        />
+        {/* Passwordless & Google Auth Modal. The auth listener above loads the
+            profile after any sign-in, so success here only closes the modal. */}
+        {isAuthModalOpen && (
+          <AuthModal
+            isOpen
+            onClose={() => setIsAuthModalOpen(false)}
+            onAuthSuccess={() => setIsAuthModalOpen(false)}
+          />
+        )}
 
         {/* First-Time Runner Profile Creation & Historical Merge */}
         {isOnboardingOpen && (

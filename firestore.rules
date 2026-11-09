@@ -301,7 +301,7 @@ service cloud.firestore {
       return data.keys().hasOnly([
                'id', 'name', 'avatarUrl', 'totalRuns', 'totalMiles', 'runCount',
                'walkCount', 'petRunCount', 'streak', 'favoritePace',
-               'unlockedBadgeIds', 'badgeCounts', 'joinedDate'
+               'unlockedBadgeIds', 'badgeCounts', 'joinedDate', 'lastCheckInDate'
              ]) &&
              data.keys().hasAll([
                'id', 'name', 'totalRuns', 'totalMiles', 'streak',
@@ -319,7 +319,8 @@ service cloud.firestore {
              (!('walkCount' in data) || data.walkCount is number) &&
              (!('petRunCount' in data) || data.petRunCount is number) &&
              (!('badgeCounts' in data) || data.badgeCounts is map) &&
-             (!('avatarUrl' in data) || (data.avatarUrl is string && data.avatarUrl.size() <= 1000));
+             (!('avatarUrl' in data) || (data.avatarUrl is string && data.avatarUrl.size() <= 1000)) &&
+             (!('lastCheckInDate' in data) || (data.lastCheckInDate is string && data.lastCheckInDate.size() <= 30));
     }
 
     // The leaderboard row must mirror the user doc as it stands after this batch.

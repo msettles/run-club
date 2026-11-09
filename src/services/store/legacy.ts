@@ -7,7 +7,6 @@ import {
 import {
   buildLegacyImport,
   datedEventsFrom,
-  matchLegacyNames,
   recomputeBadges,
   isLegacyClaimed,
   type LegacyEvent,
@@ -40,10 +39,6 @@ export function createLegacyOps(ctx: StoreState) {
     currentUserEmail,
     legacyMembers,
   } = ctx;
-
-  /** Unclaimed legacy names that fuzzily match what the runner typed (e.g. MATT SETTLED). */
-  const searchLegacyMatches = (nameQuery: string): LegacyMember[] =>
-    matchLegacyNames(nameQuery, legacyMembers.filter((m) => !isLegacyClaimed(m)));
 
   /**
    * Load the legacy name pool: one index doc (names + counts) plus the claimed
@@ -80,7 +75,6 @@ export function createLegacyOps(ctx: StoreState) {
     return snaps.flatMap((sn) => (sn.exists() ? ((sn.data().events as LegacyEvent[]) || []) : []));
   };
 
-  /** Recalculate badges + streaks for a profile from all its dated history and save them. */
   /** All of one runner's check-ins (server query: staff only load recent ones). */
   const fetchRunnerCheckins = async (email: string): Promise<CheckInRecord[]> => {
     const clean = email.toLowerCase();
@@ -89,6 +83,7 @@ export function createLegacyOps(ctx: StoreState) {
     return snap.docs.map((d) => d.data() as CheckInRecord);
   };
 
+  /** Recalculate badges + streaks for a profile from all its dated history and save them. */
   const refreshDerivedStats = async (user: UserProfile, legacyEvents?: LegacyEvent[]): Promise<UserProfile> => {
     const events = legacyEvents ?? (await fetchLegacyEvents(user.linkedLegacyIds || []));
     const own = await fetchRunnerCheckins(user.email);
@@ -272,5 +267,5 @@ export function createLegacyOps(ctx: StoreState) {
   };
 
 
-  return { searchLegacyMatches, loadLegacyPool, fetchLegacyEvents, fetchRunnerCheckins, refreshDerivedStats, claimLegacyProfile, adminSetLegacyClaim, importLegacyData };
+  return { loadLegacyPool, fetchLegacyEvents, fetchRunnerCheckins, refreshDerivedStats, claimLegacyProfile, adminSetLegacyClaim, importLegacyData };
 }

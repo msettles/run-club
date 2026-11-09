@@ -9,6 +9,7 @@ import {
 import { computeCheckInWindow } from '../../utils/checkInWindow';
 import { buildMeetupFromRun } from '../../utils/runChoices';
 import {
+  adjustDistanceCounts,
   datedEventsFrom,
   recomputeBadges,
 } from '../../utils/legacy';
@@ -30,16 +31,11 @@ import {
 } from 'firebase/firestore';
 import { codeKeyFor, memberKeyFor } from '../../utils/memberKey';
 import { isAdminProfile } from '../../utils/roles';
-import { cleanFirestoreData, formatRouteForFirestore, memberFromUser, toPublicMember } from './helpers';
+import { assertRouteFitsFirestore, cleanFirestoreData, formatRouteForFirestore, memberFromUser, toPublicMember } from './helpers';
 import type { StoreState } from './state';
 import type { createLegacyOps } from './legacy';
-import type { createPrivateSyncOps } from './privateSync';
-import type { createMemberOps } from './members';
-import type { createCheckInOps } from './checkIn';
-import type { createEventOps } from './events';
-import type { createBadgeOps } from './badges';
 
-export function createRunOps(ctx: StoreState & ReturnType<typeof createLegacyOps> & ReturnType<typeof createPrivateSyncOps> & ReturnType<typeof createMemberOps> & ReturnType<typeof createCheckInOps> & ReturnType<typeof createEventOps> & ReturnType<typeof createBadgeOps>) {
+export function createRunOps(ctx: StoreState & ReturnType<typeof createLegacyOps>) {
   const {
     runs,
     setRuns,
@@ -60,9 +56,6 @@ export function createRunOps(ctx: StoreState & ReturnType<typeof createLegacyOps
     fetchRunnerCheckins,
   } = ctx;
 
-  /**
-   * Toggle RSVP for a run (legacy support)
-   */
   /** RSVP / un-RSVP the signed-in runner. Saves first; throws if the server refuses. */
   const toggleRSVP = async (runId: string) => {
     if (!currentUserEmail || currentMember.id === 'guest') return;
@@ -93,9 +86,6 @@ export function createRunOps(ctx: StoreState & ReturnType<typeof createLegacyOps
     );
   };
 
-  /**
-   * Add a new scheduled run
-   */
   /**
    * Create a run together with its check-in event, code word and code word
    * lookup key in ONE write, so a run never exists without a working check-in.
@@ -142,30 +132,19 @@ export function createRunOps(ctx: StoreState & ReturnType<typeof createLegacyOps
     return run;
   };
 
-  /**
-   * Add a newly parsed GPX route
-   */
+  /** Save a newly parsed GPX route (staff). Saves first; throws if the server refuses. */
   const addRoute = async (routeData: Omit<GPXRoute, 'id'>): Promise<GPXRoute> => {
-    const id = `route-${Date.now()}`;
-    const newRoute: GPXRoute = {
-      ...routeData,
-      id,
-    };
-
-    setRoutes((prev) => [newRoute, ...prev]);
+    const newRoute: GPXRoute = { ...routeData, id: `route-${Date.now()}` };
     if (isFirebaseConfigured && db) {
-      try {
-        await setDoc(doc(db, 'routes', id), formatRouteForFirestore(newRoute));
-      } catch (err) {
-        console.error('Firebase save route error:', err);
-      }
+      const formatted = formatRouteForFirestore(newRoute);
+      assertRouteFitsFirestore(formatted);
+      await setDoc(doc(db, 'routes', newRoute.id), formatted);
     }
+    setRoutes((prev) => [newRoute, ...prev]);
     return newRoute;
   };
 
-  /**
-   * Update an existing route (Organizer / Admin)
-   */
+  /** Update an existing route (staff). Saves first; throws if the server refuses. */
   const updateRoute = async (routeId: string, updates: Partial<GPXRoute>): Promise<GPXRoute> => {
     const existing = routes.find((r) => r.id === routeId);
     const updatedObj: GPXRoute = {
@@ -174,16 +153,12 @@ export function createRunOps(ctx: StoreState & ReturnType<typeof createLegacyOps
       id: routeId,
       updatedAt: new Date().toISOString(),
     };
-
-    setRoutes((prev) => prev.map((r) => (r.id === routeId ? updatedObj : r)));
-
     if (isFirebaseConfigured && db) {
-      try {
-        await setDoc(doc(db, 'routes', routeId), formatRouteForFirestore(updatedObj), { merge: true });
-      } catch (err) {
-        console.error('Firebase update route error:', err);
-      }
+      const formatted = formatRouteForFirestore(updatedObj);
+      assertRouteFitsFirestore(formatted);
+      await setDoc(doc(db, 'routes', routeId), formatted, { merge: true });
     }
+    setRoutes((prev) => prev.map((r) => (r.id === routeId ? updatedObj : r)));
     return updatedObj;
   };
 
@@ -198,26 +173,20 @@ export function createRunOps(ctx: StoreState & ReturnType<typeof createLegacyOps
   };
 
   /**
-   * Update an existing run (Admin)
+   * Update an existing run's details (staff). The RSVP list is left alone: it may
+   * have changed since the edit form opened, and only runners change their own RSVP.
    */
   const updateRun = async (updatedRun: RunEvent) => {
+    const { attendees: _attendees, ...details } = updatedRun;
     if (isFirebaseConfigured && db) {
-      await setDoc(doc(db, 'runs', updatedRun.id), cleanFirestoreData(updatedRun), { merge: true });
+      await setDoc(doc(db, 'runs', updatedRun.id), cleanFirestoreData(details), { merge: true });
     }
-    setRuns((prev) => prev.map((r) => (r.id === updatedRun.id ? updatedRun : r)));
+    setRuns((prev) => prev.map((r) => (r.id === updatedRun.id ? { ...r, ...details } : r)));
   };
 
-  /**
-   * Delete a run (Admin)
-   */
   /** Undo one check-in's effect on a runner's totals (badges/streaks are recomputed separately). */
   const rollBackCheckIn = (u: UserProfile, c: CheckInRecord): UserProfile => {
-    const dist: Record<string, number> = { ...(u.distanceCounts || {}) };
     const m = c.actualMiles || 0;
-    const rounded = (Math.round(m * 10) / 10).toFixed(1);
-    for (const key of [m <= 2.0 ? '1' : m <= 4.0 ? '3' : '5', rounded, `${rounded} mi`]) {
-      if (dist[key]) dist[key] = Math.max(0, dist[key] - 1);
-    }
     return {
       ...u,
       totalRuns: Math.max(0, u.totalRuns - 1),
@@ -226,7 +195,7 @@ export function createRunOps(ctx: StoreState & ReturnType<typeof createLegacyOps
       walkCount: c.activity === 'walking' ? Math.max(0, u.walkCount - 1) : u.walkCount,
       petRunCount: c.withPet ? Math.max(0, (u.petRunCount || 0) - 1) : u.petRunCount,
       totalMiles: Math.max(0, Math.round((u.totalMiles - m) * 100) / 100),
-      distanceCounts: dist,
+      distanceCounts: adjustDistanceCounts(u.distanceCounts, m, -1),
     };
   };
 

@@ -18,12 +18,8 @@ import {
 import { codeKeyFor } from '../../utils/memberKey';
 import { cleanFirestoreData } from './helpers';
 import type { StoreState } from './state';
-import type { createLegacyOps } from './legacy';
-import type { createPrivateSyncOps } from './privateSync';
-import type { createMemberOps } from './members';
-import type { createCheckInOps } from './checkIn';
 
-export function createEventOps(ctx: StoreState & ReturnType<typeof createLegacyOps> & ReturnType<typeof createPrivateSyncOps> & ReturnType<typeof createMemberOps> & ReturnType<typeof createCheckInOps>) {
+export function createEventOps(ctx: StoreState) {
   const {
     meetupEvents,
     setMeetupEvents,

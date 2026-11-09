@@ -2,7 +2,7 @@
 import { 
   UserProfile,
 } from '../../types';
-import { calculateAge } from '../../utils/dateUtils';
+import { calculateAge, localYmd } from '../../utils/dateUtils';
 import { isFirebaseConfigured, db } from '../firebase';
 import {
   collection,
@@ -25,7 +25,6 @@ export function createMemberOps(ctx: StoreState & ReturnType<typeof createLegacy
     runs,
     setRuns,
     setMembers,
-    setCurrentMemberId,
     users,
     setUsers,
     setCheckins,
@@ -84,7 +83,7 @@ export function createMemberOps(ctx: StoreState & ReturnType<typeof createLegacy
       runCount: 0,
       walkCount: 0,
       petRunCount: 0,
-      firstRunDate: new Date().toISOString().split('T')[0],
+      firstRunDate: localYmd(),
       linkedLegacyIds: [],
       linkedLegacyNames: [],
       unlockedBadgeIds: [],
@@ -108,7 +107,6 @@ export function createMemberOps(ctx: StoreState & ReturnType<typeof createLegacy
     setMembers((prev) => [memberFromUser(newUser, memberKey), ...prev.filter((m) => m.id !== memberKey)]);
 
     setCurrentUserEmail(cleanEmail);
-    setCurrentMemberId(memberKey);
 
     // Claim the selected old profiles one by one; a name someone else grabbed
     // in the meantime is reported but doesn't undo the rest.
@@ -214,12 +212,9 @@ export function createMemberOps(ctx: StoreState & ReturnType<typeof createLegacy
     setUsers((prev) => prev.map((u) => (u.email.toLowerCase() === cleanEmail ? { ...u, role } : u)));
   };
 
-  /**
-   * Switch the current active testing user by email
-   */
+  /** Set (or clear, with '') whose profile this app is showing: the signed-in account. */
   const switchCurrentUser = (email: string) => {
     setCurrentUserEmail(email.toLowerCase());
-    setCurrentMemberId(email.toLowerCase());
   };
 
 

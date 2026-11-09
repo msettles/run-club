@@ -32,3 +32,8 @@ export function calculateAge(birthday?: string | null): number | undefined {
 
   return age >= 0 && age <= 130 ? age : undefined;
 }
+
+/** A date as "YYYY-MM-DD" in this device's local time (toISOString() would give UTC, i.e. tomorrow on a Wednesday evening in California). */
+export function localYmd(d: Date = new Date()): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}

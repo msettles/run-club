@@ -1,10 +1,10 @@
 /** All club-store state (React state, browser persistence, derived current user). */
-import { useState, useEffect, useMemo } from 'react';
-import { 
-  RunEvent, 
-  GPXRoute, 
-  Member, 
-  Badge, 
+import { useState, useEffect, useMemo, useRef } from 'react';
+import {
+  RunEvent,
+  GPXRoute,
+  Member,
+  Badge,
   UserProfile,
   MeetupEvent,
   CheckInRecord,
@@ -15,10 +15,10 @@ import {
 import {
   type LegacyEvent,
 } from '../../utils/legacy';
-import { 
-  INITIAL_RUNS, 
-  INITIAL_ROUTES, 
-  INITIAL_MEMBERS, 
+import {
+  INITIAL_RUNS,
+  INITIAL_ROUTES,
+  INITIAL_MEMBERS,
   INITIAL_BADGES,
   INITIAL_SPECIAL_EVENTS,
   INITIAL_USERS,
@@ -30,56 +30,65 @@ import {
 } from '../../data/initialData';
 import { isFirebaseConfigured } from '../firebase';
 import { memberKeyFor } from '../../utils/memberKey';
-import { 
-  ClubNotification, 
-  getStoredNotifications, 
+import {
+  ClubNotification,
+  getStoredNotifications,
 } from '../notifications';
 import { onPushReceived, readReceivedPushes, type ReceivedPush } from '../push';
 import { STORAGE_KEYS, hydrateRouteFromFirestore, loadFromStorage, memberFromUser, saveToStorage } from './helpers';
 
+/**
+ * Local (no-Firebase) mode keeps everything in this browser, starting from the
+ * sample data. With Firebase, Firestore is the only source: state starts empty
+ * (or with the built-in catalog) and nothing is cached in localStorage, so sample
+ * people never show up in production and other runners' data never sits on a device.
+ */
+const LOCAL_MODE = !isFirebaseConfigured;
+
+/** Stored list plus any sample entries it doesn't have yet (local mode only). */
+function loadMerged<T>(key: string, initial: T[], idOf: (x: T) => string): T[] {
+  const stored = loadFromStorage<T[]>(key, initial);
+  const ids = new Set(stored.map(idOf));
+  return [...stored, ...initial.filter((x) => !ids.has(idOf(x)))];
+}
+
+/** Save a piece of state to localStorage whenever it changes (local mode only). */
+function usePersist<T>(key: string, value: T) {
+  useEffect(() => {
+    if (LOCAL_MODE) saveToStorage(key, value);
+  }, [key, value]);
+}
+
+const emailOf = (x: { email: string }) => x.email.toLowerCase();
+const idOf = (x: { id: string }) => x.id;
+
 export function useStoreState() {
-  // Legacy / existing state
-  // With Firebase the schedule comes only from Firestore (sample runs are for local mode).
-  const [runs, setRuns] = useState<RunEvent[]>(() => (isFirebaseConfigured ? [] : loadFromStorage(STORAGE_KEYS.RUNS, INITIAL_RUNS)));
-  const [routes, setRoutes] = useState<GPXRoute[]>(() => {
-    const stored = loadFromStorage<GPXRoute[]>(STORAGE_KEYS.ROUTES, INITIAL_ROUTES).map(hydrateRouteFromFirestore);
-    const existingIds = new Set(stored.map((r) => r.id));
-    const missing = INITIAL_ROUTES.filter((r) => !existingIds.has(r.id)).map(hydrateRouteFromFirestore);
-    return [...stored, ...missing];
-  });
-  const [members, setMembers] = useState<Member[]>(() => {
-    const stored = loadFromStorage<Member[]>(STORAGE_KEYS.MEMBERS, INITIAL_MEMBERS);
-    const existingEmails = new Set(stored.map((m) => m.email.toLowerCase()));
-    const missing = INITIAL_MEMBERS.filter((m) => !existingEmails.has(m.email.toLowerCase()));
-    const updated = stored.map((m) => {
-      const match = INITIAL_MEMBERS.find((init) => init.email.toLowerCase() === m.email.toLowerCase());
-      if (match && m.totalRuns < match.totalRuns) {
-        return { ...m, ...match };
+  // Builds before this one cached club data in localStorage in Firebase mode too
+  // (including the staff roster). Drop it: Firestore is the source of truth.
+  useEffect(() => {
+    if (LOCAL_MODE) return;
+    for (const key of Object.values(STORAGE_KEYS)) {
+      try {
+        localStorage.removeItem(key);
+      } catch {
+        // ignore
       }
-      return m;
-    });
-    return [...updated, ...missing];
-  });
-  const [currentMemberId, setCurrentMemberId] = useState<string>(() => {
-    const stored = loadFromStorage<string>(STORAGE_KEYS.CURRENT_USER_ID, '');
-    return stored;
-  });
-  const [badges, setBadges] = useState<Badge[]>(() => {
-    const stored = loadFromStorage<Badge[]>(STORAGE_KEYS.BADGES, INITIAL_BADGES);
-    const existingIds = new Set(stored.map((b) => b.id));
-    const missing = INITIAL_BADGES.filter((b) => !existingIds.has(b.id));
-    return [...stored, ...missing];
-  });
-  const [specialEvents, setSpecialEvents] = useState<SpecialEventDefinition[]>(() => {
-    const stored = loadFromStorage<SpecialEventDefinition[]>(STORAGE_KEYS.SPECIAL_EVENTS, INITIAL_SPECIAL_EVENTS);
-    const existingIds = new Set(stored.map((s) => s.id));
-    const missing = INITIAL_SPECIAL_EVENTS.filter((s) => !existingIds.has(s.id));
-    return [...stored, ...missing];
-  });
-  // Club announcements: shared via Firestore (announcements collection); local mode keeps them in the browser.
-  const [notifications, setNotifications] = useState<ClubNotification[]>(() =>
-    isFirebaseConfigured ? [] : getStoredNotifications()
+    }
+  }, []);
+
+  const [runs, setRuns] = useState<RunEvent[]>(() => (LOCAL_MODE ? loadFromStorage(STORAGE_KEYS.RUNS, INITIAL_RUNS) : []));
+  // The official club routes always show; Firestore adds the rest (see syncFromFirestore).
+  const [routes, setRoutes] = useState<GPXRoute[]>(() =>
+    (LOCAL_MODE ? loadMerged(STORAGE_KEYS.ROUTES, INITIAL_ROUTES, idOf) : INITIAL_ROUTES).map(hydrateRouteFromFirestore)
   );
+  const [members, setMembers] = useState<Member[]>(() => (LOCAL_MODE ? loadMerged(STORAGE_KEYS.MEMBERS, INITIAL_MEMBERS, emailOf) : []));
+  // The built-in badge catalog is part of the app; admin-made badges come from Firestore.
+  const [badges, setBadges] = useState<Badge[]>(() => (LOCAL_MODE ? loadMerged(STORAGE_KEYS.BADGES, INITIAL_BADGES, idOf) : INITIAL_BADGES));
+  const [specialEvents, setSpecialEvents] = useState<SpecialEventDefinition[]>(() =>
+    LOCAL_MODE ? loadMerged(STORAGE_KEYS.SPECIAL_EVENTS, INITIAL_SPECIAL_EVENTS, idOf) : INITIAL_SPECIAL_EVENTS
+  );
+  // Club announcements: shared via Firestore (announcements collection); local mode keeps them in the browser.
+  const [notifications, setNotifications] = useState<ClubNotification[]>(() => (LOCAL_MODE ? getStoredNotifications() : []));
   // Pushes this device received from the Firebase console (saved by the push worker).
   const [receivedPushes, setReceivedPushes] = useState<ClubNotification[]>([]);
   useEffect(() => {
@@ -102,46 +111,22 @@ export function useStoreState() {
   );
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
 
-  // New Relational Collections state (local testing / offline first)
-  const [users, setUsers] = useState<UserProfile[]>(() => {
-    const stored = loadFromStorage<UserProfile[]>(STORAGE_KEYS.USERS, INITIAL_USERS);
-    const existingEmails = new Set(stored.map((u) => u.email.toLowerCase()));
-    const missing = INITIAL_USERS.filter((u) => !existingEmails.has(u.email.toLowerCase()));
-    const updated = stored.map((u) => {
-      const match = INITIAL_USERS.find((init) => init.email.toLowerCase() === u.email.toLowerCase());
-      if (match && u.totalRuns < match.totalRuns) {
-        return { ...u, ...match };
-      }
-      return u;
-    });
-    return [...updated, ...missing];
-  });
-  // Same for check-in events: never mix in sample/cached events, or the table QR code
+  const [users, setUsers] = useState<UserProfile[]>(() => (LOCAL_MODE ? loadMerged(STORAGE_KEYS.USERS, INITIAL_USERS, emailOf) : []));
+  // Never mix sample/cached events into Firebase mode, or the table QR code
   // could open a run that doesn't exist on the server.
   const [meetupEvents, setMeetupEvents] = useState<MeetupEvent[]>(() =>
-    isFirebaseConfigured ? [] : loadFromStorage(STORAGE_KEYS.MEETUP_EVENTS, INITIAL_MEETUP_EVENTS)
+    LOCAL_MODE ? loadFromStorage(STORAGE_KEYS.MEETUP_EVENTS, INITIAL_MEETUP_EVENTS) : []
   );
+  // Staff code words by run ID (from meetup_secrets). Kept here too so they survive
+  // the public schedule loading after the staff sync (the two run in parallel).
+  const staffCodeWords = useRef<Record<string, string>>({});
   // True once the schedule and check-in events have loaded (immediately in local mode).
-  const [scheduleLoaded, setScheduleLoaded] = useState<boolean>(!isFirebaseConfigured);
-  const [checkins, setCheckins] = useState<CheckInRecord[]>(() => {
-    const stored = loadFromStorage<CheckInRecord[]>(STORAGE_KEYS.CHECKINS, INITIAL_CHECKINS);
-    const existingIds = new Set(stored.map((c) => c.id));
-    const missing = INITIAL_CHECKINS.filter((c) => !existingIds.has(c.id));
-    return [...stored, ...missing];
-  });
-  const [legacyPool, setLegacyMembers] = useState<LegacyMember[]>(() => {
-    // With Firebase the pool comes from Firestore (loadLegacyPool); the local
-    // sample pool is only for offline/local mode.
-    if (isFirebaseConfigured) return [];
-    const stored = loadFromStorage<LegacyMember[]>(STORAGE_KEYS.LEGACY_MEMBERS, INITIAL_LEGACY_MEMBERS);
-    const existingNames = new Set(stored.map((m) => m.name.toUpperCase()));
-    const missing = INITIAL_LEGACY_MEMBERS.filter((m) => !existingNames.has(m.name.toUpperCase()));
-    const updated = stored.map((m) => {
-      const match = INITIAL_LEGACY_MEMBERS.find((init) => init.name.toUpperCase() === m.name.toUpperCase());
-      return match ? { ...m, ...match } : m;
-    });
-    return [...updated, ...missing];
-  });
+  const [scheduleLoaded, setScheduleLoaded] = useState<boolean>(LOCAL_MODE);
+  const [checkins, setCheckins] = useState<CheckInRecord[]>(() => (LOCAL_MODE ? loadMerged(STORAGE_KEYS.CHECKINS, INITIAL_CHECKINS, idOf) : []));
+  // With Firebase the pool comes from Firestore (loadLegacyPool).
+  const [legacyPool, setLegacyMembers] = useState<LegacyMember[]>(() =>
+    LOCAL_MODE ? loadMerged(STORAGE_KEYS.LEGACY_MEMBERS, INITIAL_LEGACY_MEMBERS, (m) => m.name.toUpperCase()) : []
+  );
   // Profiles are the source of truth for who claimed what (linkedLegacyIds /
   // linkedLegacyNames); claimedBy on the legacy doc is the server-side lock.
   const legacyMembers = useMemo<LegacyMember[]>(() => {
@@ -160,69 +145,31 @@ export function useStoreState() {
   // Dated old-app sign-ins for the signed-in runner's claimed names (streaks/badges).
   const [ownLegacyEvents, setOwnLegacyEvents] = useState<LegacyEvent[]>([]);
 
-  const [currentUserEmail, setCurrentUserEmail] = useState<string>(() => {
-    const stored = loadFromStorage<string>(STORAGE_KEYS.CURRENT_USER_EMAIL, '');
-    return stored;
-  });
-  const [milestoneAlerts, setMilestoneAlerts] = useState<MilestoneAlert[]>(() => {
-    const stored = loadFromStorage<MilestoneAlert[]>(STORAGE_KEYS.MILESTONE_ALERTS, INITIAL_MILESTONE_ALERTS);
-    return stored;
-  });
+  // With Firebase the signed-in account decides this (App sets it on sign-in).
+  const [currentUserEmail, setCurrentUserEmail] = useState<string>(() =>
+    LOCAL_MODE ? loadFromStorage<string>(STORAGE_KEYS.CURRENT_USER_EMAIL, '') : ''
+  );
+  const [milestoneAlerts, setMilestoneAlerts] = useState<MilestoneAlert[]>(() =>
+    LOCAL_MODE ? loadFromStorage(STORAGE_KEYS.MILESTONE_ALERTS, INITIAL_MILESTONE_ALERTS) : []
+  );
 
-  // Sync state changes to localStorage
-  useEffect(() => {
-    saveToStorage(STORAGE_KEYS.RUNS, runs);
-  }, [runs]);
-
-  useEffect(() => {
-    saveToStorage(STORAGE_KEYS.ROUTES, routes);
-  }, [routes]);
-
-  useEffect(() => {
-    saveToStorage(STORAGE_KEYS.MEMBERS, members);
-  }, [members]);
-
-  useEffect(() => {
-    saveToStorage(STORAGE_KEYS.CURRENT_USER_ID, currentMemberId);
-  }, [currentMemberId]);
-
-  // Sync V2 state changes to localStorage
-  useEffect(() => {
-    saveToStorage(STORAGE_KEYS.USERS, users);
-  }, [users]);
-
-  useEffect(() => {
-    saveToStorage(STORAGE_KEYS.MEETUP_EVENTS, meetupEvents);
-  }, [meetupEvents]);
-
-  useEffect(() => {
-    saveToStorage(STORAGE_KEYS.CHECKINS, checkins);
-  }, [checkins]);
-
-  useEffect(() => {
-    if (!isFirebaseConfigured) saveToStorage(STORAGE_KEYS.LEGACY_MEMBERS, legacyPool);
-  }, [legacyPool]);
-
-  useEffect(() => {
-    saveToStorage(STORAGE_KEYS.CURRENT_USER_EMAIL, currentUserEmail);
-  }, [currentUserEmail]);
-
-  useEffect(() => {
-    saveToStorage(STORAGE_KEYS.MILESTONE_ALERTS, milestoneAlerts);
-  }, [milestoneAlerts]);
-
-  useEffect(() => {
-    saveToStorage(STORAGE_KEYS.BADGES, badges);
-  }, [badges]);
-
-  useEffect(() => {
-    saveToStorage(STORAGE_KEYS.SPECIAL_EVENTS, specialEvents);
-  }, [specialEvents]);
+  usePersist(STORAGE_KEYS.RUNS, runs);
+  usePersist(STORAGE_KEYS.ROUTES, routes);
+  usePersist(STORAGE_KEYS.MEMBERS, members);
+  usePersist(STORAGE_KEYS.USERS, users);
+  usePersist(STORAGE_KEYS.MEETUP_EVENTS, meetupEvents);
+  usePersist(STORAGE_KEYS.CHECKINS, checkins);
+  usePersist(STORAGE_KEYS.LEGACY_MEMBERS, legacyPool);
+  usePersist(STORAGE_KEYS.CURRENT_USER_EMAIL, currentUserEmail);
+  usePersist(STORAGE_KEYS.MILESTONE_ALERTS, milestoneAlerts);
+  usePersist(STORAGE_KEYS.BADGES, badges);
+  usePersist(STORAGE_KEYS.SPECIAL_EVENTS, specialEvents);
 
   // Derived current user (Falls back to GUEST_USER if not logged in)
-  const currentUser: UserProfile = currentUserEmail
-    ? (users.find((u) => u.email.toLowerCase() === currentUserEmail.toLowerCase()) || GUEST_USER)
-    : GUEST_USER;
+  const currentUser: UserProfile = useMemo(
+    () => (currentUserEmail ? users.find((u) => u.email.toLowerCase() === currentUserEmail.toLowerCase()) || GUEST_USER : GUEST_USER),
+    [currentUserEmail, users]
+  );
   // Hashed public key for the signed-in runner (members doc ID / RSVP attendee ID)
   const [currentMemberKey, setCurrentMemberKey] = useState<string>('');
   useEffect(() => {
@@ -239,10 +186,11 @@ export function useStoreState() {
     };
   }, [currentUserEmail]);
 
-  const guestMember: Member = { ...GUEST_USER, id: 'guest', name: 'Guest Runner', streak: 0, favoritePace: 'Any', joinedDate: '' };
-  const currentMember: Member = currentUserEmail && currentMemberKey && currentUser !== GUEST_USER
-    ? { ...memberFromUser(currentUser, currentMemberKey), ...(members.find((m) => m.id === currentMemberKey) ? { streak: members.find((m) => m.id === currentMemberKey)!.streak } : {}) }
-    : guestMember;
+  const currentMember: Member = useMemo(() => {
+    if (!currentUserEmail || !currentMemberKey || currentUser === GUEST_USER) return GUEST_MEMBER;
+    const row = members.find((m) => m.id === currentMemberKey);
+    return { ...memberFromUser(currentUser, currentMemberKey), ...(row ? { streak: row.streak } : {}) };
+  }, [currentUserEmail, currentMemberKey, currentUser, members]);
 
   return {
     runs,
@@ -251,8 +199,6 @@ export function useStoreState() {
     setRoutes,
     members,
     setMembers,
-    currentMemberId,
-    setCurrentMemberId,
     badges,
     setBadges,
     specialEvents,
@@ -267,6 +213,7 @@ export function useStoreState() {
     setUsers,
     meetupEvents,
     setMeetupEvents,
+    staffCodeWords,
     scheduleLoaded,
     setScheduleLoaded,
     checkins,
@@ -284,9 +231,10 @@ export function useStoreState() {
     bellItems,
     legacyMembers,
     currentUser,
-    guestMember,
     currentMember,
   };
 }
+
+const GUEST_MEMBER: Member = { ...GUEST_USER, id: 'guest', name: 'Guest Runner', streak: 0, favoritePace: 'Any', joinedDate: '' };
 
 export type StoreState = ReturnType<typeof useStoreState>;

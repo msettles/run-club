@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Member, Badge } from '../types';
 import { Trophy, Flame, Award } from 'lucide-react';
+import { liveStreak } from '../utils/legacy';
 
 interface LeaderboardProps {
   members: Member[];
@@ -15,11 +16,14 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<'miles' | 'runs' | 'streak'>('miles');
 
+  // Streaks as of today (a stored streak ends once the runner misses a week)
+  const streakOf = (m: Member) => liveStreak(m.streak, m.lastCheckInDate);
+
   // Sort members based on selected tab
   const sortedMembers = [...members].sort((a, b) => {
     if (activeTab === 'miles') return b.totalMiles - a.totalMiles;
     if (activeTab === 'runs') return b.totalRuns - a.totalRuns;
-    return b.streak - a.streak;
+    return streakOf(b) - streakOf(a);
   });
 
   return (
@@ -74,7 +78,7 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
               </span>
               <span className="text-lg font-black text-amber-300 flex items-center justify-center gap-0.5">
                 <Flame className="w-4 h-4 fill-amber-400 text-amber-400 inline" />
-                {currentMember.streak}
+                {streakOf(currentMember)}
               </span>
             </div>
           </div>
@@ -263,7 +267,7 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
                         ? `${member.totalMiles} mi`
                         : activeTab === 'runs'
                         ? `${member.totalRuns} runs`
-                        : `${member.streak} run streak`}
+                        : `${streakOf(member)} run streak`}
                     </span>
                     <span className="text-[11px] text-stone-400 block">
                       {member.unlockedBadgeIds.length} badges

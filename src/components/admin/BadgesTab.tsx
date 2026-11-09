@@ -695,8 +695,13 @@ export const BadgesTab: React.FC<AdminDashboardProps> = (props) => {
                       <button
                         type="button"
                         onClick={async () => {
-                          if (confirm(`Delete custom special event "${se.name}"?`)) {
-                            if (onDeleteBadge) await onDeleteBadge(se.badgeId);
+                          if (confirm(`Delete custom special event "${se.name}"?`) && onDeleteBadge) {
+                            try {
+                              await onDeleteBadge(se.badgeId);
+                            } catch (err) {
+                              console.error('Deleting special event failed:', err);
+                              alert("The special event couldn't be deleted. Please check your connection and try again.");
+                            }
                           }
                         }}
                         className="p-1 text-stone-400 hover:text-red-500 transition"
@@ -768,7 +773,12 @@ export const BadgesTab: React.FC<AdminDashboardProps> = (props) => {
                         type="button"
                         onClick={async () => {
                           if (confirm(`Are you sure you want to delete badge "${b.name}"?`)) {
-                            await onDeleteBadge(b.id);
+                            try {
+                              await onDeleteBadge(b.id);
+                            } catch (err) {
+                              console.error('Deleting badge failed:', err);
+                              alert("The badge couldn't be deleted. Please check your connection and try again.");
+                            }
                           }
                         }}
                         className="text-stone-400 hover:text-red-500 p-1"

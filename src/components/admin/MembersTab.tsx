@@ -165,7 +165,7 @@ export const MembersTab: React.FC<AdminDashboardProps> = (props) => {
     const headers = ['Email', 'Display Name', 'Shirt Size', 'Birthday', 'Age', 'Total Runs', 'Pre-2021 Runs', 'Logged Runs', 'Total Miles', 'Runs Count', 'Walks Count', 'First Run Date', 'Linked Legacy Names'];
     const rows = users.map((u) => [
       u.email,
-      `"${u.displayName}"`,
+      u.displayName,
       u.shirtSize,
       u.birthday || '',
       calculateAge(u.birthday) ?? u.age ?? '',
@@ -176,10 +176,9 @@ export const MembersTab: React.FC<AdminDashboardProps> = (props) => {
       u.runCount,
       u.walkCount,
       u.firstRunDate || '',
-      `"${(u.linkedLegacyNames || []).join('; ')}"`,
+      (u.linkedLegacyNames || []).join('; '),
     ]);
-    const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
-    downloadCSV(csvContent, 'woodchuckers-users-profiles.csv');
+    downloadCSV(headers, rows, 'woodchuckers-users-profiles.csv');
   };
 
   return (

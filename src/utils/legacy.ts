@@ -9,6 +9,7 @@
  * sign-in to the same event counts once, while two events on one day count twice.
  */
 import type { Badge, CheckInRecord, LegacyMember, MeetupEvent, UserProfile } from '../types';
+import { localYmd } from './dateUtils';
 
 export interface LegacyEvent {
   d: string; // YYYY-MM-DD
@@ -250,7 +251,7 @@ const addWeeks = (week: string, n: number): string => {
  * Weekly streaks: consecutive calendar weeks with at least one event.
  * `current` is still alive if the last attended week is this week or last week.
  */
-export function computeStreaks(dates: string[], today = new Date().toISOString().slice(0, 10)): { current: number; longest: number } {
+export function computeStreaks(dates: string[], today = localYmd()): { current: number; longest: number } {
   const weeks = [...new Set(dates.filter(Boolean).map(weekStart))].sort();
   if (!weeks.length) return { current: 0, longest: 0 };
   let longest = 1;
@@ -263,6 +264,16 @@ export function computeStreaks(dates: string[], today = new Date().toISOString()
   const thisWeek = weekStart(today);
   const alive = last === thisWeek || last === addWeeks(thisWeek, -1);
   return { current: alive ? run : 0, longest };
+}
+
+/**
+ * A stored weekly streak as of today. Streaks are saved at check-in time, so a
+ * runner who stopped coming would otherwise keep showing it: once the last
+ * check-in is older than last week, the streak is over.
+ */
+export function liveStreak(streak: number, lastCheckInDate: string | undefined, today = localYmd()): number {
+  if (!lastCheckInDate || !streak) return streak || 0;
+  return weekStart(lastCheckInDate) >= addWeeks(weekStart(today), -1) ? streak : 0;
 }
 
 // ---------- special events ----------
@@ -289,16 +300,39 @@ export interface DatedEvent {
 export function datedEventsFrom(
   legacyEvents: LegacyEvent[],
   appCheckins: CheckInRecord[],
-  meetupEvents: MeetupEvent[]
+  meetupEvents: Pick<MeetupEvent, 'id' | 'date' | 'title' | 'specialEvent'>[]
 ): DatedEvent[] {
+  // A check-in belongs to its run (several runs can share a date); very old
+  // check-ins without a runId fall back to that day's event.
+  const byId = new Map(meetupEvents.map((e) => [e.id, e]));
   const byDate = new Map(meetupEvents.map((e) => [e.date, e]));
   return [
     ...legacyEvents.map((e) => ({ date: e.d, specialEventIds: specialEventIdsFor(e.c) })),
     ...appCheckins.map((c) => {
-      const ev = byDate.get(c.date);
+      const ev = (c.runId && byId.get(c.runId)) || byDate.get(c.date);
       return { date: c.date, specialEventIds: specialEventIdsFor(c.codeWord || '', ev?.title, ev?.specialEvent) };
     }),
   ];
+}
+
+/**
+ * The distanceCounts keys one check-in of `miles` counts toward: the old 1/3/5
+ * bucket plus the rounded distance, in both "3.1" and "3.1 mi" forms (badges may
+ * be configured with either).
+ */
+export function distanceCountKeys(miles: number): string[] {
+  const rounded = (Math.round(miles * 10) / 10).toFixed(1);
+  return [miles <= 2.0 ? '1' : miles <= 4.0 ? '3' : '5', rounded, `${rounded} mi`];
+}
+
+/** distanceCounts with one check-in of `miles` added (+1) or removed (-1, never below 0). */
+export function adjustDistanceCounts(counts: Record<string, number> | undefined, miles: number, delta: 1 | -1): Record<string, number> {
+  const next = { ...(counts || {}) };
+  for (const key of distanceCountKeys(miles)) {
+    if (delta > 0) next[key] = (next[key] || 0) + 1;
+    else if (next[key]) next[key] = Math.max(0, next[key] - 1);
+  }
+  return next;
 }
 
 /**

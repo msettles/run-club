@@ -56,6 +56,7 @@ const memberFromUser = (u) => ({
   favoritePace: 'Any',
   unlockedBadgeIds: u.unlockedBadgeIds,
   joinedDate: '2026-01-01',
+  ...(u.lastCheckInDate ? { lastCheckInDate: u.lastCheckInDate } : {}),
 });
 
 const checkIn = (email, extra = {}) => ({
@@ -223,6 +224,14 @@ test('leaderboard row must mirror the user doc', async () => {
   await assertFails(setDoc(doc(alice, 'members', memberKeyFor(ALICE)), fake));
   await assertSucceeds(setDoc(doc(alice, 'members', memberKeyFor(ALICE)), memberFromUser(baseUser(ALICE))));
   await assertFails(setDoc(doc(alice, 'members', memberKeyFor(BOB)), memberFromUser(baseUser(BOB))));
+});
+
+test('leaderboard row may carry the last check-in date (for lapsed streaks), and only as a short string', async () => {
+  const alice = ctx(ALICE);
+  const row = memberFromUser(baseUser(ALICE));
+  await assertSucceeds(setDoc(doc(alice, 'members', memberKeyFor(ALICE)), { ...row, lastCheckInDate: DATE }));
+  await assertFails(setDoc(doc(alice, 'members', memberKeyFor(ALICE)), { ...row, lastCheckInDate: 20261111 }));
+  await assertFails(setDoc(doc(alice, 'members', memberKeyFor(ALICE)), { ...row, lastCheckInDate: 'x'.repeat(31) }));
 });
 
 test('milestone alert only alongside the qualifying check-in, once', async () => {

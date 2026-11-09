@@ -8,6 +8,7 @@ import {
 import { 
   GUEST_USER
 } from '../../data/initialData';
+import { localYmd } from '../../utils/dateUtils';
 
 /**
  * Recursively removes any keys with `undefined` values, which Firestore rejects.
@@ -36,7 +37,10 @@ export function cleanFirestoreData<T>(obj: T): T {
  * and arrays within maps within arrays (e.g. step.point: [x, y]).
  */
 export function formatRouteForFirestore(route: Partial<GPXRoute>): any {
-  const cleaned = cleanFirestoreData(route);
+  // The raw GPX file isn't stored: it can be bigger than Firestore's 1 MiB document
+  // limit, and downloads rebuild it from the points (see downloadGPXFile).
+  const { gpxXml: _gpx, ...rest } = route;
+  const cleaned = cleanFirestoreData(rest);
   const formatted: any = { ...cleaned };
 
   if (formatted.directions !== undefined && typeof formatted.directions !== 'string') {
@@ -57,6 +61,20 @@ export function formatRouteForFirestore(route: Partial<GPXRoute>): any {
   }
 
   return formatted;
+}
+
+/** Firestore's document limit is 1 MiB; leave room for field overhead. */
+const MAX_ROUTE_DOC_BYTES = 900 * 1024;
+
+/** Throw a readable error if a formatted route is too big to save as one document. */
+export function assertRouteFitsFirestore(formatted: unknown): void {
+  const bytes = new TextEncoder().encode(JSON.stringify(formatted)).length;
+  if (bytes > MAX_ROUTE_DOC_BYTES) {
+    throw Object.assign(
+      new Error(`This route is too detailed to save (${Math.round(bytes / 1024)} KB; the limit is about 900 KB). Try a GPX file with fewer track points.`),
+      { code: 'route-too-large' }
+    );
+  }
 }
 
 /**
@@ -96,7 +114,7 @@ export const STORAGE_KEYS = {
   RUNS: 'woodchuckers_runs_v1',
   ROUTES: 'woodchuckers_routes_v1',
   MEMBERS: 'woodchuckers_members_v1',
-  CURRENT_USER_ID: 'woodchuckers_current_user_id_v1',
+  CURRENT_USER_ID: 'woodchuckers_current_user_id_v1', // no longer used; listed so old copies get cleared
   // Relational V2 keys
   USERS: 'woodchuckers_users_v2',
   MEETUP_EVENTS: 'woodchuckers_events_v2',
@@ -138,14 +156,15 @@ export function toPublicMember(user: UserProfile, memberKey: string): Record<str
     unlockedBadgeIds: user.unlockedBadgeIds,
     badgeCounts: user.badgeCounts,
     joinedDate: user.firstRunDate || user.createdAt.split('T')[0],
+    // Lets the leaderboard drop a streak that has lapsed since the last check-in.
+    lastCheckInDate: user.lastCheckInDate,
   });
 }
 
 /** Staff load this many days of check-ins for the Check-In Log. */
 export const RECENT_CHECKIN_DAYS = 60;
 export function recentCheckinCutoff(): string {
-  const d = new Date(Date.now() - RECENT_CHECKIN_DAYS * 86400e3);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  return localYmd(new Date(Date.now() - RECENT_CHECKIN_DAYS * 86400e3));
 }
 
 /** Local (in-app) Member record for a profile, keyed by memberKey. */
@@ -174,8 +193,6 @@ export function memberFromPublicDoc(data: any): Member {
   } as Member;
 }
 
-/** Parse "YYYY-MM-DD" + "06:00 PM" into a local Date. */
-
 /** Strip Firestore-only fields from a public meetup doc. The code word is never public. */
 export function meetupFromPublicDoc(data: any): MeetupEvent {
   const { checkInOpensAt, checkInClosesAt, ...rest } = data || {};
@@ -183,8 +200,6 @@ export function meetupFromPublicDoc(data: any): MeetupEvent {
     t && typeof t.toDate === 'function' ? t.toDate().toISOString() : typeof t === 'string' ? t : undefined;
   return { ...rest, codeWord: '', checkInOpensAt: iso(checkInOpensAt), checkInClosesAt: iso(checkInClosesAt) } as MeetupEvent;
 }
-
-export const PRIVATE_STORAGE_KEYS = ['USERS', 'CHECKINS', 'MILESTONE_ALERTS'] as const;
 
 export function saveToStorage<T>(key: string, data: T): void {
   try {
