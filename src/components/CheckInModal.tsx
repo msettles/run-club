@@ -551,11 +551,15 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
                         Boom, {currentUser.firstName}! 🎉
                       </h3>
                       <p className="text-xs text-stone-600">
-                        Registered for <strong className="text-stone-900">{matchedGpxRoute.name}</strong> ({activeCheckIn?.actualMiles || creditedMiles} mi {activeCheckIn?.activity || selectedActivity}{(activeCheckIn?.loops || currentLoops) > 1 ? ` • ${activeCheckIn?.loops || currentLoops} loops` : ''}).
+                        Checked in for <strong className="text-stone-900">{matchedGpxRoute.name}</strong> ({activeCheckIn?.actualMiles || creditedMiles} mi {activeCheckIn?.activity || selectedActivity}{(activeCheckIn?.loops || currentLoops) > 1 ? ` • ${activeCheckIn?.loops || currentLoops} loops` : ''}).
                       </p>
                     </div>
                   </div>
                 </div>
+
+                <p className="text-xs text-stone-600">
+                  Your check-in is saved. Route information and milestones are optional; you can close this window now.
+                </p>
 
                 {/* Change Route or Distance Button */}
                 <button
@@ -580,7 +584,7 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
 
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                     {/* Strava */}
-                    {matchedGpxRoute.externalLinks?.stravaUrl ? (
+                    {matchedGpxRoute.externalLinks?.stravaUrl?.trim() && (
                       <a
                         href={matchedGpxRoute.externalLinks.stravaUrl}
                         target="_blank"
@@ -593,16 +597,10 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
                           Open Route <ExternalLink className="w-2.5 h-2.5" />
                         </span>
                       </a>
-                    ) : (
-                      <div className="flex flex-col items-center justify-center p-2.5 rounded-xl bg-stone-100/60 border border-stone-200 text-stone-400 font-bold text-center opacity-60">
-                        <span className="text-lg">🟠</span>
-                        <span className="text-xs font-extrabold mt-0.5">Strava</span>
-                        <span className="text-[10px]">Not linked</span>
-                      </div>
                     )}
 
                     {/* Garmin */}
-                    {matchedGpxRoute.externalLinks?.garminUrl ? (
+                    {matchedGpxRoute.externalLinks?.garminUrl?.trim() && (
                       <a
                         href={matchedGpxRoute.externalLinks.garminUrl}
                         target="_blank"
@@ -615,16 +613,10 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
                           Send to Watch <ExternalLink className="w-2.5 h-2.5" />
                         </span>
                       </a>
-                    ) : (
-                      <div className="flex flex-col items-center justify-center p-2.5 rounded-xl bg-stone-100/60 border border-stone-200 text-stone-400 font-bold text-center opacity-60">
-                        <span className="text-lg">🔵</span>
-                        <span className="text-xs font-extrabold mt-0.5">Garmin</span>
-                        <span className="text-[10px]">Not linked</span>
-                      </div>
                     )}
 
                     {/* RunGo */}
-                    {matchedGpxRoute.externalLinks?.rungoUrl ? (
+                    {matchedGpxRoute.externalLinks?.rungoUrl?.trim() && (
                       <a
                         href={matchedGpxRoute.externalLinks.rungoUrl}
                         target="_blank"
@@ -637,12 +629,6 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
                           Voice Nav <ExternalLink className="w-2.5 h-2.5" />
                         </span>
                       </a>
-                    ) : (
-                      <div className="flex flex-col items-center justify-center p-2.5 rounded-xl bg-stone-100/60 border border-stone-200 text-stone-400 font-bold text-center opacity-60">
-                        <span className="text-lg">🟢</span>
-                        <span className="text-xs font-extrabold mt-0.5">RunGo</span>
-                        <span className="text-[10px]">Not linked</span>
-                      </div>
                     )}
 
                     {/* Download GPX */}

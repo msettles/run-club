@@ -1,3 +1,4 @@
+import assert from 'node:assert/strict';
 // Firestore security rules tests. Run with: npm run test:rules
 import { test, before, after, beforeEach } from 'node:test';
 import { readFileSync } from 'node:fs';
@@ -8,7 +9,7 @@ import {
   assertSucceeds,
 } from '@firebase/rules-unit-testing';
 import {
-  doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, collection, query, where, writeBatch, Timestamp,
+  doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, collection, query, where, writeBatch, Timestamp, arrayUnion,
 } from 'firebase/firestore';
 
 const memberKeyFor = (email) =>
@@ -112,7 +113,7 @@ async function seed({ windowOpen = true } = {}) {
   });
 }
 
-function checkInBatch(db, email, { codeWord = 'ACORN', bump = 1, milestone = false } = {}) {
+function checkInBatch(db, email, { codeWord = 'ACORN', bump = 1, milestone = false, rsvp = false } = {}) {
   const user = baseUser(email);
   const updated = {
     ...user,
@@ -127,6 +128,12 @@ function checkInBatch(db, email, { codeWord = 'ACORN', bump = 1, milestone = fal
   batch.set(doc(db, 'checkins', `${RUN}_${email}`), checkIn(email, { codeWord }));
   batch.set(doc(db, 'users', email), updated);
   batch.set(doc(db, 'members', memberKeyFor(email)), memberFromUser(updated));
+  if (rsvp) {
+    batch.update(doc(db, 'runs', RUN), { attendees: arrayUnion({
+      memberId: memberKeyFor(email), name: user.displayName,
+      checkedIn: false, rsvpDate: '2026-11-11T18:05:00.000Z',
+    }) });
+  }
   if (milestone) {
     batch.set(doc(db, 'milestone_alerts', `m${updated.totalRuns}_${email}`), {
       id: `m${updated.totalRuns}_${email}`, userEmail: email, runnerName: updated.displayName,
@@ -197,6 +204,29 @@ test('runner cannot bump stats without a check-in', async () => {
 
 test('check-in with the right code word inside the window succeeds', async () => {
   await assertSucceeds(checkInBatch(ctx(ALICE), ALICE));
+});
+
+test('check-in and automatic RSVP save together and preserve other attendees', async () => {
+  const bob = { memberId: memberKeyFor(BOB), name: 'Bob', checkedIn: false, rsvpDate: '2026-11-10' };
+  await env.withSecurityRulesDisabled(async (c) => {
+    await updateDoc(doc(c.firestore(), 'runs', RUN), { attendees: [bob] });
+  });
+  const alice = ctx(ALICE);
+  await assertSucceeds(checkInBatch(alice, ALICE, { rsvp: true }));
+  const saved = (await getDoc(doc(alice, 'runs', RUN))).data();
+  assert.equal(saved.attendees.length, 2);
+  assert.deepEqual(saved.attendees[0], bob);
+  assert.equal(saved.attendees[1].memberId, memberKeyFor(ALICE));
+  assert.equal((await getDoc(doc(alice, 'checkins', `${RUN}_${ALICE}`))).exists(), true);
+});
+
+test('a rejected check-in does not leave an automatic RSVP behind', async () => {
+  const alice = ctx(ALICE);
+  await assertFails(checkInBatch(alice, ALICE, { codeWord: 'WRONG', rsvp: true }));
+  assert.deepEqual((await getDoc(doc(alice, 'runs', RUN))).data().attendees, []);
+  await env.withSecurityRulesDisabled(async (c) => {
+    assert.equal((await getDoc(doc(c.firestore(), 'checkins', `${RUN}_${ALICE}`))).exists(), false);
+  });
 });
 
 test('check-in with the wrong code word fails', async () => {

@@ -212,7 +212,7 @@ export const RunCard: React.FC<RunCardProps> = ({
                     <span>Map &amp; Turns {choice.route.directions?.length ? `(${choice.route.directions.length})` : ''}</span>
                   </button>
 
-                  {choice.route.externalLinks?.stravaUrl && (
+                  {choice.route.externalLinks?.stravaUrl?.trim() && (
                     <a
                       href={choice.route.externalLinks.stravaUrl}
                       target="_blank"
@@ -223,7 +223,7 @@ export const RunCard: React.FC<RunCardProps> = ({
                       Strava
                     </a>
                   )}
-                  {choice.route.externalLinks?.garminUrl && (
+                  {choice.route.externalLinks?.garminUrl?.trim() && (
                     <a
                       href={choice.route.externalLinks.garminUrl}
                       target="_blank"
@@ -234,7 +234,7 @@ export const RunCard: React.FC<RunCardProps> = ({
                       Garmin
                     </a>
                   )}
-                  {choice.route.externalLinks?.rungoUrl && (
+                  {choice.route.externalLinks?.rungoUrl?.trim() && (
                     <a
                       href={choice.route.externalLinks.rungoUrl}
                       target="_blank"

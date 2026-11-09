@@ -271,7 +271,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
               Apps:
             </span>
 
-            {route.externalLinks?.stravaUrl && (
+            {route.externalLinks?.stravaUrl?.trim() && (
               <a
                 href={route.externalLinks.stravaUrl}
                 target="_blank"
@@ -282,7 +282,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
               </a>
             )}
 
-            {route.externalLinks?.garminUrl && (
+            {route.externalLinks?.garminUrl?.trim() && (
               <a
                 href={route.externalLinks.garminUrl}
                 target="_blank"
@@ -293,7 +293,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
               </a>
             )}
 
-            {route.externalLinks?.rungoUrl && (
+            {route.externalLinks?.rungoUrl?.trim() && (
               <a
                 href={route.externalLinks.rungoUrl}
                 target="_blank"

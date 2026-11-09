@@ -103,7 +103,7 @@ export function hydrateRouteFromFirestore(data: any): GPXRoute {
   }
   return {
     ...data,
-    isLoop: data.isLoop !== undefined ? Boolean(data.isLoop) : (data.id === 'route-the-123' || (data.name && (data.name.includes('123') || data.name.includes('1, 2, 3')))),
+    isLoop: data.isLoop === true,
     maxLoops: data.maxLoops || 4,
     directions: Array.isArray(directions) ? directions : [],
     geoJson: geoJson || null,

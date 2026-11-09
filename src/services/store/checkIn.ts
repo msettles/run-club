@@ -1,5 +1,6 @@
 /** Club store operations: checkIn. */
 import { 
+  Attendee,
   Badge, 
   UserProfile,
   CheckInRecord,
@@ -21,7 +22,7 @@ import { isFirebaseConfigured, db } from '../firebase';
 import {
   setDoc,
   doc,
-  writeBatch,
+  runTransaction,
 } from 'firebase/firestore';
 import { memberKeyFor } from '../../utils/memberKey';
 import { cleanFirestoreData, memberFromUser, toPublicMember } from './helpers';
@@ -30,6 +31,7 @@ import type { createLegacyOps } from './legacy';
 
 export function createCheckInOps(ctx: StoreState & ReturnType<typeof createLegacyOps>) {
   const {
+    setRuns,
     setMembers,
     badges,
     users,
@@ -249,16 +251,32 @@ export function createCheckInOps(ctx: StoreState & ReturnType<typeof createLegac
     // 8. Persist atomically. The Firestore rules verify the code word, the check-in
     //    window, and that the stats/leaderboard changes match this check-in.
     const memberKey = await memberKeyFor(cleanEmail);
+    const attendee: Attendee = {
+      memberId: memberKey,
+      name: u.displayName,
+      checkedIn: false,
+      rsvpDate: nowIso,
+    };
     if (isFirebaseConfigured && db) {
+      const firestore = db;
       try {
-        const batch = writeBatch(db);
-        batch.set(doc(db, 'checkins', checkinId), cleanFirestoreData(newCheckIn));
-        batch.set(doc(db, 'users', cleanEmail), cleanFirestoreData(updatedUser));
-        batch.set(doc(db, 'members', memberKey), toPublicMember(updatedUser, memberKey));
-        if (unlockedMilestone && !milestoneAlerts.some((a) => a.id === unlockedMilestone!.id)) {
-          batch.set(doc(db, 'milestone_alerts', unlockedMilestone.id), cleanFirestoreData(unlockedMilestone));
-        }
-        await batch.commit();
+        await runTransaction(firestore, async (batch) => {
+          // Reading the run in this transaction preserves concurrent RSVPs and
+          // avoids adding a second entry when the runner already RSVP'd.
+          const runRef = doc(firestore, 'runs', eventId);
+          const runSnapshot = await batch.get(runRef);
+          if (!runSnapshot.exists()) throw new Error('Run no longer exists.');
+          const attendees = (runSnapshot.data().attendees || []) as Attendee[];
+          if (!attendees.some((a) => a.memberId === memberKey)) {
+            batch.update(runRef, { attendees: [...attendees, attendee] });
+          }
+          batch.set(doc(firestore, 'checkins', checkinId), cleanFirestoreData(newCheckIn));
+          batch.set(doc(firestore, 'users', cleanEmail), cleanFirestoreData(updatedUser));
+          batch.set(doc(firestore, 'members', memberKey), toPublicMember(updatedUser, memberKey));
+          if (unlockedMilestone && !milestoneAlerts.some((a) => a.id === unlockedMilestone!.id)) {
+            batch.set(doc(firestore, 'milestone_alerts', unlockedMilestone.id), cleanFirestoreData(unlockedMilestone));
+          }
+        });
       } catch (err: any) {
         console.error('Check-in rejected by server:', err);
         return {
@@ -271,6 +289,11 @@ export function createCheckInOps(ctx: StoreState & ReturnType<typeof createLegac
     }
 
     // 9. Server accepted it (or local mode): update local state
+    setRuns((prev) => prev.map((run) =>
+      run.id !== eventId || run.attendees.some((a) => a.memberId === memberKey)
+        ? run
+        : { ...run, attendees: [...run.attendees, attendee] }
+    ));
     setCheckins((prev) => [
       newCheckIn,
       ...prev.filter((c) => c.id !== checkinId),

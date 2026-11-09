@@ -91,7 +91,7 @@ export const RouteStudioModal: React.FC<RouteStudioModalProps> = ({
       setDirections(Array.isArray(existingRoute.directions) ? existingRoute.directions : []);
       setGeoJson(existingRoute.geoJson || null);
       setCustomDistanceLabel(existingRoute.customDistanceLabel || (existingRoute as any).targetDistanceTier || '');
-      setIsLoop(Boolean(existingRoute.isLoop));
+      setIsLoop(existingRoute.isLoop === true);
       setMaxLoops(existingRoute.maxLoops || 4);
 
       setStravaUrl(existingRoute.externalLinks?.stravaUrl || '');

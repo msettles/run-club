@@ -131,17 +131,17 @@ export const RouteChoicesEditor: React.FC<RouteChoicesEditorProps> = ({ routes, 
                       <Compass className="w-3 h-3 text-stone-400" /> {r.directions.length} turns
                     </span>
                   ) : null}
-                  {r.externalLinks?.stravaUrl && (
+                  {r.externalLinks?.stravaUrl?.trim() && (
                     <span className="text-[10px] bg-orange-50 text-orange-800 font-bold px-1.5 py-0.5 rounded border border-orange-200">
                       Strava
                     </span>
                   )}
-                  {r.externalLinks?.garminUrl && (
+                  {r.externalLinks?.garminUrl?.trim() && (
                     <span className="text-[10px] bg-cyan-50 text-cyan-800 font-bold px-1.5 py-0.5 rounded border border-cyan-200">
                       Garmin
                     </span>
                   )}
-                  {r.externalLinks?.rungoUrl && (
+                  {r.externalLinks?.rungoUrl?.trim() && (
                     <span className="text-[10px] bg-emerald-50 text-emerald-800 font-bold px-1.5 py-0.5 rounded border border-emerald-200">
                       RunGo
                     </span>
