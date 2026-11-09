@@ -567,3 +567,30 @@ test('runners can look up a code word key but not list them', async () => {
   await assertFails(getDoc(doc(env.unauthenticatedContext().firestore(), 'meetup_codes', codeKey(DATE, 'ACORN'))));
   await assertFails(setDoc(doc(alice, 'meetup_codes', codeKey(DATE, 'MINE')), { runId: RUN, date: DATE }));
 });
+
+test('deleting a run with check-ins: admin rolls back runners; organizer cannot', async () => {
+  // Alice checked into run-1 (check-in open, so the code word key is locked for organizers)
+  const first = checkInToRun(ctx(ALICE), ALICE, RUN, 'ACORN');
+  await assertSucceeds(first.batch.commit());
+
+  // Organizer can't rewrite Alice's stats
+  const org = ctx(ORGANIZER);
+  const ob = writeBatch(org);
+  ob.delete(doc(org, 'checkins', `${RUN}_${ALICE}`));
+  ob.set(doc(org, 'users', ALICE), baseUser(ALICE));
+  await assertFails(ob.commit());
+
+  // Admin: per-runner rollback, then the run, its event, code key and secret
+  const admin = ctx(BOOTSTRAP);
+  const b = writeBatch(admin);
+  b.delete(doc(admin, 'checkins', `${RUN}_${ALICE}`));
+  b.set(doc(admin, 'users', ALICE), baseUser(ALICE));
+  b.set(doc(admin, 'members', memberKeyFor(ALICE)), memberFromUser(baseUser(ALICE)));
+  await assertSucceeds(b.commit());
+  const b2 = writeBatch(admin);
+  b2.delete(doc(admin, 'runs', RUN));
+  b2.delete(doc(admin, 'meetup_events', RUN));
+  b2.delete(doc(admin, 'meetup_codes', codeKey(DATE, 'ACORN')));
+  b2.delete(doc(admin, 'meetup_secrets', RUN));
+  await assertSucceeds(b2.commit());
+});

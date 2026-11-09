@@ -12,6 +12,7 @@ interface EditRunModalProps {
   onClose: () => void;
   onSave: (updatedRun: RunEvent, codeWord: string) => void;
   onDelete?: (runId: string) => void;
+  checkInCount?: number; // Runners checked into this run (their stats are rolled back on delete)
   specialEvents?: SpecialEventDefinition[];
   currentCodeWord?: string; // Code word of the check-in event for this run's date
   codeWordLockedSince?: string; // Set once check-in has opened: the code word can no longer change
@@ -24,6 +25,7 @@ export const EditRunModal: React.FC<EditRunModalProps> = ({
   onClose,
   onSave,
   onDelete,
+  checkInCount = 0,
   specialEvents = INITIAL_SPECIAL_EVENTS,
   currentCodeWord = '',
   codeWordLockedSince,
@@ -287,7 +289,10 @@ export const EditRunModal: React.FC<EditRunModalProps> = ({
               <button
                 type="button"
                 onClick={() => {
-                  if (confirm(`Are you sure you want to delete "${run.title}"?`)) {
+                  const message = checkInCount > 0
+                    ? `Delete "${run.title}"?\n\n${checkInCount} runner${checkInCount === 1 ? '' : 's'} checked in. Their check-ins will be removed and their run counts, miles, badges and streaks adjusted. Gear alerts from this run that haven't been handed out yet are removed. This can't be undone.`
+                    : `Are you sure you want to delete "${run.title}"?`;
+                  if (confirm(message)) {
                     onDelete(run.id);
                     onClose();
                   }

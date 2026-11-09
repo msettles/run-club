@@ -671,7 +671,8 @@ service cloud.firestore {
                        request.resource.data.date is string &&
                        !checkInHasOpened(request.resource.data.runId);
       allow update: if false;
-      allow delete: if isStaff() && !checkInHasOpened(resource.data.runId);
+      // Admins may also remove it later, e.g. when deleting a run that already happened.
+      allow delete: if isAdmin() || (isStaff() && !checkInHasOpened(resource.data.runId));
     }
 
     // 10. CLUB SETTINGS — public read, admin write.

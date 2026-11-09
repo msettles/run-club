@@ -265,6 +265,15 @@ export function App() {
     });
   };
 
+  const handleDeleteRun = async (runId: string) => {
+    try {
+      await deleteRun(runId);
+    } catch (err: any) {
+      console.error('Deleting run failed:', err);
+      alert(err?.code === 'needs-admin' ? err.message : "The run couldn't be fully deleted. Please try again; it's safe to retry.");
+    }
+  };
+
   const handleAddRun = async (run: Omit<RunEvent, 'id' | 'attendees'>, codeWord: string) => {
     try {
       const created = await addRun(run);
@@ -822,7 +831,8 @@ export function App() {
             isOpen={Boolean(editingRun)}
             onClose={() => setEditingRun(null)}
             onSave={handleUpdateRun}
-            onDelete={deleteRun}
+            onDelete={handleDeleteRun}
+            checkInCount={checkins.filter((c) => c.runId === editingRun.id).length}
             specialEvents={specialEvents}
             currentCodeWord={meetupEvents.find((e) => e.id === editingRun.id)?.codeWord || ''}
             codeWordLockedSince={(() => {
