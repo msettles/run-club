@@ -12,7 +12,6 @@ import {
   RefreshCw, 
   Shield, 
   Bell, 
-  Palette,
   LogIn,
   LogOut,
   Shirt,
@@ -33,7 +32,6 @@ interface NavbarProps {
   onOpenNewRun: () => void;
   onOpenUploadGpx: () => void;
   onOpenSetupGuide: () => void;
-  onOpenBrandAssets?: () => void;
   onToggleNotifications?: () => void;
   onOpenAuthModal: () => void;
   onOpenRegister?: () => void;
@@ -52,7 +50,6 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenNewRun,
   onOpenUploadGpx,
   onOpenSetupGuide,
-  onOpenBrandAssets,
   onToggleNotifications,
   onOpenAuthModal,
   onOpenRegister,
@@ -64,27 +61,27 @@ export const Navbar: React.FC<NavbarProps> = ({
   const isUserLoggedIn = Boolean(firebaseUser || (currentUser && currentUser.email && currentUser.role !== 'guest'));
 
   return (
-    <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-stone-200 shadow-xs">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16 gap-3">
+    <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-stone-200 shadow-xs w-full overflow-x-clip">
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
+        <div className="flex items-center justify-between h-16 gap-2 sm:gap-4 max-w-full">
           {/* Logo & Brand */}
           <div
             onClick={() => setActiveTab('runs')}
-            className="flex items-center gap-2.5 cursor-pointer select-none shrink-0 group"
+            className="flex items-center gap-2 sm:gap-2.5 cursor-pointer select-none shrink min-w-0 group"
           >
-            <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-woodland-700 via-woodland-800 to-woodland-950 flex items-center justify-center shadow-md p-1 border border-woodland-600/40 group-hover:scale-105 transition overflow-hidden">
+            <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl bg-gradient-to-br from-woodland-700 via-woodland-800 to-woodland-950 flex items-center justify-center shadow-md p-1 border border-woodland-600/40 group-hover:scale-105 transition shrink-0 overflow-hidden">
               <img
                 src="/Woodchucker2026.png"
                 alt="Woodland Woodchuckers 2026 Mascot"
                 className="w-full h-full object-contain filter drop-shadow-sm invert sm:invert-0 brightness-110"
               />
             </div>
-            <div>
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="font-display font-bold text-stone-900 tracking-wide text-sm sm:text-lg uppercase">
+            <div className="min-w-0">
+              <div className="flex items-center gap-1 sm:gap-1.5 flex-nowrap">
+                <span className="font-display font-bold text-stone-900 tracking-wide text-xs sm:text-base lg:text-lg uppercase truncate">
                   Woodland Woodchuckers
                 </span>
-                <span className="hidden sm:inline-block text-[10px] font-bold uppercase tracking-wider bg-woodland-100 text-woodland-900 px-1.5 py-0.5 rounded border border-woodland-200">
+                <span className="hidden lg:inline-block text-[10px] font-bold uppercase tracking-wider bg-woodland-100 text-woodland-900 px-1.5 py-0.5 rounded border border-woodland-200 shrink-0">
                   Run Club
                 </span>
                 <button
@@ -94,22 +91,22 @@ export const Navbar: React.FC<NavbarProps> = ({
                     onOpenVersionModal?.();
                   }}
                   title={`Version ${FULL_VERSION} - Tap to check for updates`}
-                  className="text-[10px] font-mono font-bold text-woodland-800 bg-woodland-50 hover:bg-woodland-100 active:scale-95 border border-woodland-200/90 px-1.5 py-0.5 rounded transition shadow-2xs cursor-pointer select-none"
+                  className="text-[10px] font-mono font-bold text-woodland-800 bg-woodland-50 hover:bg-woodland-100 active:scale-95 border border-woodland-200/90 px-1.5 py-0.5 rounded transition shadow-2xs cursor-pointer select-none shrink-0"
                 >
                   {VERSION_LABEL}
                 </button>
               </div>
-              <p className="hidden sm:block text-[11px] text-stone-500 font-medium">
+              <p className="hidden xl:block text-[11px] text-stone-500 font-medium truncate">
                 Blue Note Brewing Co. • Pounding trails &amp; pavement!
               </p>
             </div>
           </div>
 
           {/* Navigation Tabs (Desktop / Tablet) */}
-          <nav className="hidden sm:flex items-center gap-1 sm:gap-2">
+          <nav className="hidden sm:flex items-center gap-1 shrink-0">
             <button
               onClick={() => setActiveTab('runs')}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold transition ${
+              className={`flex items-center gap-1.5 px-2.5 lg:px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition ${
                 activeTab === 'runs'
                   ? 'bg-woodland-50 text-woodland-900 font-bold shadow-xs border border-woodland-200/60'
                   : 'text-stone-600 hover:text-stone-900 hover:bg-stone-100'
@@ -121,19 +118,19 @@ export const Navbar: React.FC<NavbarProps> = ({
 
             <button
               onClick={() => setActiveTab('routes')}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold transition ${
+              className={`flex items-center gap-1.5 px-2.5 lg:px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition ${
                 activeTab === 'routes'
                   ? 'bg-woodland-50 text-woodland-900 font-bold shadow-xs border border-woodland-200/60'
                   : 'text-stone-600 hover:text-stone-900 hover:bg-stone-100'
               }`}
             >
               <Map className="w-4 h-4 text-woodland-600" />
-              <span>GPX Routes</span>
+              <span>Routes</span>
             </button>
 
             <button
               onClick={() => setActiveTab('milestones')}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold transition ${
+              className={`flex items-center gap-1.5 px-2.5 lg:px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition ${
                 activeTab === 'milestones'
                   ? 'bg-woodland-50 text-woodland-900 font-bold shadow-xs border border-woodland-200/60'
                   : 'text-stone-600 hover:text-stone-900 hover:bg-stone-100'
@@ -145,7 +142,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
             <button
               onClick={() => setActiveTab('leaderboard')}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold transition ${
+              className={`flex items-center gap-1.5 px-2.5 lg:px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition ${
                 activeTab === 'leaderboard'
                   ? 'bg-woodland-50 text-woodland-900 font-bold shadow-xs border border-woodland-200/60'
                   : 'text-stone-600 hover:text-stone-900 hover:bg-stone-100'
@@ -158,7 +155,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             {isAdmin && (
               <button
                 onClick={() => setActiveTab('admin')}
-                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-bold transition ${
+                className={`flex items-center gap-1.5 px-2.5 lg:px-3 py-1.5 rounded-xl text-xs sm:text-sm font-bold transition ${
                   activeTab === 'admin'
                     ? 'bg-stone-900 text-white shadow-xs'
                     : 'text-stone-800 bg-stone-100 hover:bg-stone-200'
@@ -171,24 +168,12 @@ export const Navbar: React.FC<NavbarProps> = ({
           </nav>
 
           {/* Action Tools & User Profile / Login */}
-          <div className="flex items-center gap-2">
-            {/* Club Brand Assets Modal Trigger */}
-            {onOpenBrandAssets && (
-              <button
-                onClick={onOpenBrandAssets}
-                className="hidden md:flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold text-woodland-800 bg-woodland-50 hover:bg-woodland-100 border border-woodland-200 rounded-xl transition shadow-2xs"
-                title="View & Download Official Club Logos & Colors"
-              >
-                <Palette className="w-3.5 h-3.5 text-woodland-600" />
-                <span>Logos</span>
-              </button>
-            )}
-
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             {/* Notification Bell */}
             {onToggleNotifications && (
               <button
                 onClick={onToggleNotifications}
-                className="relative p-2 text-stone-600 hover:text-stone-900 hover:bg-stone-100 rounded-xl transition"
+                className="relative p-2 text-stone-600 hover:text-stone-900 hover:bg-stone-100 rounded-xl transition cursor-pointer"
                 title="Club Announcements & Alerts"
               >
                 <Bell className="w-4 h-4" />
@@ -201,7 +186,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             {/* Firebase Status Pill */}
             <button
               onClick={onOpenSetupGuide}
-              className={`hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold border transition ${
+              className={`hidden xl:flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold border transition ${
                 isFirebaseConfigured
                   ? 'bg-woodland-50 border-woodland-300 text-woodland-800'
                   : 'bg-amber-50 border-amber-300 text-amber-800 hover:bg-amber-100'
@@ -222,7 +207,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             {/* Quick Actions */}
             <button
               onClick={onOpenUploadGpx}
-              className="hidden xl:flex items-center gap-1 px-3 py-1.5 text-xs font-semibold bg-white border border-stone-300 text-stone-700 hover:bg-stone-50 rounded-xl transition shadow-xs"
+              className="hidden 2xl:flex items-center gap-1 px-3 py-1.5 text-xs font-semibold bg-white border border-stone-300 text-stone-700 hover:bg-stone-50 rounded-xl transition shadow-xs cursor-pointer"
               title="Upload GPX route"
             >
               <UploadCloud className="w-3.5 h-3.5 text-woodland-600" />
@@ -231,11 +216,11 @@ export const Navbar: React.FC<NavbarProps> = ({
 
             <button
               onClick={onOpenNewRun}
-              className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold bg-woodland-600 hover:bg-woodland-700 text-white rounded-xl transition shadow-sm"
+              className="flex items-center gap-1 px-2.5 sm:px-3 py-1.5 text-xs font-semibold bg-woodland-600 hover:bg-woodland-700 text-white rounded-xl transition shadow-sm cursor-pointer"
             >
               <Plus className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Schedule Run</span>
-              <span className="sm:hidden">Run</span>
+              <span className="hidden md:inline">Schedule Run</span>
+              <span className="md:hidden">Run</span>
             </button>
 
             {/* USER LOGIN / PROFILE AREA */}
@@ -343,7 +328,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 {onOpenRegister && (
                   <button
                     onClick={onOpenRegister}
-                    className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-woodland-700 hover:bg-woodland-800 text-white font-bold text-xs rounded-xl transition shadow-xs cursor-pointer"
+                    className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 bg-woodland-700 hover:bg-woodland-800 text-white font-bold text-xs rounded-xl transition shadow-xs cursor-pointer"
                     title="Join the Club (Free, 24/7/365)"
                   >
                     <UserPlus className="w-3.5 h-3.5 text-amber-300" />

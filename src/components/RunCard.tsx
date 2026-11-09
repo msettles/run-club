@@ -26,6 +26,21 @@ export const RunCard: React.FC<RunCardProps> = ({
   const isCheckedIn = run.attendees.some((a) => a.memberId === currentMember.id && a.checkedIn);
   const checkedInCount = run.attendees.filter((a) => a.checkedIn).length;
 
+  // Normalize available routes: use choices if provided, otherwise fall back to attached route
+  const availableRoutes: ResolvedChoice[] = choices.length > 0
+    ? choices
+    : route
+    ? [
+        {
+          id: route.id,
+          label: `${(Math.round(route.distanceMiles * 10) / 10).toFixed(1)} mi • ${route.name}`,
+          miles: Math.round(route.distanceMiles * 10) / 10,
+          actualMiles: route.distanceMiles,
+          route,
+        },
+      ]
+    : [];
+
   // Format nice human-readable date
   const runDateObj = new Date(`${run.date}T00:00:00`);
   const formattedDay = runDateObj.toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase();
@@ -94,15 +109,15 @@ export const RunCard: React.FC<RunCardProps> = ({
                 {run.surface} Special
               </span>
             )}
-            {choices.length > 0 ? (
-              choices.map((c, idx) => (
+            {availableRoutes.length > 0 ? (
+              availableRoutes.map((c, idx) => (
                 <span
                   key={c.id || idx}
                   className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-stone-100 text-stone-700"
                   title={`${c.route.name} • ${c.route.distanceMiles} mi`}
                 >
                   {c.route.isLoop
-                    ? `${c.miles.toFixed(1)} mi (1–${c.route.maxLoops || 4} loops)`
+                    ? `${c.miles.toFixed(1)} mi (${c.route.maxLoops || 4} loops)`
                     : `${c.miles.toFixed(1)} mi`}
                 </span>
               ))
@@ -142,6 +157,103 @@ export const RunCard: React.FC<RunCardProps> = ({
           {run.description}
         </p>
       </div>
+
+      {/* Available Runs & Route Names */}
+      {availableRoutes.length > 0 && (
+        <div className="px-5 py-2.5">
+          <div className="text-[11px] font-bold text-stone-500 uppercase tracking-wider mb-2 flex items-center justify-between">
+            <span className="flex items-center gap-1.5">
+              <Map className="w-3.5 h-3.5 text-woodland-600" />
+              <span>Available Runs ({availableRoutes.length}):</span>
+            </span>
+            <span className="text-[10px] text-stone-400 font-normal">
+              Tap Map &amp; Turns to preview course
+            </span>
+          </div>
+          <div className="space-y-2">
+            {availableRoutes.map((choice) => (
+              <div
+                key={choice.id || choice.route.id}
+                className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 p-3 rounded-xl bg-stone-50 hover:bg-stone-100/80 border border-stone-200 transition"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="shrink-0 flex flex-col items-center justify-center bg-woodland-700 text-white rounded-lg px-2.5 py-1 min-w-[3.75rem] shadow-2xs">
+                    <span className="text-xs font-black font-mono leading-none">
+                      {choice.miles.toFixed(1)}
+                    </span>
+                    <span className="text-[9px] font-semibold text-woodland-200 uppercase leading-tight mt-0.5">
+                      miles
+                    </span>
+                  </div>
+                  <div className="min-w-0">
+                    <div className="font-bold text-sm text-stone-900 truncate">
+                      {choice.route.name}
+                    </div>
+                    <div className="text-[11px] text-stone-500 flex items-center gap-2 flex-wrap">
+                      <span>{choice.route.surface || 'Pavement'}</span>
+                      {choice.route.elevationGainFt > 0 && (
+                        <span>• +{choice.route.elevationGainFt} ft gain</span>
+                      )}
+                      {choice.route.isLoop && (
+                        <span className="text-woodland-700 font-semibold">
+                          • {choice.route.maxLoops ? `1–${choice.route.maxLoops} loops` : 'Repeatable Loop'}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Quick actions for this specific route */}
+                <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-center">
+                  <button
+                    type="button"
+                    onClick={() => onViewRoute(choice.route)}
+                    className="flex items-center gap-1 text-xs font-bold text-woodland-800 hover:text-woodland-950 px-2.5 py-1.5 rounded-lg bg-white hover:bg-woodland-50 border border-stone-300 shadow-2xs transition cursor-pointer"
+                    title={`View map and turn-by-turn directions for ${choice.route.name}`}
+                  >
+                    <Map className="w-3.5 h-3.5 text-woodland-600" />
+                    <span>Map &amp; Turns {choice.route.directions?.length ? `(${choice.route.directions.length})` : ''}</span>
+                  </button>
+
+                  {choice.route.externalLinks?.stravaUrl && (
+                    <a
+                      href={choice.route.externalLinks.stravaUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-2 py-1.5 bg-orange-50 hover:bg-orange-100 text-orange-800 text-xs font-bold rounded-lg border border-orange-200 transition"
+                      title="Open in Strava"
+                    >
+                      Strava
+                    </a>
+                  )}
+                  {choice.route.externalLinks?.garminUrl && (
+                    <a
+                      href={choice.route.externalLinks.garminUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-2 py-1.5 bg-cyan-50 hover:bg-cyan-100 text-cyan-900 text-xs font-bold rounded-lg border border-cyan-200 transition"
+                      title="Send to Garmin"
+                    >
+                      Garmin
+                    </a>
+                  )}
+                  {choice.route.externalLinks?.rungoUrl && (
+                    <a
+                      href={choice.route.externalLinks.rungoUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-2 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 text-xs font-bold rounded-lg border border-emerald-200 transition"
+                      title="RunGo Voice Navigation"
+                    >
+                      RunGo
+                    </a>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Pace Groups */}
       {run.paceGroups && run.paceGroups.length > 0 && (
@@ -198,62 +310,17 @@ export const RunCard: React.FC<RunCardProps> = ({
       </div>
 
       {/* Footer Actions */}
-      <div className="p-4 bg-stone-50 border-t border-stone-200 flex flex-wrap items-center justify-between gap-2">
-        {route ? (
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <button
-              onClick={() => onViewRoute(route)}
-              className="flex items-center gap-1 text-xs font-bold text-woodland-800 hover:text-woodland-950 px-2.5 py-1.5 rounded-lg bg-woodland-100/60 hover:bg-woodland-100 transition border border-woodland-200 shadow-2xs"
-            >
-              <Map className="w-3.5 h-3.5 text-woodland-600" />
-              <span>Map &amp; Turns {route.directions?.length ? `(${route.directions.length})` : ''}</span>
-            </button>
-
-            {route.externalLinks?.stravaUrl && (
-              <a
-                href={route.externalLinks.stravaUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-2 py-1 bg-orange-50 hover:bg-orange-100 text-orange-800 text-[11px] font-bold rounded-lg border border-orange-200 transition"
-                title="Open Course in Strava"
-              >
-                <span>🟠 Strava</span>
-              </a>
-            )}
-
-            {route.externalLinks?.garminUrl && (
-              <a
-                href={route.externalLinks.garminUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-2 py-1 bg-cyan-50 hover:bg-cyan-100 text-cyan-900 text-[11px] font-bold rounded-lg border border-cyan-200 transition"
-                title="Send Course to Garmin"
-              >
-                <span>🔵 Garmin</span>
-              </a>
-            )}
-
-            {route.externalLinks?.rungoUrl && (
-              <a
-                href={route.externalLinks.rungoUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 text-[11px] font-bold rounded-lg border border-emerald-200 transition"
-                title="RunGo Voice Navigation"
-              >
-                <span>🟢 RunGo</span>
-              </a>
-            )}
-          </div>
-        ) : (
-          <div />
-        )}
+      <div className="p-4 bg-stone-50 border-t border-stone-200 flex flex-wrap items-center justify-between gap-3">
+        <div className="text-xs text-stone-500 font-medium flex items-center gap-1.5">
+          <span>🍻</span>
+          <span>Meet on patio @ Blue Note Brewing • All paces &amp; jog/walkers welcome!</span>
+        </div>
 
         <div className="flex items-center gap-2">
           {/* RSVP Toggle */}
           <button
             onClick={() => onToggleRSVP(run.id)}
-            className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition flex items-center gap-1.5 ${
+            className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition flex items-center gap-1.5 cursor-pointer ${
               isAttending
                 ? 'bg-stone-200 text-stone-800 hover:bg-stone-300'
                 : 'bg-white border border-stone-300 text-stone-700 hover:bg-stone-100 shadow-xs'
@@ -272,7 +339,7 @@ export const RunCard: React.FC<RunCardProps> = ({
           {/* Check-In Button */}
           <button
             onClick={() => onOpenCheckIn(run)}
-            className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition flex items-center gap-1.5 ${
+            className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition flex items-center gap-1.5 cursor-pointer ${
               isCheckedIn
                 ? 'bg-woodland-100 text-woodland-800 border border-woodland-200'
                 : 'bg-woodland-600 text-white hover:bg-woodland-700 shadow-sm'

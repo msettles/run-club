@@ -206,7 +206,7 @@ export function App() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-stone-100 font-sans pb-16 sm:pb-0">
+    <div className="min-h-screen flex flex-col bg-stone-100 font-sans pb-16 sm:pb-0 w-full overflow-x-hidden">
       {/* Mobile PWA Install & Push Notification Banner */}
       <InstallPwaBanner />
 
@@ -225,7 +225,6 @@ export function App() {
           setIsRouteStudioOpen(true);
         }}
         onOpenSetupGuide={() => setIsSetupGuideOpen(true)}
-        onOpenBrandAssets={() => setIsBrandAssetsOpen(true)}
         onToggleNotifications={() => setShowNotificationsDrawer(!showNotificationsDrawer)}
         onOpenAuthModal={() => setIsAuthModalOpen(true)}
         onOpenRegister={handleOpenRegister}
@@ -287,7 +286,7 @@ export function App() {
                       className="flex items-center gap-2 px-4 py-2.5 bg-amber-400/20 hover:bg-amber-400/30 text-amber-300 font-bold text-xs sm:text-sm rounded-xl border border-amber-400/30 transition backdrop-blur-xs"
                     >
                       <Gift className="w-4 h-4 text-amber-300" />
-                      <span>Club Milestones 🏆</span>
+                      <span>Milestones 🏆</span>
                     </button>
 
                     <button
@@ -295,15 +294,7 @@ export function App() {
                       className="flex items-center gap-2 px-4 py-2.5 bg-woodland-700/60 hover:bg-woodland-700 text-white font-semibold text-xs sm:text-sm rounded-xl border border-woodland-500/40 transition"
                     >
                       <Compass className="w-4 h-4 text-woodland-300" />
-                      <span>Explore GPX Trails</span>
-                    </button>
-                    <button
-                      onClick={() => setIsBrandAssetsOpen(true)}
-                      className="flex items-center gap-2 px-3.5 py-2.5 bg-white/10 hover:bg-white/20 text-white font-semibold text-xs sm:text-sm rounded-xl border border-white/20 transition backdrop-blur-xs"
-                      title="View & Download Official 2026 & Heritage Logos"
-                    >
-                      <Palette className="w-4 h-4 text-amber-300" />
-                      <span>Club Logos</span>
+                      <span>Explore Runs</span>
                     </button>
                     {isAdmin && (
                       <button
@@ -313,43 +304,6 @@ export function App() {
                         <span>Admin Portal</span>
                       </button>
                     )}
-                  </div>
-                </div>
-
-                {/* Dual Logo Showcase */}
-                <div className="flex items-center gap-4 shrink-0">
-                  <div
-                    onClick={() => setIsBrandAssetsOpen(true)}
-                    className="cursor-pointer group flex flex-col items-center bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 rounded-2xl p-3 shadow-xl transition group-hover:scale-105"
-                    title="Click to view & download the 2026 Run Crew mascot logo"
-                  >
-                    <div className="w-24 h-24 sm:w-28 sm:h-28 flex items-center justify-center p-1 relative">
-                      <img
-                        src="/Woodchucker2026.png"
-                        alt="Woodland Woodchuckers 2026 Run Crew Mascot"
-                        className="max-h-full max-w-full object-contain filter drop-shadow-md transition group-hover:scale-110"
-                      />
-                    </div>
-                    <span className="text-[10px] font-bold uppercase tracking-wider bg-amber-400 text-stone-950 px-2 py-0.5 rounded-full mt-1.5 shadow-xs">
-                      2026 Mascot
-                    </span>
-                  </div>
-
-                  <div
-                    onClick={() => setIsBrandAssetsOpen(true)}
-                    className="hidden sm:flex cursor-pointer group flex-col items-center bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 rounded-2xl p-3 shadow-xl transition group-hover:scale-105"
-                    title="Click to view & download the original Blue Note bottle cap logo"
-                  >
-                    <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-xl overflow-hidden shadow-md">
-                      <img
-                        src="/woodchuck.svg"
-                        alt="Woodchuck Bottle Cap Logo"
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                    <span className="text-[10px] font-bold uppercase tracking-wider bg-white/20 text-white px-2 py-0.5 rounded-full mt-1.5 border border-white/30">
-                      Classic Heritage
-                    </span>
                   </div>
                 </div>
               </div>
