@@ -64,6 +64,9 @@ export function App() {
     syncPrivateData,
     clearPrivateData,
     setUserRole,
+    loadLegacyPool,
+    adminSetLegacyClaim,
+    importLegacyData,
     users,
     setUsers,
     meetupEvents,
@@ -159,7 +162,9 @@ export function App() {
         setPendingCheckInRun(null);
       }
     } else {
-      // First time this email is seen in club profiles! Launch onboarding modal
+      // First time this email is seen in club profiles! Load the old-app name
+      // pool for claiming, then launch onboarding.
+      loadLegacyPool().catch((err) => console.warn('Legacy pool load failed:', err));
       setOnboardingEmail(cleanEmail);
       setOnboardingDisplayName(displayName || '');
       setIsOnboardingOpen(true);
@@ -575,6 +580,9 @@ export function App() {
               onOpenNewRun={() => setIsNewRunOpen(true)}
               onSendBroadcast={sendPushAnnouncement}
               onSetUserRole={setUserRole}
+              onSetLegacyClaim={adminSetLegacyClaim}
+              onImportLegacyData={importLegacyData}
+              onReloadLegacyPool={loadLegacyPool}
             />
           </Suspense>
         )}

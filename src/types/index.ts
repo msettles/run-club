@@ -233,9 +233,10 @@ export interface UserProfile {
   };
   preferredPace?: string;
   // Attendance & Miles
-  pre2021Runs: number;       // From pre-2021 OldCounts
-  loggedRuns: number;        // From individual checkin records
-  totalRuns: number;         // pre2021Runs + loggedRuns
+  pre2021Runs: number;       // Sum of claimed legacy names' pre-2021 OldCounts
+  legacyEventRuns?: number;  // Sum of claimed legacy names' sign-ins since 2021
+  loggedRuns: number;        // Check-ins in this app
+  totalRuns: number;         // pre2021Runs + legacyEventRuns + loggedRuns
   totalMiles: number;        // Cumulative miles walked + run
   runCount: number;          // Total times ran
   walkCount: number;         // Total times walked
@@ -243,8 +244,11 @@ export interface UserProfile {
   distanceCounts?: Record<string, number>; // Route choices count (e.g. { '1': 4, '3': 10, '5': 2 })
   firstRunDate?: string;     // Earliest recorded check-in date
   lastCheckInDate?: string;  // Date of the check-in that last changed these stats
+  currentStreakWeeks?: number; // Consecutive weeks with a run, ending this or last week
+  longestStreakWeeks?: number; // Longest run of consecutive weeks (legacy + app)
   // Legacy Link
   linkedLegacyNames: string[]; // Claimed historical names (e.g. ["MATT SETTLES"])
+  linkedLegacyIds?: string[];  // IDs of claimed legacy_profiles docs
   unlockedBadgeIds: string[];
   badgeCounts?: Record<string, number>; // How many times each badge was achieved (e.g. { 'special-turkey': 2, 'power-walker': 3 })
   role: 'member' | 'organizer' | 'admin' | 'guest';
@@ -257,7 +261,8 @@ export interface LegacyMember {
   newCount: number;          // From 2021-2026 log (sum is 6,263)
   oldCount: number;          // Pre-2021 count (sum is 2,473)
   totalRuns: number;         // newCount + oldCount
-  claimedByEmail: string | null; // Null until runner claims it
+  claimedBy?: string | null;     // memberKey of the claimer (Firestore). Null until claimed
+  claimedByEmail: string | null; // Derived for display from loaded profiles
   claimedAt: string | null;
 }
 

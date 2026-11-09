@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   GPXRoute, 
   MeetupEvent, 
@@ -18,6 +18,7 @@ import { INITIAL_BADGES, INITIAL_SPECIAL_EVENTS } from '../data/initialData';
 import { ClubNotification } from '../services/notifications';
 import { calculateAge } from '../utils/dateUtils';
 import { ADMIN_EMAILS } from '../utils/roles';
+import { isLegacyClaimed, matchLegacyNames } from '../utils/legacy';
 import { 
   Calendar, 
   Users, 
@@ -70,6 +71,13 @@ interface AdminDashboardProps {
   onOpenNewRun?: () => void;
   onSendBroadcast: (title: string, body: string) => void;
   onSetUserRole?: (email: string, role: AssignableRole) => Promise<void>;
+  onSetLegacyClaim?: (legacyId: string, toEmail: string | null) => Promise<void>;
+  onImportLegacyData?: (
+    totalsCsv: string,
+    checkinsCsv: string,
+    onProgress?: (msg: string) => void
+  ) => Promise<{ names: number; events: number; duplicatesDropped: number; oldRuns: number }>;
+  onReloadLegacyPool?: () => Promise<unknown>;
 }
 
 type AssignableRole = 'member' | 'organizer' | 'admin';
@@ -111,6 +119,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onOpenNewRun,
   onSendBroadcast,
   onSetUserRole,
+  onSetLegacyClaim,
+  onImportLegacyData,
+  onReloadLegacyPool,
 }) => {
   const [adminTab, setAdminTab] = useState<'events' | 'badges' | 'checkins' | 'milestones' | 'members' | 'notifications'>('events');
   const [memberSearch, setMemberSearch] = useState<string>('');
@@ -179,7 +190,72 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   // Quick stats
   const totalCheckinsLogged = checkins.length;
   const totalLifetimeMiles = Math.round(users.reduce((sum, u) => sum + u.totalMiles, 0) * 10) / 10;
-  const totalLegacyClaimed = legacyMembers.filter((m) => m.claimedByEmail !== null).length;
+  const totalLegacyClaimed = legacyMembers.filter(isLegacyClaimed).length;
+
+  // ---- Legacy (old app) claim pool ----
+  const [legacySearch, setLegacySearch] = useState<string>('');
+  const [legacyFilter, setLegacyFilter] = useState<'all' | 'claimed' | 'unclaimed'>('all');
+  const [legacyBusyId, setLegacyBusyId] = useState<string | null>(null);
+  const [legacyError, setLegacyError] = useState<string | null>(null);
+  const [legacyTotalsFile, setLegacyTotalsFile] = useState<File | null>(null);
+  const [legacyCheckinsFile, setLegacyCheckinsFile] = useState<File | null>(null);
+  const [legacyImportBusy, setLegacyImportBusy] = useState<boolean>(false);
+  const [legacyImportMsg, setLegacyImportMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (adminTab === 'members' && legacyMembers.length === 0 && onReloadLegacyPool) {
+      onReloadLegacyPool().catch((err) => console.warn('Legacy pool load failed:', err));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [adminTab]);
+
+  const filteredLegacy = (() => {
+    const byStatus = legacyMembers.filter((m) =>
+      legacyFilter === 'all' ? true : legacyFilter === 'claimed' ? isLegacyClaimed(m) : !isLegacyClaimed(m)
+    );
+    return legacySearch.trim().length >= 2 ? matchLegacyNames(legacySearch, byStatus, 0.6) : byStatus;
+  })();
+  const visibleLegacy = filteredLegacy.slice(0, 150);
+  const assignableUsers = [...users]
+    .filter((u) => u.role !== 'guest' && u.email)
+    .sort((a, b) => a.displayName.localeCompare(b.displayName));
+
+  const handleLegacyAssign = async (leg: LegacyMember, toEmail: string | null) => {
+    if (!onSetLegacyClaim) return;
+    const target = toEmail ? users.find((u) => u.email === toEmail) : undefined;
+    const message = toEmail
+      ? `Assign ${leg.name} (${leg.totalRuns} runs) to ${target?.displayName || toEmail}?${leg.claimedByEmail ? ' It will be removed from its current runner.' : ''}`
+      : `Unclaim ${leg.name}? Its ${leg.totalRuns} runs will be removed from that runner's total.`;
+    if (!window.confirm(message)) return;
+    setLegacyBusyId(leg.id);
+    setLegacyError(null);
+    try {
+      await onSetLegacyClaim(leg.id, toEmail);
+    } catch (err) {
+      console.error('Legacy claim change failed:', err);
+      setLegacyError(`Could not update ${leg.name}. Only admins can change claims.`);
+    } finally {
+      setLegacyBusyId(null);
+    }
+  };
+
+  const handleLegacyImport = async () => {
+    if (!onImportLegacyData || !legacyTotalsFile || !legacyCheckinsFile) return;
+    setLegacyImportBusy(true);
+    setLegacyImportMsg('Reading files…');
+    try {
+      const [totals, checkinsCsv] = await Promise.all([legacyTotalsFile.text(), legacyCheckinsFile.text()]);
+      const stats = await onImportLegacyData(totals, checkinsCsv, setLegacyImportMsg);
+      setLegacyImportMsg(
+        `Imported ${stats.names} names, ${stats.events} sign-ins since 2021 (${stats.duplicatesDropped} double sign-ins dropped) and ${stats.oldRuns} pre-2021 runs.`
+      );
+    } catch (err: any) {
+      console.error('Legacy import failed:', err);
+      setLegacyImportMsg(`Import failed: ${err?.message || 'unknown error'}`);
+    } finally {
+      setLegacyImportBusy(false);
+    }
+  };
   const pendingMilestones = milestoneAlerts.filter((a) => !a.fulfilled);
   const fulfilledMilestones = milestoneAlerts.filter((a) => a.fulfilled);
 
@@ -1989,7 +2065,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     <th className="py-2.5 px-3">Email Key</th>
                     <th className="py-2.5 px-3">Shirt</th>
                     <th className="py-2.5 px-3">Total Runs</th>
-                    <th className="py-2.5 px-3">Old Counts</th>
+                    <th className="py-2.5 px-3">Legacy Runs</th>
                     <th className="py-2.5 px-3">Lifetime Miles</th>
                     <th className="py-2.5 px-3">Run/Walk Split</th>
                     <th className="py-2.5 px-3">Claimed Past Aliases</th>
@@ -2045,7 +2121,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         </span>
                       </td>
                       <td className="py-2.5 px-3 font-mono font-black text-amber-700">{u.totalRuns}</td>
-                      <td className="py-2.5 px-3 font-mono text-stone-500">{u.pre2021Runs}</td>
+                      <td className="py-2.5 px-3 font-mono text-stone-500" title="Pre-2021 runs + old-app sign-ins since 2021">
+                        {u.pre2021Runs} + {u.legacyEventRuns || 0}
+                      </td>
                       <td className="py-2.5 px-3 font-mono font-bold text-emerald-700">{u.totalMiles} mi</td>
                       <td className="py-2.5 px-3 text-stone-500">
                         {u.runCount}R / {u.walkCount}W
@@ -2072,53 +2150,175 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
           {/* Legacy Members Claim Pool */}
           <div className="bg-white rounded-2xl p-6 shadow-sm border border-stone-200 space-y-4">
-            <div className="border-b border-stone-100 pb-3 flex items-center justify-between">
+            <div className="border-b border-stone-100 pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <h3 className="font-extrabold text-base text-stone-900 font-display">
                   Legacy Members Roster &amp; Claim Pool
                 </h3>
                 <p className="text-xs text-stone-500">
-                  Historical runner entries available for self-service claiming during onboarding.
+                  Sign-in names from the old app. A claimed name is locked to one runner; its pre-2021 runs and sign-ins since 2021 count toward their total.
                 </p>
               </div>
-              <span className="px-3 py-1 bg-stone-100 text-stone-700 text-xs font-bold rounded-full font-mono">
+              <span className="px-3 py-1 bg-stone-100 text-stone-700 text-xs font-bold rounded-full font-mono shrink-0">
                 {totalLegacyClaimed} / {legacyMembers.length} Claimed
               </span>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-              {legacyMembers.map((leg) => {
-                const isClaimed = leg.claimedByEmail !== null;
-                return (
-                  <div
-                    key={leg.id}
-                    className={`p-3 rounded-xl border text-xs flex items-center justify-between transition ${
-                      isClaimed ? 'bg-emerald-50/70 border-emerald-200' : 'bg-stone-50 border-stone-200'
-                    }`}
-                  >
-                    <div>
-                      <div className="font-bold text-stone-900">{leg.name}</div>
-                      <div className="text-[10px] text-stone-500 font-mono">
-                        {leg.totalRuns} past runs ({leg.newCount} logged + {leg.oldCount} old)
-                      </div>
-                    </div>
-
-                    <div>
-                      {isClaimed ? (
-                        <span className="px-2 py-0.5 bg-emerald-200/80 text-emerald-900 font-bold text-[10px] rounded-full flex items-center gap-1">
-                          <Check className="w-3 h-3" />
-                          <span>Claimed</span>
-                        </span>
-                      ) : (
-                        <span className="px-2 py-0.5 bg-stone-200 text-stone-600 font-semibold text-[10px] rounded-full">
-                          Unclaimed
-                        </span>
-                      )}
-                    </div>
+            {/* Import */}
+            {onImportLegacyData && (
+              <details className="rounded-xl border border-stone-200 bg-stone-50 p-3 text-xs">
+                <summary className="font-bold text-stone-800 cursor-pointer select-none">
+                  Import old-app data (CSV)
+                </summary>
+                <div className="mt-3 space-y-3">
+                  <p className="text-stone-600">
+                    Upload the two exports from the old app. Re-importing keeps existing claims and recalculates those runners&apos; totals.
+                  </p>
+                  <div className="grid sm:grid-cols-2 gap-3">
+                    <label className="block">
+                      <span className="block font-semibold text-stone-700 mb-1">Totals file (Name, OldCounts)</span>
+                      <input
+                        type="file"
+                        accept=".csv,text/csv"
+                        onChange={(e) => setLegacyTotalsFile(e.target.files?.[0] || null)}
+                        className="block w-full text-[11px]"
+                      />
+                    </label>
+                    <label className="block">
+                      <span className="block font-semibold text-stone-700 mb-1">Check-ins file (Name, Date, Time, Code Name)</span>
+                      <input
+                        type="file"
+                        accept=".csv,text/csv"
+                        onChange={(e) => setLegacyCheckinsFile(e.target.files?.[0] || null)}
+                        className="block w-full text-[11px]"
+                      />
+                    </label>
                   </div>
-                );
-              })}
+                  <div className="flex flex-wrap items-center gap-3">
+                    <button
+                      type="button"
+                      disabled={!legacyTotalsFile || !legacyCheckinsFile || legacyImportBusy}
+                      onClick={handleLegacyImport}
+                      className="px-4 py-2 bg-woodland-700 hover:bg-woodland-800 disabled:opacity-40 text-white font-bold rounded-xl transition"
+                    >
+                      {legacyImportBusy ? 'Importing…' : 'Import'}
+                    </button>
+                    {legacyImportMsg && <span className="text-stone-700 font-semibold">{legacyImportMsg}</span>}
+                  </div>
+                </div>
+              </details>
+            )}
+
+            {/* Filter */}
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="relative">
+                <Search className="w-3.5 h-3.5 absolute left-2.5 top-2 text-stone-400" />
+                <input
+                  type="text"
+                  value={legacySearch}
+                  onChange={(e) => setLegacySearch(e.target.value)}
+                  placeholder="Search old names..."
+                  aria-label="Search old names"
+                  className="pl-8 pr-3 py-1.5 text-xs border rounded-xl outline-none"
+                />
+              </div>
+              <select
+                value={legacyFilter}
+                onChange={(e) => setLegacyFilter(e.target.value as 'all' | 'claimed' | 'unclaimed')}
+                aria-label="Filter by claim status"
+                className="px-2.5 py-1.5 text-xs border rounded-xl outline-none bg-white"
+              >
+                <option value="all">All ({legacyMembers.length})</option>
+                <option value="claimed">Claimed ({totalLegacyClaimed})</option>
+                <option value="unclaimed">Unclaimed ({legacyMembers.length - totalLegacyClaimed})</option>
+              </select>
+              {legacyError && <span className="text-[11px] text-red-600 font-semibold">{legacyError}</span>}
             </div>
+
+            {legacyMembers.length === 0 ? (
+              <p className="text-xs text-stone-500 italic">No old-app names loaded yet. Import the CSV exports above.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-stone-50 text-stone-600 font-bold uppercase tracking-wider border-b border-stone-200">
+                    <tr>
+                      <th className="py-2 px-3">Old Name</th>
+                      <th className="py-2 px-3">Pre-2021</th>
+                      <th className="py-2 px-3">2021+</th>
+                      <th className="py-2 px-3">Total</th>
+                      <th className="py-2 px-3">Claimed By</th>
+                      <th className="py-2 px-3">Admin</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-stone-100">
+                    {visibleLegacy.map((leg) => {
+                      const claimer = leg.claimedByEmail
+                        ? users.find((u) => u.email.toLowerCase() === leg.claimedByEmail!.toLowerCase())
+                        : undefined;
+                      const claimed = isLegacyClaimed(leg);
+                      const busy = legacyBusyId === leg.id;
+                      return (
+                        <tr key={leg.id} className={claimed ? 'bg-emerald-50/40' : ''}>
+                          <td className="py-2 px-3 font-bold text-stone-900">{leg.name}</td>
+                          <td className="py-2 px-3 font-mono text-stone-600">{leg.oldCount}</td>
+                          <td className="py-2 px-3 font-mono text-stone-600">{leg.newCount}</td>
+                          <td className="py-2 px-3 font-mono font-black text-amber-700">{leg.totalRuns}</td>
+                          <td className="py-2 px-3">
+                            {claimed ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-200/80 text-emerald-900 font-bold text-[10px] rounded-full">
+                                <Check className="w-3 h-3" />
+                                {claimer ? claimer.displayName : 'Unknown runner'}
+                              </span>
+                            ) : (
+                              <span className="px-2 py-0.5 bg-stone-200 text-stone-600 font-semibold text-[10px] rounded-full">
+                                Unclaimed
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-2 px-3">
+                            {onSetLegacyClaim && (
+                              <div className="flex items-center gap-2">
+                                <select
+                                  value=""
+                                  disabled={busy}
+                                  onChange={(e) => e.target.value && handleLegacyAssign(leg, e.target.value)}
+                                  aria-label={`Assign ${leg.name} to a runner`}
+                                  className="max-w-[150px] px-2 py-1 text-[11px] border rounded-lg outline-none bg-white disabled:opacity-50"
+                                >
+                                  <option value="">{claimed ? 'Reassign to…' : 'Assign to…'}</option>
+                                  {assignableUsers
+                                    .filter((u) => u.email !== claimer?.email)
+                                    .map((u) => (
+                                      <option key={u.email} value={u.email}>
+                                        {u.displayName}
+                                      </option>
+                                    ))}
+                                </select>
+                                {claimed && (
+                                  <button
+                                    type="button"
+                                    disabled={busy}
+                                    onClick={() => handleLegacyAssign(leg, null)}
+                                    className="px-2 py-1 text-[11px] font-bold text-red-700 hover:bg-red-50 rounded-lg disabled:opacity-50"
+                                  >
+                                    Unclaim
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+                {filteredLegacy.length > visibleLegacy.length && (
+                  <p className="pt-2 text-[11px] text-stone-500">
+                    Showing {visibleLegacy.length} of {filteredLegacy.length}. Search to narrow the list.
+                  </p>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}

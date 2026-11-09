@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { X, CheckCircle, ShieldCheck, Sparkles, Search, AlertCircle, RefreshCw } from 'lucide-react';
 import { LegacyMember, UserProfile } from '../types';
 import { calculateAge } from '../utils/dateUtils';
+import { isLegacyClaimed, matchLegacyNames } from '../utils/legacy';
 
 interface NewUserModalProps {
   isOpen: boolean;
@@ -21,7 +22,7 @@ interface NewUserModalProps {
       zipCode?: string;
       preferredPace?: string;
     },
-    claimedLegacyNames: string[]
+    claimedLegacyIds: string[]
   ) => Promise<UserProfile>;
   onSuccess: (user: UserProfile) => void;
 }
@@ -56,9 +57,9 @@ export const NewUserModal: React.FC<NewUserModalProps> = ({
 
   const computedAge = useMemo(() => calculateAge(birthday), [birthday]);
 
-  // Search query for legacy members (defaults to last name or first name)
+  // Search query for legacy names (defaults to the full name; matching is typo tolerant)
   const [searchQuery, setSearchQuery] = useState<string>(() => {
-    return parsedNames.last || parsedNames.first || '';
+    return `${parsedNames.first} ${parsedNames.last}`.trim();
   });
 
   // Selected legacy records to merge (keyed on legacy member ID)
@@ -67,32 +68,11 @@ export const NewUserModal: React.FC<NewUserModalProps> = ({
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // Compute search results dynamically without losing selected records
-  const searchResults = useMemo(() => {
-    const q = searchQuery.trim().toUpperCase();
-    if (q.length < 2) return [];
-
-    const tokens = q.split(/\s+/).filter(Boolean);
-
-    return legacyMembers.filter((m) => {
-      // Must be unclaimed or claimed by this user
-      if (m.claimedByEmail !== null && m.claimedByEmail.toLowerCase() !== email.toLowerCase()) {
-        return false;
-      }
-      const memName = m.name.toUpperCase();
-
-      // Exact substring match
-      if (memName.includes(q)) return true;
-
-      // All words present in name
-      if (tokens.length > 1 && tokens.every((t) => memName.includes(t))) return true;
-
-      // Any token with >= 3 characters matches
-      if (tokens.some((t) => t.length >= 3 && memName.includes(t))) return true;
-
-      return false;
-    });
-  }, [searchQuery, legacyMembers, email]);
+  // Fuzzy matches among unclaimed legacy names (e.g. "Matt Settles" also finds MATT SETTLED)
+  const searchResults = useMemo(
+    () => matchLegacyNames(searchQuery, legacyMembers.filter((m) => !isLegacyClaimed(m))),
+    [searchQuery, legacyMembers]
+  );
 
   if (!isOpen) return null;
 
@@ -130,7 +110,7 @@ export const NewUserModal: React.FC<NewUserModalProps> = ({
 
     setIsSubmitting(true);
     try {
-      const claimedNames = selectedList.map((r) => r.name);
+      const claimedIds = selectedList.map((r) => r.id);
       const newUser = await onRegisterUser(
         {
           email: email.trim().toLowerCase(),
@@ -143,13 +123,20 @@ export const NewUserModal: React.FC<NewUserModalProps> = ({
           zipCode: zipCode.trim() || '95695',
           preferredPace,
         },
-        claimedNames
+        claimedIds
       );
 
       onSuccess(newUser);
       onClose();
     } catch (err: any) {
       console.error('Registration error:', err);
+      if (err?.user) {
+        // Profile was created; only some old profiles couldn't be claimed.
+        onSuccess(err.user);
+        onClose();
+        window.alert(err.message);
+        return;
+      }
       setErrorMsg(err.message || 'Failed to complete profile registration.');
     } finally {
       setIsSubmitting(false);

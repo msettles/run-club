@@ -19,6 +19,10 @@ service cloud.firestore {
     //   users/{email}             Full profile (birthday, city, zip, emergency contact...).
     //   checkins/{date_email}     Check-in audit log.
     //   milestone_alerts/{id}     Gear pickup queue (shirt size, email).
+    //   legacy_history/{id}       Old-app sign-in dates per legacy name (claimer + staff).
+    //
+    // SIGNED-IN ONLY:
+    //   legacy_index/pool, legacy_profiles/{id}  Old-app names + counts, claim lock.
     //
     // STAFF ONLY:
     //   meetup_secrets/{date}     { codeWord } for that night's check-in.
@@ -53,6 +57,10 @@ service cloud.firestore {
 
     function userPath(email) {
       return /databases/$(database)/documents/users/$(email);
+    }
+
+    function legacyPath(id) {
+      return /databases/$(database)/documents/legacy_profiles/$(id);
     }
 
     function checkinPath(date, email) {
@@ -208,6 +216,17 @@ service cloud.firestore {
         );
     }
 
+    function isOwnLegacyClaim(id) {
+      let me = tokenEmail();
+      return hasVerifiedEmail() &&
+        resource.data.get('claimedBy', null) == null &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['claimedBy', 'claimedAt']) &&
+        request.resource.data.claimedBy == memberKeyFor(me) &&
+        request.resource.data.claimedAt is string &&
+        (id in getAfter(userPath(me)).data.get('linkedLegacyIds', [])) &&
+        !(id in get(userPath(me)).data.get('linkedLegacyIds', []));
+    }
+
     function isValidGPXRoute(data) {
       return data.keys().hasOnly([
                'id', 'name', 'description', 'distanceMiles', 'elevationGainFt',
@@ -310,7 +329,8 @@ service cloud.firestore {
                'walkCount', 'linkedLegacyNames', 'unlockedBadgeIds', 'role',
                'createdAt', 'age', 'birthday', 'city', 'zipCode', 'preferredPace',
                'petRunCount', 'distanceCounts', 'firstRunDate', 'badgeCounts',
-               'emergencyContact', 'lastCheckInDate'
+               'emergencyContact', 'lastCheckInDate', 'linkedLegacyIds',
+               'legacyEventRuns', 'currentStreakWeeks', 'longestStreakWeeks'
              ]) &&
              data.keys().hasAll([
                'email', 'firstName', 'lastName', 'displayName', 'shirtSize',
@@ -341,15 +361,71 @@ service cloud.firestore {
              (!('petRunCount' in data) || (data.petRunCount is number && data.petRunCount >= 0 && data.petRunCount <= 100000)) &&
              (!('firstRunDate' in data) || (data.firstRunDate is string && data.firstRunDate.size() <= 30)) &&
              (!('lastCheckInDate' in data) || (data.lastCheckInDate is string && data.lastCheckInDate.size() <= 30)) &&
+             (!('linkedLegacyIds' in data) || (data.linkedLegacyIds is list && data.linkedLegacyIds.size() <= 50)) &&
+             (!('legacyEventRuns' in data) || (data.legacyEventRuns is int && data.legacyEventRuns >= 0)) &&
+             (!('currentStreakWeeks' in data) || (data.currentStreakWeeks is int && data.currentStreakWeeks >= 0)) &&
+             (!('longestStreakWeeks' in data) || (data.longestStreakWeeks is int && data.longestStreakWeeks >= 0)) &&
              (!('distanceCounts' in data) || (data.distanceCounts is map)) &&
              (!('badgeCounts' in data) || (data.badgeCounts is map)) &&
              (!('emergencyContact' in data) || (data.emergencyContact is map));
     }
 
     // Fields a runner can never change on their own profile after sign-up.
-    function lockedProfileFieldsUnchanged() {
+    function coreProfileFieldsUnchanged() {
       return !request.resource.data.diff(resource.data).affectedKeys().hasAny([
-        'email', 'role', 'createdAt', 'pre2021Runs', 'linkedLegacyNames'
+        'email', 'role', 'createdAt'
+      ]);
+    }
+
+    // Legacy claim fields: only change through isLegacyClaimBacked (or an admin).
+    function legacyFieldsUnchanged() {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+        'pre2021Runs', 'linkedLegacyNames', 'linkedLegacyIds', 'legacyEventRuns'
+      ]);
+    }
+
+    // A self-created profile starts empty; runs only arrive via claims and check-ins.
+    function isFreshProfile(d) {
+      return d.pre2021Runs == 0 && d.loggedRuns == 0 && d.totalRuns == 0 &&
+        d.totalMiles == 0 && d.runCount == 0 && d.walkCount == 0 &&
+        d.linkedLegacyNames.size() == 0 && d.unlockedBadgeIds.size() == 0 &&
+        d.get('linkedLegacyIds', []).size() == 0 &&
+        d.get('legacyEventRuns', 0) == 0 &&
+        d.get('petRunCount', 0) == 0;
+    }
+
+    // Claiming one legacy name: the legacy doc goes from unclaimed to this runner
+    // in the same batch, and the totals grow by exactly that name's counts.
+    function isLegacyClaimBacked(email) {
+      let before = resource.data.get('linkedLegacyIds', []);
+      let after = request.resource.data.get('linkedLegacyIds', []);
+      let added = after.removeAll(before);
+      return added.size() == 1 &&
+        after.size() == before.size() + 1 &&
+        before.removeAll(after).size() == 0 &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'linkedLegacyIds', 'linkedLegacyNames', 'pre2021Runs', 'legacyEventRuns', 'totalRuns'
+        ]) &&
+        claimAddsCounts(email, added[0]);
+    }
+
+    function claimAddsCounts(email, id) {
+      let d = request.resource.data;
+      let o = resource.data;
+      let lp = getAfter(legacyPath(id)).data;
+      return exists(legacyPath(id)) &&
+        get(legacyPath(id)).data.get('claimedBy', null) == null &&
+        lp.claimedBy == memberKeyFor(email) &&
+        d.pre2021Runs == o.pre2021Runs + lp.oldCount &&
+        d.get('legacyEventRuns', 0) == o.get('legacyEventRuns', 0) + lp.newCount &&
+        d.totalRuns == o.totalRuns + lp.oldCount + lp.newCount;
+    }
+
+    // Badges and streaks are recalculated on the client from the runner's dated
+    // history (claimed legacy sign-ins + check-ins) after a claim; nothing else changes.
+    function isBadgeRefreshOnly() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+        'unlockedBadgeIds', 'badgeCounts', 'currentStreakWeeks', 'longestStreakWeeks'
       ]);
     }
 
@@ -362,7 +438,7 @@ service cloud.firestore {
       return !request.resource.data.diff(resource.data).affectedKeys().hasAny([
         'totalRuns', 'loggedRuns', 'totalMiles', 'runCount', 'walkCount',
         'petRunCount', 'distanceCounts', 'unlockedBadgeIds', 'badgeCounts',
-        'lastCheckInDate', 'firstRunDate'
+        'lastCheckInDate', 'firstRunDate', 'currentStreakWeeks', 'longestStreakWeeks'
       ]);
     }
 
@@ -480,6 +556,7 @@ service cloud.firestore {
                        (
                          (isAdmin() && !isUserEmailOwner(email)) ||
                          (isUserEmailOwner(email) &&
+                          isFreshProfile(request.resource.data) &&
                           (request.resource.data.role == 'member' ||
                            (request.resource.data.role == 'admin' && isBootstrapAdminEmail())))
                        );
@@ -488,8 +565,12 @@ service cloud.firestore {
                        (
                          (isAdmin() && (!isUserEmailOwner(email) || !roleChanged())) ||
                          (isUserEmailOwner(email) &&
-                          lockedProfileFieldsUnchanged() &&
-                          (statsUnchanged() || isStatsChangeBackedByCheckIn(email)))
+                          coreProfileFieldsUnchanged() &&
+                          (
+                            (legacyFieldsUnchanged() &&
+                             (statsUnchanged() || isStatsChangeBackedByCheckIn(email) || isBadgeRefreshOnly())) ||
+                            isLegacyClaimBacked(email)
+                          ))
                        );
 
       allow delete: if isAdmin() && !isUserEmailOwner(email);
@@ -549,7 +630,32 @@ service cloud.firestore {
       allow create, update, delete: if isAdmin();
     }
 
-    // 11. DEFAULT DENY
+    // 11. LEGACY (old app) DATA
+    // legacy_index/pool: { entries: [{id, name, oldCount, newCount}] } — one read for name search.
+    match /legacy_index/{docId} {
+      allow read: if hasVerifiedEmail();
+      allow write: if isAdmin();
+    }
+
+    // legacy_profiles/{id}: one per old sign-in name. claimedBy = claimer's memberKey.
+    // A runner can claim an unclaimed name only together with the matching
+    // profile update (isLegacyClaimBacked). Only admins unclaim or reassign.
+    match /legacy_profiles/{id} {
+      allow read: if hasVerifiedEmail();
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin() || isOwnLegacyClaim(id);
+    }
+
+    // legacy_history/{id}: { events: [{d, t, c}] } — dated sign-ins since 2021.
+    // Private: the claimer and staff only.
+    match /legacy_history/{id} {
+      allow read: if isStaff() ||
+                     (hasVerifiedEmail() &&
+                      get(legacyPath(id)).data.get('claimedBy', null) == memberKeyFor(tokenEmail()));
+      allow write: if isAdmin();
+    }
+
+    // 12. DEFAULT DENY
     match /{document=**} {
       allow read, write: if false;
     }
