@@ -1,5 +1,6 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
+import './services/install' // capture the browser's install prompt as early as possible
 import App from './App'
 import './index.css'
 

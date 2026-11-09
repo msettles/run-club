@@ -7,6 +7,7 @@ import { RunCard } from './components/RunCard';
 import { MapViewer } from './components/MapViewer';
 import { Leaderboard } from './components/Leaderboard';
 import { InstallPwaBanner } from './components/InstallPwaBanner';
+import { InstallAppLink } from './components/InstallAppLink';
 import { MobileBottomNav } from './components/MobileBottomNav';
 import { MilestonesPage } from './components/MilestonesPage';
 import { FULL_VERSION } from './utils/version';
@@ -754,6 +755,7 @@ export function App() {
           </div>
 
           <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4">
+            <InstallAppLink />
             <button
               onClick={() => setIsBrandAssetsOpen(true)}
               className="text-woodland-700 hover:text-woodland-900 hover:underline font-bold flex items-center gap-1 cursor-pointer"

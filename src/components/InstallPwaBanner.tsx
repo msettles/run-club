@@ -1,11 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { Download, Bell, BellRing, Smartphone, X } from 'lucide-react';
 import { enablePushOnThisDevice, getPushStatus, type PushStatus } from '../services/push';
+import { promptInstall, useInstallState } from '../services/install';
 
-interface BeforeInstallPromptEvent extends Event {
-  prompt: () => Promise<void>;
-  userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
-}
 
 interface InstallPwaBannerProps {
   // Signed-in runner, so their device is recorded for the admin count (optional).
@@ -18,55 +15,43 @@ const PUSH_MESSAGES: Partial<Record<PushStatus, string>> = {
   unsupported: "This browser doesn't support push notifications.",
 };
 
+// × hides the banner for this long (per browser), then it can come back.
+const DISMISS_KEY = 'woodchuckers_pwa_banner_dismissed_at';
+const DISMISS_DAYS = 30;
+
+function readDismissedAt(): number {
+  try {
+    const at = Number(localStorage.getItem(DISMISS_KEY) || 0);
+    if (at) return at;
+    // Older builds stored a permanent "dismissed" flag: treat it as dismissed now.
+    if (localStorage.getItem('woodchuckers_pwa_banner_dismissed') === 'true') {
+      const now = Date.now();
+      localStorage.setItem(DISMISS_KEY, String(now));
+      localStorage.removeItem('woodchuckers_pwa_banner_dismissed');
+      return now;
+    }
+  } catch {
+    // ignore (private mode etc.)
+  }
+  return 0;
+}
+
 export const InstallPwaBanner: React.FC<InstallPwaBannerProps> = ({ pushAccount }) => {
-  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
-  const [isInstalled, setIsInstalled] = useState<boolean>(false);
-  const [isIOS, setIsIOS] = useState<boolean>(false);
+  const { installed: isInstalled, isIOS } = useInstallState();
   const [showIOSGuide, setShowIOSGuide] = useState<boolean>(false);
   const [pushStatus, setPushStatus] = useState<PushStatus>('off');
   const [pushMessage, setPushMessage] = useState<string | null>(null);
   const [pushBusy, setPushBusy] = useState<boolean>(false);
-  const [dismissed, setDismissed] = useState<boolean>(() => {
-    return localStorage.getItem('woodchuckers_pwa_banner_dismissed') === 'true';
-  });
+  const [dismissedAt, setDismissedAt] = useState<number>(readDismissedAt);
+  const dismissed = Date.now() - dismissedAt < DISMISS_DAYS * 86400e3;
 
   useEffect(() => {
-    // Check if running in standalone PWA mode
-    if (window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone) {
-      setIsInstalled(true);
-    }
-
-    // Check iOS
-    const userAgent = window.navigator.userAgent.toLowerCase();
-    const isIosDevice = /iphone|ipad|ipod/.test(userAgent);
-    setIsIOS(isIosDevice);
-
-    // Listen for Android beforeinstallprompt
-    const handleBeforeInstallPrompt = (e: Event) => {
-      e.preventDefault();
-      setDeferredPrompt(e as BeforeInstallPromptEvent);
-    };
-
-    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-
     getPushStatus().then(setPushStatus).catch(() => setPushStatus('unsupported'));
-
-    return () => {
-      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-    };
   }, []);
 
   const handleInstallClick = async () => {
-    if (deferredPrompt) {
-      await deferredPrompt.prompt();
-      const choice = await deferredPrompt.userChoice;
-      if (choice.outcome === 'accepted') {
-        setIsInstalled(true);
-        setDeferredPrompt(null);
-      }
-    } else if (isIOS) {
-      setShowIOSGuide(true);
-    }
+    const result = await promptInstall();
+    if (result === 'unavailable' && isIOS) setShowIOSGuide(true);
   };
 
   const handleEnablePush = async () => {
@@ -86,11 +71,22 @@ export const InstallPwaBanner: React.FC<InstallPwaBannerProps> = ({ pushAccount 
   };
 
   const handleDismiss = () => {
-    setDismissed(true);
-    localStorage.setItem('woodchuckers_pwa_banner_dismissed', 'true');
+    const now = Date.now();
+    setDismissedAt(now);
+    try {
+      localStorage.setItem(DISMISS_KEY, String(now));
+    } catch {
+      // ignore
+    }
   };
 
-  if (dismissed && (isInstalled || pushStatus === 'on')) {
+  // What the banner still has to offer on this device.
+  const canTurnOnPush = pushStatus === 'off' || pushStatus === 'blocked' || pushStatus === 'needs-install';
+  const offersInstall = !isInstalled;
+  const offersPush = pushStatus !== 'on' && pushStatus !== 'not-configured' && pushStatus !== 'unsupported' && (!isInstalled || canTurnOnPush);
+
+  // Hidden for 30 days after ×; once installed, only shown if notifications can still be turned on.
+  if (dismissed || (!offersInstall && !offersPush)) {
     return null;
   }
 
@@ -104,10 +100,12 @@ export const InstallPwaBanner: React.FC<InstallPwaBannerProps> = ({ pushAccount 
           <div>
             <strong className="font-bold">Runner Mobile App:</strong>{' '}
             <span className="text-woodland-100 hidden sm:inline">
-              Install Woodchuckers on your phone for 1-tap check-ins and push notifications.
+              {offersInstall
+                ? 'Install Woodchuckers on your phone for 1-tap check-ins and run alerts.'
+                : 'Turn on notifications to get run reminders and club alerts on this phone.'}
             </span>
             <span className="text-woodland-100 sm:hidden">
-              Install app for 1-tap check-ins &amp; alerts.
+              {offersInstall ? 'Install the app for 1-tap check-ins & alerts.' : 'Turn on run alerts.'}
             </span>
           </div>
         </div>
@@ -140,7 +138,7 @@ export const InstallPwaBanner: React.FC<InstallPwaBannerProps> = ({ pushAccount 
               className="flex items-center gap-1.5 px-3 py-1 bg-white text-woodland-900 hover:bg-woodland-50 font-bold rounded-lg transition shadow-xs"
             >
               <Download className="w-3.5 h-3.5 text-woodland-700" />
-              <span>Install PWA</span>
+              <span>Install app</span>
             </button>
           )}
 
