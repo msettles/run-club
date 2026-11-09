@@ -44,6 +44,9 @@ export const NewRunModal: React.FC<NewRunModalProps> = ({
     { label: 'Pace 3 (jog/walk)', targetPace: '11:00+ /mi' },
   ]);
 
+  // Hooks must run before the early return below.
+  const [isSaving, setIsSaving] = useState(false);
+
   if (!isOpen) return null;
 
   const addPaceGroup = () => {
@@ -54,7 +57,6 @@ export const NewRunModal: React.FC<NewRunModalProps> = ({
     setPaceGroups(paceGroups.filter((_, i) => i !== index));
   };
 
-  const [isSaving, setIsSaving] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -1,5 +1,7 @@
 # Run Creation, Turn-by-Turn Directions & Route Resources — Architecture Plan
 
+> **Update (Nov 9, 2026):** The port is done. `src/utils/routeEngine/` is the source of truth, and the original Python prototype in `scripts/` has been removed (it's still in git history).
+>
 > **Document Version:** 1.0  
 > **Status:** Planning / Architecture Review  
 > **Created:** November 7, 2026  

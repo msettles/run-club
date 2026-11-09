@@ -9,7 +9,7 @@ let commitCount = '0'
 try {
   commitHash = execSync('git rev-parse --short HEAD').toString().trim()
   commitCount = execSync('git rev-list --count HEAD').toString().trim()
-} catch (e) {
+} catch {
   // fallback if git is unavailable
 }
 
@@ -17,7 +17,7 @@ let appVersion = '1.0.0'
 try {
   const pkg = JSON.parse(fs.readFileSync('./package.json', 'utf-8'))
   appVersion = pkg.version || '1.0.0'
-} catch (e) {
+} catch {
   // fallback
 }
 

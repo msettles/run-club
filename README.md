@@ -1,91 +1,118 @@
-# 🦫 Woodland Woodchuckers Run Club PWA
+# 🦫 Woodland Woodchuckers Run Club
 
 > *"Pounding trails & pavement — one burrow at a time!"*
 
-A zero-cost, zero-credit-card Progressive Web App (PWA) for managing run schedules, member check-ins, leaderboards, and GPX routes for the Woodland Woodchuckers Run Club.
+The club's installable web app (PWA): run schedule, code-word check-ins, leaderboards, milestones and badges, GPX routes with turn-by-turn directions, old-app history claims, announcements and phone notifications.
 
-![Vite](https://img.shields.io/badge/Vite-6.x-646CFF?logo=vite&logoColor=white)
-![React](https://img.shields.io/badge/React-18.x-61DAFB?logo=react&logoColor=black)
-![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript&logoColor=white)
-![TailwindCSS](https://img.shields.io/badge/TailwindCSS-3.x-38B2AC?logo=tailwind-css&logoColor=white)
-![Firebase Spark](https://img.shields.io/badge/Firebase-Spark_Plan_(Free)-FFCA28?logo=firebase&logoColor=black)
-![Leaflet](https://img.shields.io/badge/Leaflet-OpenStreetMap-199900?logo=leaflet&logoColor=white)
+**Live:** https://woodland-woodchuckers.web.app · **Stack:** React 18 · TypeScript · Vite 6 · Tailwind 3 · Firebase 13 (Spark plan: Auth, Firestore, Hosting, Cloud Messaging) · Leaflet / OpenStreetMap
+
+![CI](https://github.com/msettles/woodland_woodchuckers/actions/workflows/ci.yml/badge.svg)
 
 ---
 
-## ✨ Features
+## What it does
 
-- 🏃 **Run Schedules & RSVPs**: Browse upcoming group runs, view dates, times, surface types (Trail, Pavement, Mixed), and RSVP with one tap.
-- ⏱️ **Pace Groups**: Clear pace brackets for every run (Fast Chucks, Steady Burrows, Cruiser Paws, Run/Walk).
-- 📅 **Add to Calendar**: Instant one-click `.ics` calendar file export for Apple Calendar, Google Calendar, and Outlook.
-- 🦫 **Digital Check-Ins**: Quick 1-tap check-in on run days with celebratory woodchuck confetti and attendance logging.
-- 🏅 **Badges & Streaks**: Earn club awards (*First Chuck*, *Burrow Regular*, *Muddy Paws*, *Dawn Patrol*, *Half Centurion*).
-- 🏆 **Club Leaderboards**: Track total runs, cumulative miles logged, and active streaks across all club members.
-- 🗺️ **Interactive GPX Maps & Elevation Profiles**:
-  - OpenStreetMap & OpenTopoMap layers (100% free, no Google Maps API keys or credit cards).
-  - Elevation charts with interactive hover scrubbing directly linked to map markers.
-  - Upload custom `.gpx` files exported from Garmin, Apple Watch, Strava, or AllTrails.
-  - One-click GPX route download.
-- 📱 **Progressive Web App (PWA)**: Installable on iOS and Android devices, offline-ready with service workers.
-- 🔒 **Zero-Credit-Card Architecture**: Operates in local-first mode using browser storage by default, and seamlessly connects to a free Google Firebase Spark plan when cloud sync is desired.
+**Runners**
+- **Schedule:** upcoming runs, soonest first, with **Show prior runs** for past ones. Includes routes, distances, pace groups, RSVP and **Add to calendar** (.ics).
+- **Check-in:** by the run's **code word**, one check-in per runner per run.
+  - Check-in opens **2 hours before the start** and closes at **midnight**.
+  - The table QR code (`/?checkin=true`) opens whichever run is open right now. If two runs are open, the code word decides which.
+- **Totals:** runs, miles (from the route chosen at check-in), weekly streaks, milestone gear and badges.
+- **Old-app history:** at sign-up, runners claim their old sign-in names (typo-tolerant search). Each name can only be claimed once.
+- **Bell:** club announcements and received push notifications, with read/unread and **Mark all as read**.
+- **Phone notifications:** turned on per device, from **Enable Alerts** or the profile menu. iPhones need the Home Screen app.
+- **Install app:** from the banner or the footer link.
 
----
+**Organizers** (event-night tools)
+- Create and edit runs, including the code word. A run isn't live until its code word is saved, and the code word locks once check-in opens.
+- Route Studio and the check-in log.
 
-## 🚀 Quickstart
+**Admins** (Admin dashboard)
+- **Runners & Claims:** promote or demote roles, delete runners, assign or unclaim old-app names, and import the old app's CSV exports.
+- **Check-In Log** (last 60 days), **Milestones & Gear** queue, **Badges & Special Events**.
+- **Push Alerts:** post announcements, and see how many devices have notifications on.
+- **Delete a run:** rolls back each runner's runs, miles, badges and streaks.
+
+## Getting started
 
 ```bash
-# 1. Clone repository
-git clone https://github.com-msettles/woodland_woodchuckers.git
-cd woodland_woodchuckers
-
-# 2. Install dependencies
 npm install
-
-# 3. Start local development server
-npm run dev
+cp .env.example .env    # fill in Firebase web config (or leave blank for local mode)
+npm run dev             # http://localhost:5173
 ```
 
-Visit `http://localhost:5173` to start using the app immediately!
+- **Without Firebase values**, the app runs in **local mode** with sample data in browser storage. There's no sign-in in that mode.
+- **With them**, it uses the live Firebase project, so take care: that's real data.
 
----
+| `.env` variable | Where it comes from |
+|---|---|
+| `VITE_FIREBASE_API_KEY` … `VITE_FIREBASE_APP_ID` | Firebase console → Project settings → Your apps (web) |
+| `VITE_FIREBASE_VAPID_KEY` | Project settings → Cloud Messaging → Web Push certificates (public key) |
 
-## 🛠️ Project Structure
+`.env` is git-ignored. Never commit real member data either: `data/` (the old-app exports) is git-ignored too.
+
+## Commands
+
+| Command | What it does |
+|---|---|
+| `npm run dev` | Vite dev server |
+| `npm run typecheck` | TypeScript, no output |
+| `npm run lint` | ESLint (errors fail; `any` is a warning for now) |
+| `npm run build` | Type-check + production build into `dist/` |
+| `npm run test:rules` | Firestore security-rules tests in the emulator (needs Java 11+) |
+| `npx firebase deploy --only firestore:rules,hosting` | Deploy rules + site (**always deploy both together**) |
+
+**CI** (`.github/workflows/ci.yml`) runs type-check, lint, build and the rules tests on every PR and every push to `main`.
+
+## How it's put together
 
 ```
-woodland_woodchuckers/
-├── public/
-│   └── woodchuck.svg          # Club mascot vector icon
-├── src/
-│   ├── components/
-│   │   ├── CheckInModal.tsx       # 1-tap run check-in with confetti & badges
-│   │   ├── FirebaseSetupGuide.tsx # In-app zero-cost setup guide modal
-│   │   ├── GpxUploader.tsx        # Drag-and-drop GPX parser & uploader
-│   │   ├── Leaderboard.tsx        # Member rankings & badge showcase
-│   │   ├── MapViewer.tsx          # Leaflet OpenStreetMap + elevation chart
-│   │   ├── Navbar.tsx             # Header navigation & member switcher
-│   │   ├── NewRunModal.tsx        # Schedule group run modal
-│   │   └── RunCard.tsx            # Run event card & .ics export
-│   ├── data/
-│   │   └── initialData.ts         # Pre-seeded sample runs, routes & members
-│   ├── services/
-│   │   ├── firebase.ts            # Firebase Spark SDK initialization
-│   │   └── storage.ts             # LocalStorage & Firestore sync store
-│   ├── types/
-│   │   └── index.ts               # TypeScript data models
-│   ├── utils/
-│   │   └── gpxParser.ts           # XML GPX parser & Haversine distance engine
-│   ├── App.tsx                    # Main app container & tab routing
-│   ├── index.css                  # Tailwind directives & Leaflet styling
-│   └── main.tsx                   # App entrypoint
-├── firebase.json              # Firebase Hosting & Firestore configuration
-├── firestore.rules            # Firestore security rules
-├── setup.md                   # Complete local setup & Firebase guide
-├── tailwind.config.js         # Custom earthy woodchuck palette
-└── vite.config.ts             # Vite configuration with PWA plugin
+src/
+  App.tsx                    tabs, check-in routing (QR / Quick Check-in), bell
+  services/
+    storage.ts               app data + Firestore reads/writes (useClubStore)
+    firebase.ts              Firebase init (env-driven; local mode if unset)
+    authService.ts           Google + email-link sign-in
+    push.ts                  phone notifications (FCM sign-up, received pushes)
+    install.ts               "Install app" prompt (banner + footer)
+  components/                screens and modals (AdminDashboard, CheckInModal, RunCard, …)
+  utils/
+    checkInWindow.ts         check-in windows, upcoming/prior runs
+    legacy.ts                old-app CSV import, fuzzy name match, streaks, badge recompute
+    routeEngine/             GPX → turn-by-turn directions (OpenStreetMap / Overpass)
+    calendar.ts              .ics export
+    memberKey.ts             hashed IDs (leaderboard key, code-word lookup key)
+    roles.ts                 owner account + admin/organizer checks
+public/push-sw.js            push-only service worker (scope /push/)
+firestore.rules              security rules (see the summary at the top of the file)
+tests/firestore.rules.test.mjs
+docs/                        plans (route engine, push notifications Plan B)
 ```
 
----
+**Firestore, in short** (details at the top of `firestore.rules`):
 
-## 📜 License
+| Who can read | Collections |
+|---|---|
+| Public | `runs`, `routes`, `members` (leaderboard, keyed by hashed email, no emails), `meetup_events` (one per run: window, routes, no code word), `announcements`, badges, settings |
+| Owner + staff | `users` (profiles), `checkins` (`{runId}_{email}`), `milestone_alerts` |
+| Staff only | `meetup_secrets` (code words) |
+| Signed-in, get only | `meetup_codes` (code-word lookup, unique per day) |
+| Signed-in | `legacy_index`, `legacy_profiles` (old-app names and claim locks) |
+| Claimer + staff | `legacy_history` |
+| Admins | `push_devices` |
 
-MIT License. Designed with ❤️ for the Woodland Woodchuckers community.
+**Roles:** `woodlandwoodchuckers@gmail.com` is the only hardcoded owner (always admin). Everyone else's role (`member` / `organizer` / `admin`) is set by an admin in Runners & Claims.
+
+## Push notifications
+
+Today (**Plan A**, free): devices sign up in the app, and admins send from **Firebase console → Messaging → New campaign → Notifications**, targeting the web app.
+
+Sending straight from **Post Announcement** needs Cloud Functions (Blaze plan, expected $0/month). That's scoped in [`docs/push-notifications-plan-b.md`](docs/push-notifications-plan-b.md).
+
+## More
+
+- [`setup.md`](setup.md): Firebase project setup
+- [`BRANDING.md`](BRANDING.md): logos and colours
+- [`docs/route-creation-architecture-plan.md`](docs/route-creation-architecture-plan.md): route engine design. The original Python prototype has been removed; `src/utils/routeEngine/` is the source of truth.
+
+MIT License. Made for the Woodland Woodchuckers community.
