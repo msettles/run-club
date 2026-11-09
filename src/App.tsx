@@ -304,7 +304,7 @@ export function App() {
         ? err.message
         : err?.code === 'permission-denied'
           ? "Not saved: the code word is locked once this run's check-in has opened."
-          : "Not saved. Please check your connection and try again."
+          : `Not saved${err?.code ? ` (${err.code})` : ''}. Please check your connection and try again.`
     );
 
   const handleToggleRSVP = async (runId: string) => {
