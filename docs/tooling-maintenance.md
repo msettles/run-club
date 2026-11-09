@@ -1,5 +1,7 @@
 # Development tooling maintenance — v1.1.4
 
+The remaining deepmerge issue and the Node engine correction are addressed in the [v1.1.5 resolver follow-up](resolver-fork.md). Counts below describe v1.1.4.
+
 November 9, 2026. This follows the v1.1.3 review audit; application behavior is unchanged.
 
 ## Changes

@@ -35,7 +35,7 @@ The club's installable web app (PWA): run schedule, code-word check-ins, leaderb
 
 ## Getting started
 
-Use Node.js 22 (`nvm use` reads `.nvmrc`), or Node.js 24. Rules tests also need Java 21+.
+Use Node.js 24.12+ (`nvm use` reads `.nvmrc`). Rules tests also need Java 21+.
 
 ```bash
 npm install
@@ -59,15 +59,16 @@ npm run dev             # http://localhost:5173
 |---|---|
 | `npm run dev` | Vite dev server |
 | `npm run typecheck` | TypeScript, no output |
-| `npm run audit:dependencies` | Report dependency advisories; moderate or higher fails |
+| `npm run audit:dependencies` | Report dependency advisories; any severity fails |
 | `npm run lint` | ESLint (errors fail; `any` is a warning for now) |
 | `npm run build` | Type-check + production build into `dist/` |
 | `npm test` | Unit tests for club logic (Vitest) |
 | `npm run test:watch` | Unit tests in watch mode |
+| `npm run test:resolver` | Verify the pinned resolver fork and Workbox compatibility |
 | `npm run test:rules` | Firestore security-rules tests in the emulator (needs Java 21+) |
 | `npx firebase deploy --only firestore:rules,hosting` | Deploy rules + site (**always deploy both together**) |
 
-**CI** (`.github/workflows/ci.yml`) runs a dependency audit, type-check, lint, unit tests, build and the rules tests on every PR and every push to `main`.
+**CI** (`.github/workflows/ci.yml`) runs a dependency audit, type-check, lint, unit tests, resolver compatibility tests, build and the rules tests on every PR and every push to `main`.
 
 ## How it's put together
 
@@ -116,7 +117,8 @@ Sending straight from **Post Announcement** needs Cloud Functions (Blaze plan, e
 
 ## More
 
-- [`docs/tooling-maintenance.md`](docs/tooling-maintenance.md): dependency overrides, supported Node versions and remaining upstream advisory.
+- [`docs/tooling-maintenance.md`](docs/tooling-maintenance.md): dependency override history.
+- [`docs/resolver-fork.md`](docs/resolver-fork.md): pinned resolver fork, Node requirement and zero-advisory follow-up.
 
 - [`setup.md`](setup.md): Firebase project setup
 - [`BRANDING.md`](BRANDING.md): logos and colours

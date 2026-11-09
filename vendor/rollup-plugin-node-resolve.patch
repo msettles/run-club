@@ -1,0 +1,36 @@
+--- a/package.json
++++ b/package.json
+@@ -3 +3 @@
+-  "version": "16.0.3",
++  "version": "16.0.3-woodchuckers.1",
+@@ -7 +7 @@
+-  "description": "Locate and bundle third-party dependencies in node_modules",
++  "description": "Locate and bundle third-party dependencies in node_modules (Woodchuckers local fork; see FORK.md)",
+@@ -24 +24 @@
+-    "node": ">=14.0.0"
++    "node": "^22.12.0 || ^24.0.0"
+@@ -31 +31,2 @@
+-    "LICENSE"
++    "LICENSE",
++    "FORK.md"
+@@ -51 +51,0 @@
+-    "deepmerge": "^4.2.2",
+@@ -88,2 +88,3 @@
+-  }
+-}+  },
++  "private": true
++}
+--- a/dist/es/index.js
++++ b/dist/es/index.js
+@@ -3 +2,0 @@
+-import deepMerge from 'deepmerge';
+@@ -1079 +1078 @@
+-const DEFAULTS = deepFreeze(deepMerge({}, defaults));
++const DEFAULTS = deepFreeze(structuredClone(defaults));
+--- a/dist/cjs/index.js
++++ b/dist/cjs/index.js
+@@ -7 +6,0 @@
+-var deepMerge = require('deepmerge');
+@@ -1083 +1082 @@
+-const DEFAULTS = deepFreeze(deepMerge({}, defaults));
++const DEFAULTS = deepFreeze(structuredClone(defaults));

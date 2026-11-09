@@ -41,3 +41,7 @@ scratch/
 firestore-debug.log
 ui-debug.log
 firebase-debug.log
+
+# Reviewed, vendored resolver distribution (required to reproduce its tarball)
+!vendor/rollup-plugin-node-resolve/dist/
+!vendor/rollup-plugin-node-resolve/dist/**
