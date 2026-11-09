@@ -120,6 +120,9 @@ export function App() {
     }
   }, [routes, selectedRoute]);
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
+  // False until Firebase has restored the sign-in (and loaded the profile), so the
+  // navbar doesn't flash a Sign In button on refresh.
+  const [authReady, setAuthReady] = useState<boolean>(!isFirebaseConfigured);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
   const [isOnboardingOpen, setIsOnboardingOpen] = useState<boolean>(false);
   const [onboardingEmail, setOnboardingEmail] = useState<string>('');
@@ -200,10 +203,11 @@ export function App() {
     const unsubscribe = onAuthChange((user) => {
       setFirebaseUser(user);
       if (user && user.email) {
-        handleUserAuthenticated(user.email, user.displayName);
+        handleUserAuthenticated(user.email, user.displayName).finally(() => setAuthReady(true));
       } else {
         switchCurrentUser('');
         clearPrivateData();
+        setAuthReady(true);
       }
     });
 
@@ -280,6 +284,15 @@ export function App() {
     }
   };
 
+  // Past runs can't be edited; admins can still delete one (check-ins are rolled back).
+  const confirmDeletePastRun = (run: RunEvent) => {
+    const count = checkins.filter((c) => c.runId === run.id).length;
+    const message = count > 0
+      ? `Delete "${run.title}"?\n\n${count} runner${count === 1 ? '' : 's'} checked in. Their check-ins will be removed and their run counts, miles, badges and streaks adjusted. Gear alerts from this run that haven't been handed out yet are removed. This can't be undone.`
+      : `Delete "${run.title}"? This can't be undone.`;
+    if (window.confirm(message)) handleDeleteRun(run.id);
+  };
+
   const handleAddRun = async (run: Omit<RunEvent, 'id' | 'attendees'>, codeWord: string) => {
     try {
       await createRunWithCheckIn(run, codeWord);
@@ -346,6 +359,7 @@ export function App() {
         setActiveTab={setActiveTab}
         currentUser={currentUser}
         firebaseUser={firebaseUser}
+        authReady={authReady}
         unreadNotifsCount={notifications.length}
         onOpenNewRun={() => setIsNewRunOpen(true)}
         onOpenUploadGpx={() => {
@@ -411,7 +425,7 @@ export function App() {
                     </button>
 
                     {/* Prominent Join Club button for Guests */}
-                    {(currentUser.role === 'guest' || !currentUser.email) && (
+                    {authReady && (currentUser.role === 'guest' || !currentUser.email) && (
                       <button
                         onClick={handleOpenRegister}
                         className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs sm:text-sm rounded-xl transition shadow-md font-display uppercase tracking-wide cursor-pointer"
@@ -460,7 +474,7 @@ export function App() {
 
             {/* Run Cards List: upcoming soonest first; prior runs on request, newest first */}
             {(() => {
-              const renderRun = (run: RunEvent) => {
+              const renderRun = (run: RunEvent, past = false) => {
                 const choices = resolveChoices(getRunChoices(run, routes), routes);
                 const attachedRoute = choices[0]?.route || routes.find((r) => r.id === run.routeId);
                 return (
@@ -475,7 +489,8 @@ export function App() {
                     onViewRoute={handleViewRouteFromRun}
                     isCheckedIn={myCheckedInRunIds.has(run.id)}
                     notLive={!isRunLive(run, meetupEvents)}
-                    onEdit={isOrganizerOrAdmin ? setEditingRun : undefined}
+                    onEdit={isOrganizerOrAdmin && !past ? setEditingRun : undefined}
+                    onDelete={isAdmin && past ? confirmDeletePastRun : undefined}
                   />
                 );
               };
@@ -491,7 +506,7 @@ export function App() {
                       <p className="text-stone-600 font-medium text-sm">No upcoming runs scheduled.</p>
                     </div>
                   ) : (
-                    upcoming.map(renderRun)
+                    upcoming.map((r) => renderRun(r))
                   )}
 
                   {prior.length > 0 && (
@@ -507,7 +522,7 @@ export function App() {
                       {showPriorRuns && (
                         <>
                           <h4 className="text-sm font-bold text-stone-500 uppercase tracking-wider">Prior Runs</h4>
-                          {prior.map(renderRun)}
+                          {prior.map((r) => renderRun(r, true))}
                         </>
                       )}
                     </div>

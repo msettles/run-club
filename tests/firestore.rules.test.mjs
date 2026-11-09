@@ -634,3 +634,24 @@ test('a run that is not live has no open check-in and no code word lock', async 
   await assertFails(setDoc(doc(org, 'meetup_secrets', 'run-draft'), { codeWord: 'AWAY' }));
   await assertFails(updateDoc(doc(org, 'meetup_events', 'run-draft'), { codeWordSet: false }));
 });
+
+test('past runs can\'t be edited; RSVP clean-up and admin delete still work', async () => {
+  await env.withSecurityRulesDisabled(async (c) => {
+    const db = c.firestore();
+    await setDoc(doc(db, 'runs', 'run-past'), { ...run, id: 'run-past', attendees: [{ memberId: memberKeyFor(ALICE), name: 'Alice', checkedIn: false, rsvpDate: 'x' }] });
+    await setDoc(doc(db, 'meetup_events', 'run-past'), {
+      id: 'run-past', runId: 'run-past', date: '2026-01-07', title: 'Past', activeDistances: [], routes: {},
+      checkInOpensAt: Timestamp.fromMillis(Date.now() - 3 * 86400e3), checkInClosesAt: Timestamp.fromMillis(Date.now() - 2 * 86400e3),
+    });
+  });
+  const org = ctx(ORGANIZER);
+  await assertFails(updateDoc(doc(org, 'runs', 'run-past'), { title: 'Renamed' }));
+  await assertFails(updateDoc(doc(org, 'meetup_events', 'run-past'), { title: 'Renamed' }));
+  await assertSucceeds(updateDoc(doc(org, 'runs', 'run-past'), { attendees: [] }));
+  // Upcoming/open runs are still editable
+  await assertSucceeds(updateDoc(doc(org, 'runs', RUN), { title: 'Renamed' }));
+  // Admin can delete the past run and its event
+  const admin = ctx(BOOTSTRAP);
+  await assertSucceeds(deleteDoc(doc(admin, 'meetup_events', 'run-past')));
+  await assertSucceeds(deleteDoc(doc(admin, 'runs', 'run-past')));
+});
