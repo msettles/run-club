@@ -32,3 +32,12 @@ dist-ssr
 
 # Firebase cache
 .firebase
+
+# Real member data & one-off analysis scripts (never commit: public repo)
+data/
+scratch/
+
+# Firebase emulator logs
+firestore-debug.log
+ui-debug.log
+firebase-debug.log

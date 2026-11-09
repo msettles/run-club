@@ -1,4 +1,4 @@
-import { useState, useEffect, lazy, Suspense } from 'react';
+import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { useClubStore } from './services/storage';
 import { RunEvent, GPXRoute, UserProfile } from './types';
 import { buildMeetupFromRun, getRunChoices, resolveChoices } from './utils/runChoices';
@@ -15,6 +15,7 @@ import { User as FirebaseUser } from 'firebase/auth';
 import { db } from './services/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import { downloadGPXFile } from './utils/gpxParser';
+import { isAdminProfile, isStaffProfile } from './utils/roles';
 
 // Lazy-loaded heavy components & modals (saves >60% initial mobile bundle size)
 const AdminDashboard = lazy(() => import('./components/AdminDashboard').then((m) => ({ default: m.AdminDashboard })));
@@ -50,7 +51,6 @@ export function App() {
     badges,
     notifications,
     currentMember,
-    setCurrentMemberId,
     toggleRSVP,
     addRun,
     updateRun,
@@ -61,6 +61,8 @@ export function App() {
     deleteRoute,
     isFirebaseConfigured,
     // V2 Relational props
+    syncPrivateData,
+    clearPrivateData,
     users,
     setUsers,
     meetupEvents,
@@ -110,15 +112,27 @@ export function App() {
   const [onboardingDisplayName, setOnboardingDisplayName] = useState<string>('');
   const [pendingCheckInRun, setPendingCheckInRun] = useState<RunEvent | null>(null);
 
-  const isUserLoggedIn = Boolean(firebaseUser || (currentUser && currentUser.email && currentUser.role !== 'guest'));
-  const isAdmin = isUserLoggedIn && (currentUser.role === 'admin' || currentUser.email === 'woodlandwoodchuckers@gmail.com' || currentUser.email === 'mattsettles@gmail.com');
-  const isOrganizerOrAdmin = isUserLoggedIn && (isAdmin || currentUser.role === 'organizer');
+  // With Firebase, only a real signed-in account counts — never a profile cached in localStorage.
+  const isUserLoggedIn = isFirebaseConfigured
+    ? Boolean(firebaseUser)
+    : Boolean(currentUser && currentUser.email && currentUser.role !== 'guest');
+  const isProfileVerified = isFirebaseConfigured
+    ? Boolean(firebaseUser?.email && firebaseUser.email.toLowerCase() === currentUser.email.toLowerCase())
+    : isUserLoggedIn;
+  const isAdmin = isUserLoggedIn && isProfileVerified && isAdminProfile(currentUser);
+  const isOrganizerOrAdmin = isUserLoggedIn && isProfileVerified && isStaffProfile(currentUser);
+
+  // Refs so the auth listener can be subscribed once without stale values
+  const usersRef = useRef(users);
+  usersRef.current = users;
+  const pendingCheckInRunRef = useRef(pendingCheckInRun);
+  pendingCheckInRunRef.current = pendingCheckInRun;
 
   // Handle post-auth check: if user has a profile, switch to them; if new, launch onboarding
   const handleUserAuthenticated = async (email: string, displayName?: string | null) => {
     const cleanEmail = email.trim().toLowerCase();
     
-    let existingProfile = users.find((u) => u.email.toLowerCase() === cleanEmail);
+    let existingProfile = usersRef.current.find((u) => u.email.toLowerCase() === cleanEmail);
     if (isFirebaseConfigured && db) {
       try {
         const snap = await getDoc(doc(db, 'users', cleanEmail));
@@ -137,8 +151,10 @@ export function App() {
 
     if (existingProfile) {
       switchCurrentUser(cleanEmail);
-      if (pendingCheckInRun) {
-        setSelectedRunForCheckIn(pendingCheckInRun);
+      syncPrivateData(cleanEmail, isStaffProfile(existingProfile));
+      const pending = pendingCheckInRunRef.current;
+      if (pending) {
+        setSelectedRunForCheckIn(pending);
         setPendingCheckInRun(null);
       }
     } else {
@@ -149,14 +165,12 @@ export function App() {
     }
   };
 
-  // Listen to Firebase Auth state & check for passwordless email link sign-in
+  // Listen to Firebase Auth state & complete passwordless email link sign-in.
+  // Subscribed once: re-subscribing on every users change caused an endless
+  // getDoc -> setUsers -> re-subscribe loop.
   useEffect(() => {
-    checkAndCompleteEmailLinkSignIn().then((user) => {
-      if (user && user.email) {
-        console.info('Passwordless sign in verified for:', user.email);
-        handleUserAuthenticated(user.email, user.displayName);
-      }
-    }).catch((err) => console.error('Email sign in check error:', err));
+    // Completing the link signs the user in; onAuthChange below then handles them.
+    checkAndCompleteEmailLinkSignIn().catch((err) => console.error('Email sign in check error:', err));
 
     const unsubscribe = onAuthChange((user) => {
       setFirebaseUser(user);
@@ -164,11 +178,13 @@ export function App() {
         handleUserAuthenticated(user.email, user.displayName);
       } else {
         switchCurrentUser('');
+        clearPrivateData();
       }
     });
 
     return () => unsubscribe();
-  }, [users, pendingCheckInRun]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleOpenCheckIn = (run: RunEvent) => {
     if (!isUserLoggedIn) {
@@ -280,6 +296,7 @@ export function App() {
           await logoutUser();
           setFirebaseUser(null);
           switchCurrentUser('');
+          clearPrivateData();
         }}
       />
 
@@ -526,7 +543,6 @@ export function App() {
             members={members}
             badges={badges}
             currentMember={currentMember}
-            onSelectMember={(id) => setCurrentMemberId(id)}
           />
         )}
 
@@ -678,13 +694,11 @@ export function App() {
             meetupEvents={meetupEvents}
             eventDate={selectedRunForCheckIn.date}
             currentUser={currentUser}
-            users={users}
             routes={routes}
             checkins={checkins}
             onCheckInRunner={checkInRunner}
             onRegisterUser={registerUser}
             onSearchLegacy={searchLegacyMatches}
-            onSwitchUser={switchCurrentUser}
             onOpenAuthModal={() => setIsAuthModalOpen(true)}
           />
         )}
