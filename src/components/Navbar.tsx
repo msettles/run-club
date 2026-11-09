@@ -5,6 +5,7 @@ import { FULL_VERSION } from '../utils/version';
 import { calculateAge } from '../utils/dateUtils';
 import { isAdminProfile } from '../utils/roles';
 import { isFirebaseConfigured } from '../services/firebase';
+import { NotificationsToggle } from './NotificationsToggle';
 import { 
   Calendar, 
   Map, 
@@ -281,6 +282,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                           <span>Admin Portal</span>
                         </button>
                       )}
+                      <NotificationsToggle email={currentUser.email} />
                       <button
                         onClick={() => {
                           setShowProfileMenu(false);
