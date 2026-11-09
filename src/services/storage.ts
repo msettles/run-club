@@ -165,6 +165,14 @@ function saveToStorage<T>(key: string, data: T): void {
   }
 }
 
+const REMOVED_TEST_EMAILS = new Set([
+  'brittney.echols@example.com',
+  'john.conway@example.com',
+  'keith.misner@example.com',
+  'brittney.ecols@example.com',
+  'matt.settles@example.com',
+]);
+
 export function useClubStore() {
   // Legacy / existing state
   const [runs, setRuns] = useState<RunEvent[]>(() => loadFromStorage(STORAGE_KEYS.RUNS, INITIAL_RUNS));
@@ -175,9 +183,10 @@ export function useClubStore() {
     return [...stored, ...missing];
   });
   const [members, setMembers] = useState<Member[]>(() => {
-    const stored = loadFromStorage<Member[]>(STORAGE_KEYS.MEMBERS, INITIAL_MEMBERS);
+    const stored = loadFromStorage<Member[]>(STORAGE_KEYS.MEMBERS, INITIAL_MEMBERS)
+      .filter((m) => !REMOVED_TEST_EMAILS.has(m.email.toLowerCase()));
     const existingEmails = new Set(stored.map((m) => m.email.toLowerCase()));
-    const missing = INITIAL_MEMBERS.filter((m) => !existingEmails.has(m.email.toLowerCase()));
+    const missing = INITIAL_MEMBERS.filter((m) => !existingEmails.has(m.email.toLowerCase()) && !REMOVED_TEST_EMAILS.has(m.email.toLowerCase()));
     const updated = stored.map((m) => {
       const match = INITIAL_MEMBERS.find((init) => init.email.toLowerCase() === m.email.toLowerCase());
       if (match && m.totalRuns < match.totalRuns) {
@@ -187,9 +196,13 @@ export function useClubStore() {
     });
     return [...updated, ...missing];
   });
-  const [currentMemberId, setCurrentMemberId] = useState<string>(() =>
-    loadFromStorage(STORAGE_KEYS.CURRENT_USER_ID, '')
-  );
+  const [currentMemberId, setCurrentMemberId] = useState<string>(() => {
+    const stored = loadFromStorage<string>(STORAGE_KEYS.CURRENT_USER_ID, '');
+    if (stored && REMOVED_TEST_EMAILS.has(stored.toLowerCase())) {
+      return '';
+    }
+    return stored;
+  });
   const [badges, setBadges] = useState<Badge[]>(() => {
     const stored = loadFromStorage<Badge[]>(STORAGE_KEYS.BADGES, INITIAL_BADGES);
     const existingIds = new Set(stored.map((b) => b.id));
@@ -207,9 +220,10 @@ export function useClubStore() {
 
   // New Relational Collections state (local testing / offline first)
   const [users, setUsers] = useState<UserProfile[]>(() => {
-    const stored = loadFromStorage<UserProfile[]>(STORAGE_KEYS.USERS, INITIAL_USERS);
+    const stored = loadFromStorage<UserProfile[]>(STORAGE_KEYS.USERS, INITIAL_USERS)
+      .filter((u) => !REMOVED_TEST_EMAILS.has(u.email.toLowerCase()));
     const existingEmails = new Set(stored.map((u) => u.email.toLowerCase()));
-    const missing = INITIAL_USERS.filter((u) => !existingEmails.has(u.email.toLowerCase()));
+    const missing = INITIAL_USERS.filter((u) => !existingEmails.has(u.email.toLowerCase()) && !REMOVED_TEST_EMAILS.has(u.email.toLowerCase()));
     const updated = stored.map((u) => {
       const match = INITIAL_USERS.find((init) => init.email.toLowerCase() === u.email.toLowerCase());
       if (match && u.totalRuns < match.totalRuns) {
@@ -221,9 +235,10 @@ export function useClubStore() {
   });
   const [meetupEvents, setMeetupEvents] = useState<MeetupEvent[]>(() => loadFromStorage(STORAGE_KEYS.MEETUP_EVENTS, INITIAL_MEETUP_EVENTS));
   const [checkins, setCheckins] = useState<CheckInRecord[]>(() => {
-    const stored = loadFromStorage<CheckInRecord[]>(STORAGE_KEYS.CHECKINS, INITIAL_CHECKINS);
+    const stored = loadFromStorage<CheckInRecord[]>(STORAGE_KEYS.CHECKINS, INITIAL_CHECKINS)
+      .filter((c) => !REMOVED_TEST_EMAILS.has(c.userEmail.toLowerCase()));
     const existingIds = new Set(stored.map((c) => c.id));
-    const missing = INITIAL_CHECKINS.filter((c) => !existingIds.has(c.id));
+    const missing = INITIAL_CHECKINS.filter((c) => !existingIds.has(c.id) && !REMOVED_TEST_EMAILS.has(c.userEmail.toLowerCase()));
     return [...stored, ...missing];
   });
   const [legacyMembers, setLegacyMembers] = useState<LegacyMember[]>(() => {
@@ -232,21 +247,30 @@ export function useClubStore() {
     const missing = INITIAL_LEGACY_MEMBERS.filter((m) => !existingNames.has(m.name.toUpperCase()));
     const updated = stored.map((m) => {
       const match = INITIAL_LEGACY_MEMBERS.find((init) => init.name.toUpperCase() === m.name.toUpperCase());
-      return match ? { ...m, ...match } : m;
+      const base = match ? { ...m, ...match } : m;
+      if (base.claimedByEmail && REMOVED_TEST_EMAILS.has(base.claimedByEmail.toLowerCase())) {
+        return { ...base, claimedByEmail: null, claimedAt: null };
+      }
+      return base;
     });
-    return [...updated, ...missing];
+    return [...updated, ...missing].map((m) => {
+      if (m.claimedByEmail && REMOVED_TEST_EMAILS.has(m.claimedByEmail.toLowerCase())) {
+        return { ...m, claimedByEmail: null, claimedAt: null };
+      }
+      return m;
+    });
   });
   const [currentUserEmail, setCurrentUserEmail] = useState<string>(() => {
     const stored = loadFromStorage<string>(STORAGE_KEYS.CURRENT_USER_EMAIL, '');
-    // If stored was the old dummy 'matt.settles@example.com', reset to guest ''
-    if (stored === 'matt.settles@example.com') {
+    if (stored && REMOVED_TEST_EMAILS.has(stored.toLowerCase())) {
       return '';
     }
     return stored;
   });
-  const [milestoneAlerts, setMilestoneAlerts] = useState<MilestoneAlert[]>(() =>
-    loadFromStorage(STORAGE_KEYS.MILESTONE_ALERTS, INITIAL_MILESTONE_ALERTS)
-  );
+  const [milestoneAlerts, setMilestoneAlerts] = useState<MilestoneAlert[]>(() => {
+    const stored = loadFromStorage<MilestoneAlert[]>(STORAGE_KEYS.MILESTONE_ALERTS, INITIAL_MILESTONE_ALERTS);
+    return stored.filter((a) => !REMOVED_TEST_EMAILS.has(a.userEmail.toLowerCase()));
+  });
 
   // Sync state changes to localStorage
   useEffect(() => {
@@ -351,36 +375,42 @@ export function useClubStore() {
           });
         }
 
-        const membersSnap = await getDocs(collection(db, 'members'));
+        const membersSnap = await getDocs(collection(currentDb, 'members'));
         if (!membersSnap.empty) {
-          const remoteMembers = membersSnap.docs.map((d) => d.data() as Member);
+          const remoteMembers = membersSnap.docs
+            .map((d) => d.data() as Member)
+            .filter((m) => !REMOVED_TEST_EMAILS.has(m.email.toLowerCase()));
           setMembers(remoteMembers);
         }
 
         // Sync users
-        const usersSnap = await getDocs(collection(db, 'users'));
+        const usersSnap = await getDocs(collection(currentDb, 'users'));
         if (!usersSnap.empty) {
-          const remoteUsers = usersSnap.docs.map((d) => d.data() as UserProfile);
+          const remoteUsers = usersSnap.docs
+            .map((d) => d.data() as UserProfile)
+            .filter((u) => !REMOVED_TEST_EMAILS.has(u.email.toLowerCase()));
           const remoteEmails = new Set(remoteUsers.map((u) => u.email.toLowerCase()));
           setUsers((prev) => {
-            const localOnly = prev.filter((u) => !remoteEmails.has(u.email.toLowerCase()));
+            const localOnly = prev.filter((u) => !remoteEmails.has(u.email.toLowerCase()) && !REMOVED_TEST_EMAILS.has(u.email.toLowerCase()));
             return [...remoteUsers, ...localOnly];
           });
         }
 
         // Sync check-in audit records
-        const checkinsSnap = await getDocs(collection(db, 'checkins'));
+        const checkinsSnap = await getDocs(collection(currentDb, 'checkins'));
         if (!checkinsSnap.empty) {
-          const remoteCheckins = checkinsSnap.docs.map((d) => d.data() as CheckInRecord);
+          const remoteCheckins = checkinsSnap.docs
+            .map((d) => d.data() as CheckInRecord)
+            .filter((c) => !REMOVED_TEST_EMAILS.has(c.userEmail.toLowerCase()));
           const remoteIds = new Set(remoteCheckins.map((c) => c.id));
           setCheckins((prev) => {
-            const localOnly = prev.filter((c) => !remoteIds.has(c.id));
+            const localOnly = prev.filter((c) => !remoteIds.has(c.id) && !REMOVED_TEST_EMAILS.has(c.userEmail.toLowerCase()));
             return [...remoteCheckins, ...localOnly];
           });
         }
 
         // Sync badges
-        const badgesSnap = await getDocs(collection(db, 'badges'));
+        const badgesSnap = await getDocs(collection(currentDb, 'badges'));
         if (!badgesSnap.empty) {
           const remoteBadges = badgesSnap.docs.map((d) => d.data() as Badge);
           const remoteIds = new Set(remoteBadges.map((b) => b.id));
@@ -391,18 +421,20 @@ export function useClubStore() {
         }
 
         // Sync milestone fulfillment alerts
-        const alertsSnap = await getDocs(collection(db, 'milestone_alerts'));
+        const alertsSnap = await getDocs(collection(currentDb, 'milestone_alerts'));
         if (!alertsSnap.empty) {
-          const remoteAlerts = alertsSnap.docs.map((d) => d.data() as MilestoneAlert);
+          const remoteAlerts = alertsSnap.docs
+            .map((d) => d.data() as MilestoneAlert)
+            .filter((a) => !REMOVED_TEST_EMAILS.has(a.userEmail.toLowerCase()));
           const remoteIds = new Set(remoteAlerts.map((a) => a.id));
           setMilestoneAlerts((prev) => {
-            const localOnly = prev.filter((a) => !remoteIds.has(a.id));
+            const localOnly = prev.filter((a) => !remoteIds.has(a.id) && !REMOVED_TEST_EMAILS.has(a.userEmail.toLowerCase()));
             return [...remoteAlerts, ...localOnly];
           });
         }
 
         // Sync meetup events
-        const meetupsSnap = await getDocs(collection(db, 'meetup_events'));
+        const meetupsSnap = await getDocs(collection(currentDb, 'meetup_events'));
         if (!meetupsSnap.empty) {
           const remoteMeetups = meetupsSnap.docs.map((d) => d.data() as MeetupEvent);
           const remoteDates = new Set(remoteMeetups.map((m) => m.date));
