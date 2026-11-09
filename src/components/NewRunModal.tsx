@@ -30,7 +30,7 @@ export const NewRunModal: React.FC<NewRunModalProps> = ({
     return d.toISOString().split('T')[0];
   });
   const [time, setTime] = useState('08:00 AM');
-  const [locationName, setLocationName] = useState('Woodland Creek Park Trailhead');
+  const [locationName, setLocationName] = useState('Blue Note Brewing Company');
   const [address, setAddress] = useState('Woodland, CA');
   const [routeChoices, setRouteChoices] = useState<RunRouteChoice[]>(() => defaultChoices(routes));
   const [codeWord, setCodeWord] = useState('');
@@ -39,9 +39,9 @@ export const NewRunModal: React.FC<NewRunModalProps> = ({
 
   // Pace groups
   const [paceGroups, setPaceGroups] = useState<PaceGroup[]>([
-    { label: 'Pace 1', targetPace: '8:00 - 8:45 /mi' },
-    { label: 'Pace 2', targetPace: '9:00 - 9:45 /mi' },
+    { label: 'Pace 2', targetPace: '8:00 - 9:45 /mi' },
     { label: 'Pace 3', targetPace: '10:00 - 11:00 /mi' },
+    { label: 'Pace 3 (jog/walk)', targetPace: '11:30+ /mi' },
   ]);
 
   if (!isOpen) return null;
@@ -191,7 +191,7 @@ export const NewRunModal: React.FC<NewRunModalProps> = ({
               required
               value={locationName}
               onChange={(e) => setLocationName(e.target.value)}
-              placeholder="e.g. Woodland Regional Park Parking Lot"
+              placeholder="e.g. Blue Note Brewing Company"
               className="w-full text-sm px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-woodland-500 focus:outline-none mb-2"
             />
             <input
