@@ -61,6 +61,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
       center: [firstPt.lat, firstPt.lon],
       zoom: 14,
       scrollWheelZoom: false,
+      attributionControl: false,
     });
 
     mapInstanceRef.current = map;
@@ -465,19 +466,20 @@ export const MapViewer: React.FC<MapViewerProps> = ({
       <div className="relative">
         <div ref={mapContainerRef} style={{ height }} className="w-full z-0" />
 
-        {/* Floating GPS Location Button */}
-        <div className="absolute top-3 left-3 z-[400]">
+        {/* Floating GPS Location Button (Bottom Right - Clear of top-left zoom controls) */}
+        <div className="absolute bottom-3 right-3 z-[400]">
           <button
+            type="button"
             onClick={toggleLocationTracking}
             title={isTrackingLocation ? 'Tracking your live location' : 'Show My Location'}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-bold transition shadow-md border ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition shadow-md border cursor-pointer ${
               isTrackingLocation
                 ? 'bg-blue-600 text-white border-blue-700 animate-pulse'
-                : 'bg-white/95 backdrop-blur-xs text-stone-700 border-stone-200 hover:bg-stone-50'
+                : 'bg-white/95 backdrop-blur-xs text-stone-800 border-stone-300 hover:bg-stone-50'
             }`}
           >
-            <Locate className={`w-3.5 h-3.5 ${isTrackingLocation ? 'animate-spin' : ''}`} />
-            <span className="hidden sm:inline">{isTrackingLocation ? 'Tracking' : 'My Location'}</span>
+            <Locate className={`w-3.5 h-3.5 text-blue-600 ${isTrackingLocation ? 'text-white animate-spin' : ''}`} />
+            <span>{isTrackingLocation ? 'Tracking Location' : 'My Location'}</span>
           </button>
         </div>
 
