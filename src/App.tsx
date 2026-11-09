@@ -673,6 +673,7 @@ export function App() {
           currentUser={currentUser}
           users={users}
           routes={routes}
+          checkins={checkins}
           initialMode={checkInInitialMode}
           onCheckInRunner={checkInRunner}
           onRegisterUser={registerUser}

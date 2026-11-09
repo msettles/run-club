@@ -506,23 +506,18 @@ export function useClubStore() {
       actualMiles: computedActualMiles,
     };
 
-    // 4. Ensure runner doesn't double-checkin on the same date
+    // 4. Check if runner already has a check-in for this event date (allow updates!)
     const checkinId = `${eventDate}_${cleanEmail}`;
-    const alreadyCheckedIn = checkins.some((c) => c.date === eventDate && c.userEmail.toLowerCase() === cleanEmail);
-    if (alreadyCheckedIn) {
-      return {
-        success: false,
-        message: `You're already checked in for today's run! Enjoy your ${activity}!`,
-        route: creditedRoute,
-      };
-    }
+    const existingCheckIn = checkins.find((c) => c.date === eventDate && c.userEmail.toLowerCase() === cleanEmail);
+    const isUpdate = Boolean(existingCheckIn);
 
-    // 5. Create new check-in record for event log
+    // 5. Create or update check-in record for event log
     const now = new Date();
     const timeStr = now.toTimeString().split(' ')[0]; // "HH:MM:SS"
     const user = users.find((u) => u.email.toLowerCase() === cleanEmail) || currentUser;
 
     const newCheckIn: CheckInRecord = {
+      ...(existingCheckIn || {}),
       id: checkinId,
       date: eventDate,
       time: timeStr,
@@ -535,10 +530,13 @@ export function useClubStore() {
       loops: effectiveLoops,
       withPet: Boolean(withPet),
       source: 'pwa',
-      createdAt: now.toISOString(),
+      createdAt: existingCheckIn?.createdAt || now.toISOString(),
     };
 
-    setCheckins((prev) => [newCheckIn, ...prev]);
+    setCheckins((prev) => [
+      newCheckIn,
+      ...prev.filter((c) => !(c.date === eventDate && c.userEmail.toLowerCase() === cleanEmail)),
+    ]);
 
     // 6. Update user totals & badge checks
     const earnedBadges: Badge[] = [];
@@ -548,22 +546,49 @@ export function useClubStore() {
       prev.map((u) => {
         if (u.email.toLowerCase() !== cleanEmail) return u;
 
-        const newTotalRuns = u.totalRuns + 1;
-        const newLoggedRuns = u.loggedRuns + 1;
-        const newTotalMiles = Math.round((u.totalMiles + computedActualMiles) * 100) / 100;
-        const newRunCount = activity === 'running' ? u.runCount + 1 : u.runCount;
-        const newWalkCount = activity === 'walking' ? u.walkCount + 1 : u.walkCount;
-        const newPetRunCount = withPet ? (u.petRunCount || 0) + 1 : (u.petRunCount || 0);
+        const newTotalRuns = isUpdate ? u.totalRuns : u.totalRuns + 1;
+        const newLoggedRuns = isUpdate ? u.loggedRuns : u.loggedRuns + 1;
+        const oldMiles = existingCheckIn ? existingCheckIn.actualMiles : 0;
+        const newTotalMiles = Math.round((u.totalMiles - oldMiles + computedActualMiles) * 100) / 100;
 
+        let newRunCount = u.runCount;
+        let newWalkCount = u.walkCount;
+        if (!isUpdate) {
+          if (activity === 'running') newRunCount++;
+          if (activity === 'walking') newWalkCount++;
+        } else if (existingCheckIn && existingCheckIn.activity !== activity) {
+          if (activity === 'running') {
+            newRunCount++;
+            newWalkCount = Math.max(0, newWalkCount - 1);
+          } else {
+            newWalkCount++;
+            newRunCount = Math.max(0, newRunCount - 1);
+          }
+        }
+
+        let newPetRunCount = u.petRunCount || 0;
+        if (!isUpdate) {
+          if (withPet) newPetRunCount++;
+        } else if (existingCheckIn) {
+          if (!existingCheckIn.withPet && withPet) newPetRunCount++;
+          if (existingCheckIn.withPet && !withPet) newPetRunCount = Math.max(0, newPetRunCount - 1);
+        }
+
+        const newDistanceCounts: Record<string, number> = { ...(u.distanceCounts || {}) };
+        if (isUpdate && existingCheckIn) {
+          const oldM = existingCheckIn.actualMiles;
+          const oldLegacyBucket = oldM <= 2.0 ? '1' : oldM <= 4.0 ? '3' : '5';
+          const oldRoundedKey = (Math.round(oldM * 10) / 10).toFixed(1);
+          if (newDistanceCounts[oldLegacyBucket]) newDistanceCounts[oldLegacyBucket] = Math.max(0, newDistanceCounts[oldLegacyBucket] - 1);
+          if (newDistanceCounts[oldRoundedKey]) newDistanceCounts[oldRoundedKey] = Math.max(0, newDistanceCounts[oldRoundedKey] - 1);
+          if (newDistanceCounts[`${oldRoundedKey} mi`]) newDistanceCounts[`${oldRoundedKey} mi`] = Math.max(0, newDistanceCounts[`${oldRoundedKey} mi`] - 1);
+        }
         const numMiles = computedActualMiles;
         const roundedDistKey = (Math.round(numMiles * 10) / 10).toFixed(1);
         const legacyBucket = numMiles <= 2.0 ? '1' : numMiles <= 4.0 ? '3' : '5';
-        const newDistanceCounts: Record<string, number> = {
-          ...(u.distanceCounts || {}),
-          [legacyBucket]: ((u.distanceCounts?.[legacyBucket] || 0) + 1),
-          [roundedDistKey]: ((u.distanceCounts?.[roundedDistKey] || 0) + 1),
-          [`${roundedDistKey} mi`]: ((u.distanceCounts?.[`${roundedDistKey} mi`] || 0) + 1),
-        };
+        newDistanceCounts[legacyBucket] = (newDistanceCounts[legacyBucket] || 0) + 1;
+        newDistanceCounts[roundedDistKey] = (newDistanceCounts[roundedDistKey] || 0) + 1;
+        newDistanceCounts[`${roundedDistKey} mi`] = (newDistanceCounts[`${roundedDistKey} mi`] || 0) + 1;
 
         const unlocked = [...(u.unlockedBadgeIds || [])];
         const counts: Record<string, number> = { ...(u.badgeCounts || {}) };
@@ -751,7 +776,9 @@ export function useClubStore() {
 
     return {
       success: true,
-      message: `Checked in successfully! That's Run #${updatedUser.totalRuns} for you!`,
+      message: isUpdate
+        ? `Check-in updated to ${computedRouteName} (${computedActualMiles} mi)!`
+        : `Checked in successfully! That's Run #${updatedUser.totalRuns} for you!`,
       route: creditedRoute,
       checkIn: newCheckIn,
       user: updatedUser,

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import confetti from 'canvas-confetti';
 import { MeetupEvent, UserProfile, RouteOption, ActivityType, DistanceChoice, CheckInRecord, LegacyMember, Badge, GPXRoute } from '../types';
 import { CLUB_MILESTONES } from '../data/initialData';
@@ -30,6 +30,7 @@ interface CheckInModalProps {
   currentUser: UserProfile;
   users: UserProfile[];
   routes?: GPXRoute[];
+  checkins?: CheckInRecord[];
   initialMode?: 'checkin' | 'register';
   onCheckInRunner: (params: {
     eventDate: string;
@@ -90,6 +91,7 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
   currentUser,
   users,
   routes,
+  checkins,
   initialMode = 'checkin',
   onCheckInRunner,
   onRegisterUser,
@@ -110,6 +112,16 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
 
   const isGuest = currentUser.role === 'guest' || !currentUser.email;
   const isOrganizerOrAdmin = currentUser.role === 'admin' || currentUser.role === 'organizer' || currentUser.email === 'woodlandwoodchuckers@gmail.com';
+
+  // Check if current user is already checked in for this event date
+  const existingCheckIn = useMemo(() => {
+    if (!currentUser.email || !checkins) return null;
+    const cleanEmail = currentUser.email.toLowerCase().trim();
+    return checkins.find((c) => c.date === activeEvent.date && c.userEmail.toLowerCase().trim() === cleanEmail) || null;
+  }, [checkins, activeEvent.date, currentUser.email]);
+
+  const [isEditingCheckIn, setIsEditingCheckIn] = useState<boolean>(false);
+  const modalBodyRef = useRef<HTMLDivElement>(null);
 
   // Build list of available route options for tonight's run
   const availableOptions = useMemo(() => {
@@ -143,11 +155,26 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
     initialMode === 'register' || isGuest ? 'register' : 'checkin'
   );
   const [codeWordInput, setCodeWordInput] = useState<string>('');
-  const [selectedActivity, setSelectedActivity] = useState<ActivityType>('running');
+  const [selectedActivity, setSelectedActivity] = useState<ActivityType>(() => {
+    return existingCheckIn?.activity || 'running';
+  });
   const [selectedOptionKey, setSelectedOptionKey] = useState<string>(() => {
+    if (existingCheckIn) {
+      const match = availableOptions.find(
+        (o) => o.key === String(existingCheckIn.distanceChoice) ||
+               o.route.name === existingCheckIn.routeName ||
+               Math.abs(o.route.actualMiles - existingCheckIn.actualMiles) < 0.1
+      );
+      if (match) return match.key;
+    }
     return availableOptions[0]?.key || '3';
   });
-  const [loopSelections, setLoopSelections] = useState<Record<string, number>>({});
+  const [loopSelections, setLoopSelections] = useState<Record<string, number>>(() => {
+    if (existingCheckIn && existingCheckIn.loops) {
+      return { [String(existingCheckIn.distanceChoice)]: existingCheckIn.loops };
+    }
+    return {};
+  });
 
   const selectedOption = useMemo(() => {
     return availableOptions.find((o) => o.key === selectedOptionKey) || availableOptions[0];
@@ -158,7 +185,9 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
   const creditedMiles = selectedOption?.route?.isLoop
     ? Math.round(baseMiles * currentLoops * 100) / 100
     : (selectedOption?.route?.actualMiles || 0);
-  const [runningWithPet, setRunningWithPet] = useState<boolean>(false);
+  const [runningWithPet, setRunningWithPet] = useState<boolean>(() => {
+    return Boolean(existingCheckIn?.withPet);
+  });
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [organizerBypass, setOrganizerBypass] = useState<boolean>(false);
@@ -174,8 +203,15 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
 
   const [postCheckInStep, setPostCheckInStep] = useState<'run_info' | 'rewards'>('run_info');
 
+  useEffect(() => {
+    modalBodyRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [errorMsg, postCheckInStep, isEditingCheckIn]);
+
   const matchedGpxRoute: GPXRoute = useMemo(() => {
-    const optRoute = successResult?.route || selectedOption?.route;
+    const activeRec = successResult?.checkIn || existingCheckIn;
+    const optRoute = isEditingCheckIn
+      ? selectedOption?.route
+      : (successResult?.route || (activeRec ? { name: activeRec.routeName || '', actualMiles: activeRec.actualMiles } : selectedOption?.route));
     let found: GPXRoute | undefined;
     if (optRoute?.routeId && routes) {
       found = routes.find((r) => r.id === optRoute.routeId);
@@ -230,7 +266,7 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
       directions: optRoute?.directionsList,
       createdAt: new Date().toISOString(),
     };
-  }, [successResult, selectedOption, routes, creditedMiles]);
+  }, [successResult, existingCheckIn, isEditingCheckIn, selectedOption, routes, creditedMiles]);
 
   // New runner onboarding state
   const [regEmail, setRegEmail] = useState<string>(currentUser.email || '');
@@ -323,7 +359,8 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
 
   const handlePerformCheckIn = async () => {
     setErrorMsg(null);
-    if (!codeWordInput.trim()) {
+    const effectiveCodeWord = codeWordInput.trim() || (existingCheckIn ? activeEvent.codeWord : '');
+    if (!effectiveCodeWord) {
       setErrorMsg("Please enter today's code word!");
       return;
     }
@@ -339,7 +376,7 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
       const res = await onCheckInRunner({
         eventDate: activeEvent.date,
         userEmail: currentUser.email,
-        codeWordEntered: codeWordInput,
+        codeWordEntered: effectiveCodeWord,
         activity: selectedActivity,
         distanceChoice: selectedOptionKey,
         loops: currentLoops,
@@ -361,6 +398,7 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
       });
 
       setPostCheckInStep('run_info');
+      setIsEditingCheckIn(false);
       setSuccessResult(res);
     } catch (err: any) {
       setErrorMsg(err.message || 'Error during check-in.');
@@ -383,9 +421,11 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
     ? CLUB_MILESTONES.find((m) => m.runsRequired === activeUserRuns)
     : null;
 
+  const activeCheckIn = successResult?.checkIn || existingCheckIn;
+
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-stone-950/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
-      <div className="relative w-full max-w-xl max-h-[92vh] flex flex-col bg-white rounded-3xl shadow-2xl border border-stone-200 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-stone-950/80 backdrop-blur-sm flex justify-center p-3 sm:p-4 min-h-screen py-6 sm:py-8">
+      <div className="relative w-full max-w-xl m-auto max-h-[90vh] flex flex-col bg-white rounded-3xl shadow-2xl border border-stone-200 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
         
         {/* Top Header */}
         <div className="shrink-0 bg-gradient-to-r from-woodland-950 via-woodland-900 to-[#13495d] px-6 py-5 text-white flex items-center justify-between">
@@ -411,7 +451,7 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
         </div>
 
         {/* Modal Body */}
-        <div className="p-4 sm:p-6 overflow-y-auto flex-1">
+        <div ref={modalBodyRef} className="p-4 sm:p-6 overflow-y-auto flex-1">
           {/* Error Alert */}
           {errorMsg && (
             <div className="mb-5 flex items-start gap-3 p-3.5 bg-red-50 border border-red-200 text-red-800 rounded-xl text-xs sm:text-sm">
@@ -421,7 +461,7 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
           )}
 
           {/* VIEW 1: SUCCESS POST-CHECK-IN FLOW */}
-          {successResult ? (
+          {(successResult || (existingCheckIn && !isEditingCheckIn)) ? (
             postCheckInStep === 'run_info' ? (
               /* PAGE 1: RUN INFORMATION (APPS, MAP, TURN-BY-TURN) */
               <div className="text-left space-y-4 animate-in fade-in duration-200">
@@ -435,9 +475,9 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-black uppercase tracking-wider">
                           <Check className="w-3 h-3 stroke-[3]" />
-                          Checked In!
+                          {existingCheckIn && !successResult ? "You're Checked In!" : "Checked In!"}
                         </span>
-                        {successResult.newBadges && successResult.newBadges.length > 0 && (
+                        {successResult?.newBadges && successResult.newBadges.length > 0 && (
                           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-400 text-stone-950 text-[10px] font-black uppercase tracking-wider animate-pulse">
                             <Sparkles className="w-3 h-3" />
                             +{successResult.newBadges.length} Badge{successResult.newBadges.length > 1 ? 's' : ''} Earned!
@@ -448,11 +488,23 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
                         Boom, {currentUser.firstName}! 🎉
                       </h3>
                       <p className="text-xs text-stone-600">
-                        Registered for <strong className="text-stone-900">{matchedGpxRoute.name}</strong> ({successResult.checkIn?.actualMiles || creditedMiles} mi {selectedActivity}{currentLoops > 1 ? ` • ${currentLoops} loops` : ''}).
+                        Registered for <strong className="text-stone-900">{matchedGpxRoute.name}</strong> ({activeCheckIn?.actualMiles || creditedMiles} mi {activeCheckIn?.activity || selectedActivity}{(activeCheckIn?.loops || currentLoops) > 1 ? ` • ${activeCheckIn?.loops || currentLoops} loops` : ''}).
                       </p>
                     </div>
                   </div>
                 </div>
+
+                {/* Change Route or Distance Button */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setErrorMsg(null);
+                    setIsEditingCheckIn(true);
+                  }}
+                  className="w-full py-2.5 px-4 bg-stone-100 hover:bg-stone-200 text-stone-800 font-bold text-xs rounded-xl transition flex items-center justify-center gap-1.5 border border-stone-300 shadow-2xs cursor-pointer"
+                >
+                  <span>✏️ Change Distance / Update Check-In</span>
+                </button>
 
                 {/* 1) Click on Strava / Garmin / RunGo / GPX */}
                 <div className="space-y-1.5">
@@ -604,7 +656,7 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
                 </div>
 
                 {/* Badge Unlock Celebration Card */}
-                {successResult.newBadges && successResult.newBadges.length > 0 && (
+                {successResult?.newBadges && successResult.newBadges.length > 0 && (
                   <div className="bg-gradient-to-r from-amber-500/15 via-emerald-500/10 to-amber-500/15 border-2 border-amber-400/80 rounded-2xl p-4 text-left space-y-2.5 shadow-sm animate-in zoom-in-95">
                     <div className="flex items-center justify-between">
                       <span className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-amber-900">
@@ -652,7 +704,7 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
                         {justUnlockedMilestone.name}: {justUnlockedMilestone.reward}
                       </div>
                       <p className="text-xs text-stone-900 font-medium leading-snug">
-                        Tonight's run organizer has been alerted with your shirt size (<strong className="font-bold">{successResult.user?.shirtSize || currentUser.shirtSize}</strong>). Pick up your gear at the organizer table, and show your phone for {justUnlockedMilestone.perks}!
+                        Tonight's run organizer has been alerted with your shirt size (<strong className="font-bold">{successResult?.user?.shirtSize || currentUser.shirtSize}</strong>). Pick up your gear at the organizer table, and show your phone for {justUnlockedMilestone.perks}!
                       </p>
                     </div>
                   )}
@@ -681,7 +733,7 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
                   <div className="pt-2 border-t border-stone-200 flex items-center justify-between text-xs">
                     <span className="text-stone-600">Lifetime Club Mileage:</span>
                     <span className="font-extrabold text-stone-900">
-                      {successResult.user?.totalMiles || currentUser.totalMiles} Miles
+                      {successResult?.user?.totalMiles || currentUser.totalMiles} Miles
                     </span>
                   </div>
                 </div>
@@ -822,27 +874,63 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
                 </div>
               </div>
 
-              {/* Step 1: Code Word */}
-              <div className="space-y-1.5">
-                <label className="block text-xs font-bold text-stone-800 uppercase tracking-wider">
-                  1. Today's Code Word
-                </label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    value={codeWordInput}
-                    onChange={(e) => setCodeWordInput(e.target.value)}
-                    placeholder="Enter today's code word (e.g. TURKEY)"
-                    className="w-full uppercase font-mono tracking-widest text-base sm:text-lg font-bold px-4 py-3 rounded-xl border border-stone-300 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none transition"
-                  />
-                  <div className="absolute right-3 top-3 text-[10px] font-bold bg-stone-100 text-stone-600 px-2 py-1 rounded-md">
-                    Required
+              {/* Updating Existing Check-in Banner */}
+              {existingCheckIn && (
+                <div className="bg-amber-50 border border-amber-300/90 rounded-2xl p-3.5 flex items-start justify-between gap-3 text-xs text-amber-950 shadow-2xs">
+                  <div>
+                    <div className="font-extrabold flex items-center gap-1.5 text-sm">
+                      <span>✏️</span> Updating Your Check-In
+                    </div>
+                    <p className="text-amber-900 mt-1 leading-relaxed">
+                      Currently registered: <strong>{existingCheckIn.routeName}</strong> ({existingCheckIn.actualMiles} mi {existingCheckIn.activity}). Choose your updated route below and tap <strong>Save &amp; Update Check-In</strong>:
+                    </p>
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setErrorMsg(null);
+                      setIsEditingCheckIn(false);
+                    }}
+                    className="px-2.5 py-1 bg-white hover:bg-stone-50 text-stone-700 font-bold rounded-lg border border-amber-200 shrink-0 cursor-pointer shadow-2xs"
+                  >
+                    Cancel
+                  </button>
                 </div>
-                <p className="text-[11px] text-stone-500">
-                  Announced by the run organizer before the run starts!
-                </p>
-              </div>
+              )}
+
+              {/* Step 1: Code Word */}
+              {existingCheckIn ? (
+                <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-3.5 flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-2 text-emerald-900 font-bold">
+                    <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>Code Word Verified for Today:</span>
+                  </div>
+                  <span className="font-mono font-bold bg-emerald-200/90 text-emerald-950 px-2.5 py-0.5 rounded-lg text-xs tracking-wider">
+                    {activeEvent.codeWord}
+                  </span>
+                </div>
+              ) : (
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-stone-800 uppercase tracking-wider">
+                    1. Today's Code Word
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={codeWordInput}
+                      onChange={(e) => setCodeWordInput(e.target.value)}
+                      placeholder="Enter today's code word (e.g. TURKEY)"
+                      className="w-full uppercase font-mono tracking-widest text-base sm:text-lg font-bold px-4 py-3 rounded-xl border border-stone-300 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none transition"
+                    />
+                    <div className="absolute right-3 top-3 text-[10px] font-bold bg-stone-100 text-stone-600 px-2 py-1 rounded-md">
+                      Required
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-stone-500">
+                    Announced by the run organizer before the run starts!
+                  </p>
+                </div>
+              )}
 
               {/* Step 2: Activity (Run vs Walk) */}
               <div className="space-y-1.5">
@@ -1052,22 +1140,39 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
                 />
               </div>
 
-              {/* Submit Button */}
-              <button
-                type="button"
-                onClick={handlePerformCheckIn}
-                disabled={isSubmitting}
-                className="w-full mt-4 py-3.5 bg-amber-500 hover:bg-amber-600 active:scale-98 text-stone-950 font-black text-base rounded-2xl transition shadow-lg flex items-center justify-center gap-2 font-display uppercase tracking-wide cursor-pointer disabled:opacity-50"
-              >
-                <Sparkles className="w-5 h-5 text-stone-950" />
-                <span>
-                  {isSubmitting
-                    ? 'Checking In...'
-                    : selectedOption?.route?.isLoop
-                    ? `Check In for ${currentLoops} ${currentLoops === 1 ? 'Loop' : 'Loops'} (${creditedMiles.toFixed(1)} mi) 🦫`
-                    : `Check In for ${creditedMiles.toFixed(1)} mi 🦫`}
-                </span>
-              </button>
+              {/* Submit Buttons */}
+              <div className="space-y-2 mt-4">
+                <button
+                  type="button"
+                  onClick={handlePerformCheckIn}
+                  disabled={isSubmitting}
+                  className="w-full py-3.5 bg-amber-500 hover:bg-amber-600 active:scale-98 text-stone-950 font-black text-base rounded-2xl transition shadow-lg flex items-center justify-center gap-2 font-display uppercase tracking-wide cursor-pointer disabled:opacity-50"
+                >
+                  <Sparkles className="w-5 h-5 text-stone-950" />
+                  <span>
+                    {isSubmitting
+                      ? (existingCheckIn ? 'Updating Check-In...' : 'Checking In...')
+                      : existingCheckIn
+                      ? `Save & Update Check-In (${creditedMiles.toFixed(1)} mi) →`
+                      : selectedOption?.route?.isLoop
+                      ? `Check In for ${currentLoops} ${currentLoops === 1 ? 'Loop' : 'Loops'} (${creditedMiles.toFixed(1)} mi) 🦫`
+                      : `Check In for ${creditedMiles.toFixed(1)} mi 🦫`}
+                  </span>
+                </button>
+
+                {existingCheckIn && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setErrorMsg(null);
+                      setIsEditingCheckIn(false);
+                    }}
+                    className="w-full py-2.5 bg-stone-100 hover:bg-stone-200 text-stone-700 font-bold text-xs rounded-xl transition flex items-center justify-center gap-1 cursor-pointer"
+                  >
+                    <span>Cancel &amp; Keep Current Route ({existingCheckIn.actualMiles} mi)</span>
+                  </button>
+                )}
+              </div>
             </div>
             )
           ) : viewMode === 'register' ? (
