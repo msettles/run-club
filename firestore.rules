@@ -730,6 +730,20 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // 11b. ANNOUNCEMENTS — club announcement feed (the bell). Public read, admins post/delete.
+    match /announcements/{id} {
+      allow read: if true;
+      allow create: if isAdmin() &&
+                       request.resource.data.keys().hasOnly(['id', 'title', 'body', 'timestamp', 'sender']) &&
+                       request.resource.data.id == id &&
+                       request.resource.data.title is string && request.resource.data.title.size() >= 1 && request.resource.data.title.size() <= 120 &&
+                       request.resource.data.body is string && request.resource.data.body.size() <= 2000 &&
+                       request.resource.data.timestamp is string && request.resource.data.timestamp.size() <= 40 &&
+                       request.resource.data.sender is string && request.resource.data.sender.size() <= 100;
+      allow update: if false;
+      allow delete: if isAdmin();
+    }
+
     // 12. PUSH DEVICES — phones/browsers signed up for club notifications.
     // Doc ID = sha256(FCM token). Sending happens from the Firebase console;
     // these docs only let admins see how many devices are signed up.

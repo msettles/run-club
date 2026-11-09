@@ -96,3 +96,46 @@ export async function disablePushOnThisDevice(): Promise<void> {
     }
   }
 }
+
+// ---- Received pushes (saved by public/push-sw.js) for the bell feed ----
+
+export interface ReceivedPush {
+  id: string;
+  title: string;
+  body: string;
+  link?: string;
+  timestamp: string;
+}
+
+/** Pushes this device has received (newest first). Empty if none or unsupported. */
+export function readReceivedPushes(): Promise<ReceivedPush[]> {
+  return new Promise((resolve) => {
+    if (typeof indexedDB === 'undefined') return resolve([]);
+    const req = indexedDB.open('woodchuckers-push', 1);
+    req.onupgradeneeded = () => req.result.createObjectStore('messages', { keyPath: 'id' });
+    req.onerror = () => resolve([]);
+    req.onsuccess = () => {
+      const db = req.result;
+      try {
+        const all = db.transaction('messages', 'readonly').objectStore('messages').getAll();
+        all.onsuccess = () => {
+          resolve((all.result as ReceivedPush[]).sort((a, b) => b.timestamp.localeCompare(a.timestamp)));
+          db.close();
+        };
+        all.onerror = () => resolve([]);
+      } catch {
+        resolve([]);
+      }
+    };
+  });
+}
+
+/** Call back whenever the push worker receives a push while the app is open. */
+export function onPushReceived(cb: (msg: ReceivedPush) => void): () => void {
+  if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return () => {};
+  const handler = (e: MessageEvent) => {
+    if (e.data?.type === 'woodchuckers-push-received' && e.data.message) cb(e.data.message as ReceivedPush);
+  };
+  navigator.serviceWorker.addEventListener('message', handler);
+  return () => navigator.serviceWorker.removeEventListener('message', handler);
+}

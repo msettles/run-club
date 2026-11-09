@@ -59,6 +59,8 @@ export function App() {
     updateRun,
     deleteRun,
     sendPushAnnouncement,
+    deleteAnnouncement,
+    bellItems,
     addRoute,
     updateRoute,
     deleteRoute,
@@ -110,6 +112,33 @@ export function App() {
   const [isBrandAssetsOpen, setIsBrandAssetsOpen] = useState<boolean>(false);
   const [isVersionModalOpen, setIsVersionModalOpen] = useState<boolean>(false);
   const [showNotificationsDrawer, setShowNotificationsDrawer] = useState<boolean>(false);
+  // Bell read state (per browser): items read one by one, plus "mark all as read"
+  // which marks everything up to that moment.
+  const BELL_READ_KEY = 'woodchuckers_bell_read_v1';
+  const [bellRead, setBellRead] = useState<{ allBefore: string; ids: string[] }>(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(BELL_READ_KEY) || 'null');
+      if (saved && typeof saved.allBefore === 'string' && Array.isArray(saved.ids)) return saved;
+      // Earlier builds stored "last opened": treat everything before it as read.
+      return { allBefore: localStorage.getItem('woodchuckers_bell_seen_at') || '', ids: [] };
+    } catch {
+      return { allBefore: '', ids: [] };
+    }
+  });
+  const saveBellRead = (next: { allBefore: string; ids: string[] }) => {
+    setBellRead(next);
+    try {
+      localStorage.setItem(BELL_READ_KEY, JSON.stringify(next));
+    } catch {
+      // ignore
+    }
+  };
+  const isBellItemRead = (n: { id: string; timestamp: string }) => n.timestamp <= bellRead.allBefore || bellRead.ids.includes(n.id);
+  const markBellItemRead = (id: string) => {
+    if (!bellRead.ids.includes(id)) saveBellRead({ ...bellRead, ids: [...bellRead.ids, id].slice(-200) });
+  };
+  const markAllBellRead = () => saveBellRead({ allBefore: new Date().toISOString(), ids: [] });
+  const toggleBell = () => setShowNotificationsDrawer((open) => !open);
 
   // Selected route for viewing
   const [selectedRoute, setSelectedRoute] = useState<GPXRoute>(routes[0]);
@@ -383,13 +412,13 @@ export function App() {
         currentUser={currentUser}
         firebaseUser={firebaseUser}
         authReady={authReady}
-        unreadNotifsCount={notifications.length}
+        unreadNotifsCount={bellItems.filter((n) => !isBellItemRead(n)).length}
         onOpenNewRun={() => setIsNewRunOpen(true)}
         onOpenUploadGpx={() => {
           setEditingRoute(null);
           setIsRouteStudioOpen(true);
         }}
-        onToggleNotifications={() => setShowNotificationsDrawer(!showNotificationsDrawer)}
+        onToggleNotifications={toggleBell}
         onOpenAuthModal={() => setIsAuthModalOpen(true)}
         onOpenRegister={handleOpenRegister}
         onOpenVersionModal={() => setIsVersionModalOpen(true)}
@@ -718,6 +747,7 @@ export function App() {
               onDeleteBadge={deleteBadge}
               onOpenNewRun={() => setIsNewRunOpen(true)}
               onSendBroadcast={sendPushAnnouncement}
+              onDeleteAnnouncement={deleteAnnouncement}
               onSetUserRole={setUserRole}
               onDeleteRunner={adminDeleteRunner}
               onSetLegacyClaim={adminSetLegacyClaim}
@@ -798,26 +828,74 @@ export function App() {
                 <Bell className="w-5 h-5 text-amber-500" />
                 <h3 className="font-bold text-base text-stone-900">Club Announcements</h3>
               </div>
+              {bellItems.some((n) => !isBellItemRead(n)) && (
+                <button
+                  type="button"
+                  onClick={markAllBellRead}
+                  className="ml-auto mr-2 text-[11px] font-bold text-woodland-700 hover:text-woodland-900 hover:underline"
+                >
+                  Mark all as read
+                </button>
+              )}
               <button onClick={() => setShowNotificationsDrawer(false)} className="text-stone-400 hover:text-stone-700 p-1">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <div className="flex-1 overflow-y-auto space-y-3">
-              {notifications.length === 0 ? (
+              {bellItems.length === 0 ? (
                 <p className="text-xs text-stone-500 text-center py-8">No announcements yet.</p>
               ) : (
-                notifications.map((n) => (
-                  <div key={n.id} className="p-3 bg-stone-50 border border-stone-200 rounded-xl space-y-1">
-                    <div className="flex items-center justify-between text-xs">
-                      <strong className="text-stone-900 font-bold">{n.title}</strong>
-                      <span className="text-[10px] text-stone-400">
-                        {new Date(n.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </span>
-                    </div>
-                    <p className="text-xs text-stone-600 leading-relaxed">{n.body}</p>
-                  </div>
-                ))
+                bellItems.map((n) => {
+                  const isPush = n.kind === 'push';
+                  const unread = !isBellItemRead(n);
+                  const when = new Date(n.timestamp);
+                  const box = `block w-full text-left p-3 rounded-xl space-y-1 border transition ${
+                    isPush ? 'bg-indigo-50' : 'bg-stone-50'
+                  } ${
+                    unread
+                      ? isPush ? 'border-indigo-400 shadow-sm' : 'border-amber-400 shadow-sm'
+                      : isPush ? 'border-indigo-200 opacity-80' : 'border-stone-200 opacity-80'
+                  }`;
+                  const content = (
+                    <>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className={`text-[10px] font-bold uppercase tracking-wider ${isPush ? 'text-indigo-600' : 'text-amber-700'}`}>
+                          {isPush ? '📲 Push notification' : '📣 Announcement'}
+                        </span>
+                        {unread && (
+                          <span className="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-amber-500 text-stone-950">
+                            New
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-start justify-between gap-2 text-xs">
+                        <strong className={`${unread ? 'font-black' : 'font-bold'} ${isPush ? 'text-indigo-950' : 'text-stone-900'}`}>{n.title}</strong>
+                        <span className="text-[10px] text-stone-400 shrink-0">
+                          {when.toLocaleDateString([], { month: 'short', day: 'numeric' })}{' '}
+                          {when.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                        </span>
+                      </div>
+                      {n.body && <p className={`text-xs leading-relaxed ${isPush ? 'text-indigo-900/80' : 'text-stone-600'}`}>{n.body}</p>}
+                      {unread && <span className="block text-[10px] text-stone-400">Tap to mark as read</span>}
+                    </>
+                  );
+                  return isPush && n.link && n.link !== '/' ? (
+                    <a key={n.id} href={n.link} onClick={() => markBellItemRead(n.id)} className={`${box} hover:bg-indigo-100`}>
+                      {content}
+                    </a>
+                  ) : (
+                    <button
+                      key={n.id}
+                      type="button"
+                      onClick={() => markBellItemRead(n.id)}
+                      aria-label={`${n.title}${unread ? ', unread. Mark as read' : ''}`}
+                      className={box}
+                    >
+                      {content}
+                    </button>
+                  );
+                })
               )}
             </div>
 
@@ -829,7 +907,7 @@ export function App() {
                 }}
                 className="w-full py-2 bg-stone-900 text-white rounded-xl text-xs font-bold hover:bg-stone-800 transition"
               >
-                Send New Push Announcement
+                Post Announcement
               </button>
             )}
           </div>

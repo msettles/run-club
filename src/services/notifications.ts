@@ -8,6 +8,8 @@ export interface ClubNotification {
   targetRunId?: string;
   sender: string;
   read?: boolean;
+  kind?: 'announcement' | 'push'; // push = received on this device from the Firebase console
+  link?: string;
 }
 
 const NOTIFICATIONS_STORAGE_KEY = 'woodchuckers_notifications_v1';
