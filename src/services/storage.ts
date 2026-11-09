@@ -343,6 +343,61 @@ export function useClubStore() {
           const remoteMembers = membersSnap.docs.map((d) => d.data() as Member);
           setMembers(remoteMembers);
         }
+
+        // Sync users
+        const usersSnap = await getDocs(collection(db, 'users'));
+        if (!usersSnap.empty) {
+          const remoteUsers = usersSnap.docs.map((d) => d.data() as UserProfile);
+          const remoteEmails = new Set(remoteUsers.map((u) => u.email.toLowerCase()));
+          setUsers((prev) => {
+            const localOnly = prev.filter((u) => !remoteEmails.has(u.email.toLowerCase()));
+            return [...remoteUsers, ...localOnly];
+          });
+        }
+
+        // Sync check-in audit records
+        const checkinsSnap = await getDocs(collection(db, 'checkins'));
+        if (!checkinsSnap.empty) {
+          const remoteCheckins = checkinsSnap.docs.map((d) => d.data() as CheckInRecord);
+          const remoteIds = new Set(remoteCheckins.map((c) => c.id));
+          setCheckins((prev) => {
+            const localOnly = prev.filter((c) => !remoteIds.has(c.id));
+            return [...remoteCheckins, ...localOnly];
+          });
+        }
+
+        // Sync badges
+        const badgesSnap = await getDocs(collection(db, 'badges'));
+        if (!badgesSnap.empty) {
+          const remoteBadges = badgesSnap.docs.map((d) => d.data() as Badge);
+          const remoteIds = new Set(remoteBadges.map((b) => b.id));
+          setBadges((prev) => {
+            const localOnly = prev.filter((b) => !remoteIds.has(b.id));
+            return [...remoteBadges, ...localOnly];
+          });
+        }
+
+        // Sync milestone fulfillment alerts
+        const alertsSnap = await getDocs(collection(db, 'milestone_alerts'));
+        if (!alertsSnap.empty) {
+          const remoteAlerts = alertsSnap.docs.map((d) => d.data() as MilestoneAlert);
+          const remoteIds = new Set(remoteAlerts.map((a) => a.id));
+          setMilestoneAlerts((prev) => {
+            const localOnly = prev.filter((a) => !remoteIds.has(a.id));
+            return [...remoteAlerts, ...localOnly];
+          });
+        }
+
+        // Sync meetup events
+        const meetupsSnap = await getDocs(collection(db, 'meetup_events'));
+        if (!meetupsSnap.empty) {
+          const remoteMeetups = meetupsSnap.docs.map((d) => d.data() as MeetupEvent);
+          const remoteDates = new Set(remoteMeetups.map((m) => m.date));
+          setMeetupEvents((prev) => {
+            const localOnly = prev.filter((m) => !remoteDates.has(m.date));
+            return [...remoteMeetups, ...localOnly];
+          });
+        }
       } catch (err) {
         console.warn('Firestore initial fetch skipped or failed:', err);
       } finally {
@@ -471,6 +526,19 @@ export function useClubStore() {
 
     setCurrentUserEmail(cleanEmail);
     setCurrentMemberId(cleanEmail);
+
+    if (isFirebaseConfigured && db) {
+      setDoc(doc(db, 'users', cleanEmail), cleanFirestoreData(newUser), { merge: true }).catch(console.error);
+      const memberRecord: Member = {
+        ...newUser,
+        id: newUser.email,
+        name: newUser.displayName,
+        streak: 1,
+        favoritePace: newUser.preferredPace || '9:00 min/mi',
+        joinedDate: newUser.firstRunDate || new Date().toISOString().split('T')[0],
+      };
+      setDoc(doc(db, 'members', cleanEmail), cleanFirestoreData(memberRecord), { merge: true }).catch(console.error);
+    }
 
     return newUser;
   };
@@ -817,6 +885,23 @@ export function useClubStore() {
       }
     }
 
+    if (isFirebaseConfigured && db) {
+      setDoc(doc(db, 'checkins', newCheckIn.id), cleanFirestoreData(newCheckIn), { merge: true }).catch(console.error);
+      setDoc(doc(db, 'users', cleanEmail), cleanFirestoreData(updatedUser), { merge: true }).catch(console.error);
+      const memberRecord: Member = {
+        ...updatedUser,
+        id: updatedUser.email,
+        name: updatedUser.displayName,
+        streak: 1,
+        favoritePace: updatedUser.preferredPace || '9:00 min/mi',
+        joinedDate: updatedUser.firstRunDate || new Date().toISOString().split('T')[0],
+      };
+      setDoc(doc(db, 'members', cleanEmail), cleanFirestoreData(memberRecord), { merge: true }).catch(console.error);
+      if (unlockedMilestone) {
+        setDoc(doc(db, 'milestone_alerts', unlockedMilestone.id), cleanFirestoreData(unlockedMilestone), { merge: true }).catch(console.error);
+      }
+    }
+
     return {
       success: true,
       message: isUpdate
@@ -841,6 +926,9 @@ export function useClubStore() {
           : a
       )
     );
+    if (isFirebaseConfigured && db) {
+      setDoc(doc(db, 'milestone_alerts', alertId), { fulfilled: true, fulfilledAt: new Date().toISOString(), fulfilledBy }, { merge: true }).catch(console.error);
+    }
   };
 
   /**
@@ -854,6 +942,9 @@ export function useClubStore() {
       }
       return [event, ...prev];
     });
+    if (isFirebaseConfigured && db) {
+      setDoc(doc(db, 'meetup_events', event.date), cleanFirestoreData(event), { merge: true }).catch(console.error);
+    }
   };
 
   /**

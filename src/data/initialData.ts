@@ -883,7 +883,7 @@ export const INITIAL_RUNS: RunEvent[] = [
     ],
     attendees: [
       { memberId: 'matt.settles@example.com', name: 'Matt Settles', checkedIn: false, rsvpDate: '2026-11-05' },
-      { memberId: 'brittney.ecols@example.com', name: 'Brittney Ecols', checkedIn: false, rsvpDate: '2026-11-05' },
+      { memberId: 'brittney.echols@example.com', name: 'Brittney Echols', checkedIn: false, rsvpDate: '2026-11-05' },
       { memberId: 'sarah.runner@example.com', name: 'Sarah Connor', checkedIn: false, rsvpDate: '2026-11-05' },
     ],
   },

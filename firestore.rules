@@ -43,7 +43,7 @@ service cloud.firestore {
     //   - gpxXml: string (optional, <= 800000 chars) - Raw GPX track XML content
     //   - thumbnailUrl: string (optional, <= 1000 chars) - Map preview thumbnail image URL
     //
-    // Collection: members
+    // Collection: members (legacy member records / leaderboard)
     // Document ID: memberId (matches runner user UID / member ID)
     // Fields:
     //   - id: string (required, 1-128 chars, immutable on update) - Unique member ID (matches UID)
@@ -57,10 +57,70 @@ service cloud.firestore {
     //   - unlockedBadgeIds: list (required, <= 50 items) - List of unlocked badge ID strings
     //   - joinedDate: string (required, 4-35 chars, immutable on update) - Date joined club
     //
+    // Collection: checkins
+    // Document ID: checkinId (pattern: `${date}_${email}`)
+    // Fields:
+    //   - id: string (required, 1-150 chars) - Match date_email format
+    //   - date: string (required, 8-25 chars) - Check-in date (YYYY-MM-DD)
+    //   - time: string (required, 1-30 chars) - Time of check-in
+    //   - userEmail: string (required, 3-150 chars, valid email format)
+    //   - activity: string (required, in ['running', 'walking'])
+    //   - distanceChoice: string or number (required) - Chosen distance tier or route key
+    //   - actualMiles: number (required, >= 0 and <= 500) - Measured distance completed
+    //   - createdAt: string (required, 8-40 chars) - ISO timestamp
+    //   - runnerName: string (optional, <= 100 chars) - Display name cache
+    //   - routeName: string (optional, <= 150 chars) - Selected route name
+    //   - loops: number (optional, >= 0 and <= 50) - Multi-lap loop count
+    //   - withPet: bool (optional) - Ran/walked with pet
+    //   - source: string (optional, <= 50 chars) - 'pwa' | 'admin' | 'legacy_import'
+    //
+    // Collection: users
+    // Document ID: email (lowercase email string)
+    // Fields:
+    //   - email: string (required, 3-150 chars, valid email format)
+    //   - firstName: string (required, 1-100 chars)
+    //   - lastName: string (required, 0-100 chars)
+    //   - displayName: string (required, 1-100 chars)
+    //   - shirtSize: string (required, 1-50 chars)
+    //   - pre2021Runs: number (required, >= 0 and <= 100000)
+    //   - loggedRuns: number (required, >= 0 and <= 100000)
+    //   - totalRuns: number (required, >= 0 and <= 100000)
+    //   - totalMiles: number (required, >= 0 and <= 1000000)
+    //   - runCount: number (required, >= 0 and <= 100000)
+    //   - walkCount: number (required, >= 0 and <= 100000)
+    //   - linkedLegacyNames: list (required, <= 100 items)
+    //   - unlockedBadgeIds: list (required, <= 100 items)
+    //   - role: string (required, in ['member', 'organizer', 'admin', 'guest'])
+    //   - createdAt: string (required, 8-40 chars)
+    //   - age: number (optional, >= 0 and <= 150)
+    //   - city: string (optional, <= 100 chars)
+    //   - zipCode: string (optional, <= 20 chars)
+    //   - preferredPace: string (optional, <= 50 chars)
+    //   - petRunCount: number (optional, >= 0 and <= 100000)
+    //   - distanceCounts: map (optional)
+    //   - firstRunDate: string (optional, <= 30 chars)
+    //   - badgeCounts: map (optional)
+    //   - emergencyContact: map (optional)
+    //
+    // Collection: badges
+    // Document ID: badgeId
+    // Fields: Badge definitions managed by organizer/admin.
+    //
+    // Collection: special_events
+    // Document ID: eventId
+    // Fields: Special event definitions managed by organizer/admin.
+    //
+    // Collection: milestone_alerts
+    // Document ID: alertId
+    // Fields: Runner milestone achievement alerts created on check-in.
+    //
+    // Collection: meetup_events
+    // Document ID: eventId
+    // Fields: Weekly meetup agendas and active route distances managed by admin.
+    //
     // Collection: settings
     // Document ID: settingId (e.g., 'club_info', 'announcements')
-    // Fields:
-    //   - arbitrary club configuration maps/strings (admin/organizer managed only)
+    // Fields: Arbitrary club configuration maps/strings (admin/organizer managed only)
     //
     // ===============================================================
 
@@ -79,7 +139,7 @@ service cloud.firestore {
       return isAuthenticated() &&
         (
           ('email' in request.auth.token &&
-           request.auth.token.email == 'woodlandwoodchuckers@gmail.com') ||
+           request.auth.token.email.lower() == 'woodlandwoodchuckers@gmail.com') ||
           ('admin' in request.auth.token && request.auth.token.admin == true) ||
           ('organizer' in request.auth.token && request.auth.token.organizer == true)
         );
@@ -90,6 +150,13 @@ service cloud.firestore {
       return isAuthenticated() &&
         (request.auth.uid == memberId ||
          (resource != null && 'id' in resource.data && request.auth.uid == resource.data.id));
+    }
+
+    // Check if the authenticated user's email matches the target email
+    function isUserEmailOwner(email) {
+      return isAuthenticated() &&
+        'email' in request.auth.token &&
+        request.auth.token.email.lower() == email.lower();
     }
 
     // Validate email format
@@ -138,9 +205,9 @@ service cloud.firestore {
              data.attendees is list && data.attendees.size() <= 500 &&
              data.organizerName is string && data.organizerName.size() >= 1 && data.organizerName.size() <= 100 &&
              (!('routeId' in data) || (data.routeId is string && data.routeId.size() >= 1 && data.routeId.size() <= 128)) &&
+             (!('routeChoices' in data) || (data.routeChoices is list && data.routeChoices.size() <= 20)) &&
              (!('completed' in data) || (data.completed is bool)) &&
-             (!('routeChoices' in data) || (data.routeChoices is list && data.routeChoices.size() <= 10)) &&
-             (!('specialEvent' in data) || (data.specialEvent is string && data.specialEvent.size() <= 64)) &&
+             (!('specialEvent' in data) || (data.specialEvent is string && data.specialEvent.size() <= 50)) &&
              (!('meetingCoordinates' in data) || isValidCoordinates(data.meetingCoordinates));
     }
 
@@ -148,7 +215,9 @@ service cloud.firestore {
     function isValidGPXRoute(data) {
       return data.keys().hasOnly([
                'id', 'name', 'description', 'distanceMiles', 'elevationGainFt',
-               'points', 'surface', 'difficulty', 'gpxXml', 'createdAt', 'thumbnailUrl'
+               'points', 'surface', 'difficulty', 'customDistanceLabel', 'isLoop',
+               'maxLoops', 'directions', 'geoJson', 'externalLinks', 'notes',
+               'gpxXml', 'createdAt', 'updatedAt', 'thumbnailUrl'
              ]) &&
              data.keys().hasAll([
                'id', 'name', 'description', 'distanceMiles', 'elevationGainFt',
@@ -163,11 +232,17 @@ service cloud.firestore {
              data.surface is string && data.surface in ['Trail', 'Pavement', 'Mixed', 'Track'] &&
              data.difficulty is string && data.difficulty in ['Easy', 'Moderate', 'Challenging'] &&
              data.createdAt is string && data.createdAt.size() >= 8 && data.createdAt.size() <= 40 &&
+             (!('customDistanceLabel' in data) || (data.customDistanceLabel is string && data.customDistanceLabel.size() <= 50)) &&
+             (!('isLoop' in data) || (data.isLoop is bool)) &&
+             (!('maxLoops' in data) || (data.maxLoops is number && data.maxLoops >= 1 && data.maxLoops <= 20)) &&
+             (!('directions' in data) || (data.directions is list && data.directions.size() <= 200)) &&
+             (!('notes' in data) || (data.notes is string && data.notes.size() <= 2000)) &&
+             (!('updatedAt' in data) || (data.updatedAt is string && data.updatedAt.size() <= 40)) &&
              (!('gpxXml' in data) || (data.gpxXml is string && data.gpxXml.size() <= 800000)) &&
              (!('thumbnailUrl' in data) || (data.thumbnailUrl is string && data.thumbnailUrl.size() <= 1000));
     }
 
-    // Validate Member schema and bounds
+    // Validate Legacy Member schema and bounds
     function isValidMember(data) {
       return data.keys().hasOnly([
                'id', 'name', 'email', 'avatarUrl', 'totalRuns',
@@ -187,6 +262,77 @@ service cloud.firestore {
              data.unlockedBadgeIds is list && data.unlockedBadgeIds.size() <= 50 &&
              data.joinedDate is string && data.joinedDate.size() >= 4 && data.joinedDate.size() <= 35 &&
              (!('avatarUrl' in data) || (data.avatarUrl is string && data.avatarUrl.size() <= 1000));
+    }
+
+    // Validate CheckInRecord schema and bounds
+    function isValidCheckIn(data) {
+      return data.keys().hasOnly([
+               'id', 'date', 'time', 'userEmail', 'activity', 'distanceChoice',
+               'actualMiles', 'createdAt', 'runnerName', 'routeName', 'loops',
+               'withPet', 'source'
+             ]) &&
+             data.keys().hasAll([
+               'id', 'date', 'time', 'userEmail', 'activity', 'distanceChoice',
+               'actualMiles', 'createdAt'
+             ]) &&
+             data.id is string && data.id.size() >= 1 && data.id.size() <= 150 &&
+             data.date is string && data.date.size() >= 8 && data.date.size() <= 25 &&
+             data.time is string && data.time.size() >= 1 && data.time.size() <= 30 &&
+             data.userEmail is string && data.userEmail.size() <= 150 && isValidEmail(data.userEmail) &&
+             data.activity is string && data.activity in ['running', 'walking'] &&
+             (
+               (data.distanceChoice is string && data.distanceChoice.size() <= 100) ||
+               (data.distanceChoice is number && data.distanceChoice >= 0 && data.distanceChoice <= 500)
+             ) &&
+             data.actualMiles is number && data.actualMiles >= 0 && data.actualMiles <= 500 &&
+             data.createdAt is string && data.createdAt.size() >= 8 && data.createdAt.size() <= 40 &&
+             (!('runnerName' in data) || (data.runnerName is string && data.runnerName.size() <= 100)) &&
+             (!('routeName' in data) || (data.routeName is string && data.routeName.size() <= 150)) &&
+             (!('loops' in data) || (data.loops is number && data.loops >= 0 && data.loops <= 50)) &&
+             (!('withPet' in data) || (data.withPet is bool)) &&
+             (!('source' in data) || (data.source is string && data.source.size() <= 50));
+    }
+
+    // Validate UserProfile schema and bounds
+    function isValidUserProfile(data) {
+      return data.keys().hasOnly([
+               'email', 'firstName', 'lastName', 'displayName', 'shirtSize',
+               'pre2021Runs', 'loggedRuns', 'totalRuns', 'totalMiles', 'runCount',
+               'walkCount', 'linkedLegacyNames', 'unlockedBadgeIds', 'role',
+               'createdAt', 'age', 'city', 'zipCode', 'preferredPace',
+               'petRunCount', 'distanceCounts', 'firstRunDate', 'badgeCounts',
+               'emergencyContact'
+             ]) &&
+             data.keys().hasAll([
+               'email', 'firstName', 'lastName', 'displayName', 'shirtSize',
+               'pre2021Runs', 'loggedRuns', 'totalRuns', 'totalMiles', 'runCount',
+               'walkCount', 'linkedLegacyNames', 'unlockedBadgeIds', 'role',
+               'createdAt'
+             ]) &&
+             data.email is string && data.email.size() <= 150 && isValidEmail(data.email) &&
+             data.firstName is string && data.firstName.size() >= 1 && data.firstName.size() <= 100 &&
+             data.lastName is string && data.lastName.size() <= 100 &&
+             data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 100 &&
+             data.shirtSize is string && data.shirtSize.size() >= 1 && data.shirtSize.size() <= 50 &&
+             data.pre2021Runs is number && data.pre2021Runs >= 0 && data.pre2021Runs <= 100000 &&
+             data.loggedRuns is number && data.loggedRuns >= 0 && data.loggedRuns <= 100000 &&
+             data.totalRuns is number && data.totalRuns >= 0 && data.totalRuns <= 100000 &&
+             data.totalMiles is number && data.totalMiles >= 0 && data.totalMiles <= 1000000 &&
+             data.runCount is number && data.runCount >= 0 && data.runCount <= 100000 &&
+             data.walkCount is number && data.walkCount >= 0 && data.walkCount <= 100000 &&
+             data.linkedLegacyNames is list && data.linkedLegacyNames.size() <= 100 &&
+             data.unlockedBadgeIds is list && data.unlockedBadgeIds.size() <= 100 &&
+             data.role is string && data.role in ['member', 'organizer', 'admin', 'guest'] &&
+             data.createdAt is string && data.createdAt.size() >= 8 && data.createdAt.size() <= 40 &&
+             (!('age' in data) || (data.age is number && data.age >= 0 && data.age <= 150)) &&
+             (!('city' in data) || (data.city is string && data.city.size() <= 100)) &&
+             (!('zipCode' in data) || (data.zipCode is string && data.zipCode.size() <= 20)) &&
+             (!('preferredPace' in data) || (data.preferredPace is string && data.preferredPace.size() <= 50)) &&
+             (!('petRunCount' in data) || (data.petRunCount is number && data.petRunCount >= 0 && data.petRunCount <= 100000)) &&
+             (!('firstRunDate' in data) || (data.firstRunDate is string && data.firstRunDate.size() <= 30)) &&
+             (!('distanceCounts' in data) || (data.distanceCounts is map)) &&
+             (!('badgeCounts' in data) || (data.badgeCounts is map)) &&
+             (!('emergencyContact' in data) || (data.emergencyContact is map));
     }
 
     // ===============================================================
@@ -232,7 +378,7 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    // 3. MEMBERS COLLECTION
+    // 3. MEMBERS COLLECTION (Legacy member profiles & leaderboard)
     // Public read for club leaderboard, streaks, and badge roster.
     // Members can create their own member document or update their own profile/stats.
     // Organizers/admins can moderate accounts or delete spam.
@@ -252,14 +398,101 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    // 4. CLUB SETTINGS & CONFIGURATION
+    // 4. CHECKINS COLLECTION (Tier 1 Check-In Records)
+    // Public read for live check-in lists and historical run statistics.
+    // Runners can create/update their own check-ins; organizers/admins can moderate or import records.
+    match /checkins/{checkinId} {
+      allow read: if true;
+
+      allow create: if isAuthenticated() &&
+                       isValidCheckIn(request.resource.data) &&
+                       (
+                         ('email' in request.auth.token &&
+                          request.auth.token.email.lower() == request.resource.data.userEmail.lower()) ||
+                         isAdmin()
+                       );
+
+      allow update: if isAuthenticated() &&
+                       isValidCheckIn(request.resource.data) &&
+                       (
+                         ('email' in request.auth.token &&
+                          request.auth.token.email.lower() == resource.data.userEmail.lower()) ||
+                         isAdmin()
+                       );
+
+      allow delete: if isAdmin();
+    }
+
+    // 5. USERS COLLECTION (Tier 1 Relational User Profiles)
+    // Public read for club member directory and leaderboard stats.
+    // Users create and maintain their own profile; organizers/admins have administrative rights.
+    match /users/{email} {
+      allow read: if true;
+
+      allow create: if isAuthenticated() &&
+                       isValidUserProfile(request.resource.data) &&
+                       request.resource.data.email.lower() == email.lower() &&
+                       (
+                         (isUserEmailOwner(email) &&
+                          (!('role' in request.resource.data) || request.resource.data.role in ['member', 'guest'])) ||
+                         isAdmin()
+                       );
+
+      allow update: if isAuthenticated() &&
+                       isValidUserProfile(request.resource.data) &&
+                       request.resource.data.email == resource.data.email &&
+                       (
+                         (isUserEmailOwner(email) &&
+                          (request.resource.data.role == resource.data.role || isAdmin())) ||
+                         isAdmin()
+                       );
+
+      allow delete: if isAdmin();
+    }
+
+    // 6. BADGES COLLECTION
+    // Badge catalog definitions (name, emoji, requirements, category).
+    // Public read; only organizers/admins can create, modify, or remove badges.
+    match /badges/{badgeId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // 7. SPECIAL EVENTS COLLECTION
+    // Special club event designations (e.g. Turkey Trot, Anniversary Run).
+    // Public read; only organizers/admins can create, modify, or remove special events.
+    match /special_events/{eventId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // 8. MILESTONE ALERTS COLLECTION
+    // Real-time alerts when runners cross club milestones (5, 50, 100, 200 runs).
+    // Public read; authenticated runners create alert records upon qualifying check-in;
+    // organizers/admins mark them fulfilled or manage them.
+    match /milestone_alerts/{alertId} {
+      allow read: if true;
+      allow create: if isAuthenticated();
+      allow update, delete: if isAdmin();
+    }
+
+    // 9. MEETUP EVENTS COLLECTION
+    // Weekly meetup agendas, codes, notes, and active distance routes.
+    // Public read; managed exclusively by club organizers and admins.
+    match /meetup_events/{eventId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // 10. CLUB SETTINGS & CONFIGURATION
+    // General club metadata and announcements.
     // Read-only to the public; only woodlandwoodchuckers@gmail.com or admin can update.
     match /settings/{settingId} {
       allow read: if true;
       allow create, update, delete: if isAdmin();
     }
 
-    // 5. DEFAULT DENY
+    // 11. DEFAULT DENY
     // Explicit default deny for all other collection paths and subcollections.
     match /{document=**} {
       allow read, write: if false;

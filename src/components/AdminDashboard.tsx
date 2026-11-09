@@ -1,7 +1,5 @@
 import React, { useState } from 'react';
 import { 
-  RunEvent, 
-  Member, 
   GPXRoute, 
   MeetupEvent, 
   CheckInRecord, 
@@ -42,8 +40,6 @@ import {
 } from 'lucide-react';
 
 interface AdminDashboardProps {
-  runs?: RunEvent[];
-  members?: Member[];
   routes?: GPXRoute[];
   notifications: ClubNotification[];
   // Relational V2 props
@@ -67,14 +63,9 @@ interface AdminDashboardProps {
     createSpecialEventOption?: boolean;
   }) => Promise<Badge>;
   onDeleteBadge?: (badgeId: string) => Promise<void>;
-  onCreateSpecialEvent?: (name: string, emoji: string, description?: string) => Promise<SpecialEventDefinition>;
-  onDeleteSpecialEvent?: (eventId: string) => Promise<void>;
   onSaveMeetupEvent: (event: MeetupEvent) => void;
   onMarkMilestoneFulfilled?: (alertId: string, fulfilledBy: string) => void;
   onOpenNewRun?: () => void;
-  onEditRun?: (run: RunEvent) => void;
-  onDeleteRun?: (runId: string) => void;
-  onUpdateMemberStats?: (memberId: string, updates: Partial<Member>) => void;
   onSendBroadcast: (title: string, body: string) => void;
 }
 
@@ -93,6 +84,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onDeleteBadge,
   onSaveMeetupEvent,
   onMarkMilestoneFulfilled,
+  onOpenNewRun,
   onSendBroadcast,
 }) => {
   const [adminTab, setAdminTab] = useState<'events' | 'badges' | 'checkins' | 'milestones' | 'members' | 'notifications'>('events');
@@ -758,10 +750,22 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
           {/* Right: Scheduled Events Roster */}
           <div className="bg-white rounded-2xl p-5 shadow-sm border border-stone-200 space-y-3">
-            <h4 className="text-xs font-bold text-stone-800 uppercase tracking-wider flex items-center gap-1.5">
-              <Calendar className="w-4 h-4 text-amber-500" />
-              <span>Meetups &amp; Active Code Words</span>
-            </h4>
+            <div className="flex items-center justify-between">
+              <h4 className="text-xs font-bold text-stone-800 uppercase tracking-wider flex items-center gap-1.5">
+                <Calendar className="w-4 h-4 text-amber-500" />
+                <span>Meetups &amp; Active Code Words</span>
+              </h4>
+              {onOpenNewRun && (
+                <button
+                  type="button"
+                  onClick={onOpenNewRun}
+                  className="px-2.5 py-1 bg-woodland-700 hover:bg-woodland-800 text-white font-bold text-xs rounded-lg transition shadow-xs flex items-center gap-1 cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>New Run</span>
+                </button>
+              )}
+            </div>
 
             <div className="space-y-2.5 max-h-[500px] overflow-y-auto">
               {meetupEvents.map((evt) => (

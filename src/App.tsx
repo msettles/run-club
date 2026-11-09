@@ -10,7 +10,6 @@ import { AdminDashboard } from './components/AdminDashboard';
 import { CheckInModal } from './components/CheckInModal';
 import { NewRunModal } from './components/NewRunModal';
 import { EditRunModal } from './components/EditRunModal';
-import { GpxUploader } from './components/GpxUploader';
 import { RouteStudioModal } from './components/RouteStudioModal';
 import { FirebaseSetupGuide } from './components/FirebaseSetupGuide';
 import { InstallPwaBanner } from './components/InstallPwaBanner';
@@ -51,7 +50,6 @@ export function App() {
     addRun,
     updateRun,
     deleteRun,
-    updateMemberStats,
     sendPushAnnouncement,
     addRoute,
     updateRoute,
@@ -74,8 +72,6 @@ export function App() {
     specialEvents,
     createBadge,
     deleteBadge,
-    createSpecialEvent,
-    deleteSpecialEvent,
   } = useClubStore();
 
   const [activeTab, setActiveTab] = useState<'runs' | 'routes' | 'milestones' | 'leaderboard' | 'admin'>('runs');
@@ -85,7 +81,6 @@ export function App() {
   const [selectedRunForCheckIn, setSelectedRunForCheckIn] = useState<RunEvent | null>(null);
   const [isNewRunOpen, setIsNewRunOpen] = useState<boolean>(false);
   const [editingRun, setEditingRun] = useState<RunEvent | null>(null);
-  const [isUploadGpxOpen, setIsUploadGpxOpen] = useState<boolean>(false);
   const [isRouteStudioOpen, setIsRouteStudioOpen] = useState<boolean>(false);
   const [editingRoute, setEditingRoute] = useState<GPXRoute | null>(null);
   const [isSetupGuideOpen, setIsSetupGuideOpen] = useState<boolean>(false);
@@ -159,14 +154,6 @@ export function App() {
   const handleViewRouteFromRun = (route: GPXRoute) => {
     setSelectedRoute(route);
     setActiveTab('routes');
-  };
-
-  const handleRouteUploaded = (newRouteData: Omit<GPXRoute, 'id'>) => {
-    addRoute(newRouteData).then((saved) => {
-      setSelectedRoute(saved);
-      setIsUploadGpxOpen(false);
-      setActiveTab('routes');
-    });
   };
 
   const handleSaveRoute = async (routeData: Omit<GPXRoute, 'id'>, existingId?: string) => {
@@ -484,8 +471,6 @@ export function App() {
         {/* TAB 5: ADMIN DASHBOARD */}
         {activeTab === 'admin' && (
           <AdminDashboard
-            runs={runs}
-            members={members}
             routes={routes}
             badges={badges}
             notifications={notifications}
@@ -499,13 +484,8 @@ export function App() {
             specialEvents={specialEvents}
             onCreateBadge={createBadge}
             onDeleteBadge={deleteBadge}
-            onCreateSpecialEvent={createSpecialEvent}
-            onDeleteSpecialEvent={deleteSpecialEvent}
             onSaveMeetupEvent={saveMeetupEvent}
             onOpenNewRun={() => setIsNewRunOpen(true)}
-            onEditRun={(r) => setEditingRun(r)}
-            onDeleteRun={deleteRun}
-            onUpdateMemberStats={updateMemberStats}
             onSendBroadcast={sendPushAnnouncement}
           />
         )}
@@ -672,17 +652,6 @@ export function App() {
           onSaveRoute={handleSaveRoute}
           onDeleteRoute={handleDeleteRoute}
         />
-      )}
-
-      {isUploadGpxOpen && (
-        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-stone-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-          <div className="w-full max-w-xl">
-            <GpxUploader
-              onRouteAdded={handleRouteUploaded}
-              onCancel={() => setIsUploadGpxOpen(false)}
-            />
-          </div>
-        </div>
       )}
 
       <FirebaseSetupGuide
