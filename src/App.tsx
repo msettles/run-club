@@ -112,29 +112,33 @@ export function App() {
   const [isBrandAssetsOpen, setIsBrandAssetsOpen] = useState<boolean>(false);
   const [isVersionModalOpen, setIsVersionModalOpen] = useState<boolean>(false);
   const [showNotificationsDrawer, setShowNotificationsDrawer] = useState<boolean>(false);
-  // Bell: items newer than the last time this browser opened the feed count as unread.
-  const BELL_SEEN_KEY = 'woodchuckers_bell_seen_at';
-  const [bellSeenAt, setBellSeenAt] = useState<string>(() => {
+  // Bell read state (per browser): items read one by one, plus "mark all as read"
+  // which marks everything up to that moment.
+  const BELL_READ_KEY = 'woodchuckers_bell_read_v1';
+  const [bellRead, setBellRead] = useState<{ allBefore: string; ids: string[] }>(() => {
     try {
-      return localStorage.getItem(BELL_SEEN_KEY) || '';
+      const saved = JSON.parse(localStorage.getItem(BELL_READ_KEY) || 'null');
+      if (saved && typeof saved.allBefore === 'string' && Array.isArray(saved.ids)) return saved;
+      // Earlier builds stored "last opened": treat everything before it as read.
+      return { allBefore: localStorage.getItem('woodchuckers_bell_seen_at') || '', ids: [] };
     } catch {
-      return '';
+      return { allBefore: '', ids: [] };
     }
   });
-  const toggleBell = () => {
-    setShowNotificationsDrawer((open) => {
-      if (!open) {
-        const now = new Date().toISOString();
-        setBellSeenAt(now);
-        try {
-          localStorage.setItem(BELL_SEEN_KEY, now);
-        } catch {
-          // ignore
-        }
-      }
-      return !open;
-    });
+  const saveBellRead = (next: { allBefore: string; ids: string[] }) => {
+    setBellRead(next);
+    try {
+      localStorage.setItem(BELL_READ_KEY, JSON.stringify(next));
+    } catch {
+      // ignore
+    }
   };
+  const isBellItemRead = (n: { id: string; timestamp: string }) => n.timestamp <= bellRead.allBefore || bellRead.ids.includes(n.id);
+  const markBellItemRead = (id: string) => {
+    if (!bellRead.ids.includes(id)) saveBellRead({ ...bellRead, ids: [...bellRead.ids, id].slice(-200) });
+  };
+  const markAllBellRead = () => saveBellRead({ allBefore: new Date().toISOString(), ids: [] });
+  const toggleBell = () => setShowNotificationsDrawer((open) => !open);
 
   // Selected route for viewing
   const [selectedRoute, setSelectedRoute] = useState<GPXRoute>(routes[0]);
@@ -408,7 +412,7 @@ export function App() {
         currentUser={currentUser}
         firebaseUser={firebaseUser}
         authReady={authReady}
-        unreadNotifsCount={bellItems.filter((n) => n.timestamp > bellSeenAt).length}
+        unreadNotifsCount={bellItems.filter((n) => !isBellItemRead(n)).length}
         onOpenNewRun={() => setIsNewRunOpen(true)}
         onOpenUploadGpx={() => {
           setEditingRoute(null);
@@ -824,6 +828,15 @@ export function App() {
                 <Bell className="w-5 h-5 text-amber-500" />
                 <h3 className="font-bold text-base text-stone-900">Club Announcements</h3>
               </div>
+              {bellItems.some((n) => !isBellItemRead(n)) && (
+                <button
+                  type="button"
+                  onClick={markAllBellRead}
+                  className="ml-auto mr-2 text-[11px] font-bold text-woodland-700 hover:text-woodland-900 hover:underline"
+                >
+                  Mark all as read
+                </button>
+              )}
               <button onClick={() => setShowNotificationsDrawer(false)} className="text-stone-400 hover:text-stone-700 p-1">
                 <X className="w-5 h-5" />
               </button>
@@ -835,32 +848,52 @@ export function App() {
               ) : (
                 bellItems.map((n) => {
                   const isPush = n.kind === 'push';
+                  const unread = !isBellItemRead(n);
                   const when = new Date(n.timestamp);
+                  const box = `block w-full text-left p-3 rounded-xl space-y-1 border transition ${
+                    isPush ? 'bg-indigo-50' : 'bg-stone-50'
+                  } ${
+                    unread
+                      ? isPush ? 'border-indigo-400 shadow-sm' : 'border-amber-400 shadow-sm'
+                      : isPush ? 'border-indigo-200 opacity-80' : 'border-stone-200 opacity-80'
+                  }`;
                   const content = (
                     <>
-                      <div className={`text-[10px] font-bold uppercase tracking-wider ${isPush ? 'text-indigo-600' : 'text-amber-700'}`}>
-                        {isPush ? '📲 Push notification' : '📣 Announcement'}
+                      <div className="flex items-center justify-between gap-2">
+                        <span className={`text-[10px] font-bold uppercase tracking-wider ${isPush ? 'text-indigo-600' : 'text-amber-700'}`}>
+                          {isPush ? '📲 Push notification' : '📣 Announcement'}
+                        </span>
+                        {unread && (
+                          <span className="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-amber-500 text-stone-950">
+                            New
+                          </span>
+                        )}
                       </div>
                       <div className="flex items-start justify-between gap-2 text-xs">
-                        <strong className={`font-bold ${isPush ? 'text-indigo-950' : 'text-stone-900'}`}>{n.title}</strong>
+                        <strong className={`${unread ? 'font-black' : 'font-bold'} ${isPush ? 'text-indigo-950' : 'text-stone-900'}`}>{n.title}</strong>
                         <span className="text-[10px] text-stone-400 shrink-0">
                           {when.toLocaleDateString([], { month: 'short', day: 'numeric' })}{' '}
                           {when.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
                         </span>
                       </div>
                       {n.body && <p className={`text-xs leading-relaxed ${isPush ? 'text-indigo-900/80' : 'text-stone-600'}`}>{n.body}</p>}
-                      {n.timestamp > bellSeenAt && <span className="sr-only">New</span>}
+                      {unread && <span className="block text-[10px] text-stone-400">Tap to mark as read</span>}
                     </>
                   );
-                  const box = `block p-3 rounded-xl space-y-1 border ${isPush ? 'bg-indigo-50 border-indigo-200' : 'bg-stone-50 border-stone-200'}`;
                   return isPush && n.link && n.link !== '/' ? (
-                    <a key={n.id} href={n.link} className={`${box} hover:bg-indigo-100`}>
+                    <a key={n.id} href={n.link} onClick={() => markBellItemRead(n.id)} className={`${box} hover:bg-indigo-100`}>
                       {content}
                     </a>
                   ) : (
-                    <div key={n.id} className={box}>
+                    <button
+                      key={n.id}
+                      type="button"
+                      onClick={() => markBellItemRead(n.id)}
+                      aria-label={`${n.title}${unread ? ', unread. Mark as read' : ''}`}
+                      className={box}
+                    >
                       {content}
-                    </div>
+                    </button>
                   );
                 })
               )}
