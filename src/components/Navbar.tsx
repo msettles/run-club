@@ -58,6 +58,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 }) => {
   const [showProfileMenu, setShowProfileMenu] = useState<boolean>(false);
   const isAdmin = currentUser.role === 'admin' || currentUser.email === 'woodlandwoodchuckers@gmail.com';
+  const isOrganizerOrAdmin = isAdmin || currentUser.role === 'organizer';
   const isUserLoggedIn = Boolean(firebaseUser || (currentUser && currentUser.email && currentUser.role !== 'guest'));
 
   return (
@@ -79,8 +80,8 @@ export const Navbar: React.FC<NavbarProps> = ({
             <div>
               <div className="flex items-center gap-1 sm:gap-1.5 flex-nowrap">
                 <span className="font-display font-bold text-stone-900 tracking-wide text-xs sm:text-base lg:text-lg uppercase">
-                  <span className="lg:hidden">Woodchuckers</span>
-                  <span className="hidden lg:inline">Woodland Woodchuckers</span>
+                  <span className="xl:hidden">Woodchuckers</span>
+                  <span className="hidden xl:inline">Woodland Woodchuckers</span>
                 </span>
                 <span className="hidden xl:inline-block text-[10px] font-bold uppercase tracking-wider bg-woodland-100 text-woodland-900 px-1.5 py-0.5 rounded border border-woodland-200 shrink-0">
                   Run Club
@@ -194,24 +195,28 @@ export const Navbar: React.FC<NavbarProps> = ({
               <Info className="w-3 h-3 opacity-60" />
             </button>
 
-            {/* Quick Actions */}
-            <button
-              onClick={onOpenUploadGpx}
-              className="hidden 2xl:flex items-center gap-1 px-3 py-1.5 text-xs font-semibold bg-white border border-stone-300 text-stone-700 hover:bg-stone-50 rounded-xl transition shadow-xs cursor-pointer"
-              title="Upload GPX route"
-            >
-              <UploadCloud className="w-3.5 h-3.5 text-woodland-600" />
-              <span>Add GPX</span>
-            </button>
+            {/* Quick Actions (Admin / Organizer Only) */}
+            {isOrganizerOrAdmin && (
+              <button
+                onClick={onOpenUploadGpx}
+                className="hidden 2xl:flex items-center gap-1 px-3 py-1.5 text-xs font-semibold bg-white border border-stone-300 text-stone-700 hover:bg-stone-50 rounded-xl transition shadow-xs cursor-pointer"
+                title="Upload GPX route"
+              >
+                <UploadCloud className="w-3.5 h-3.5 text-woodland-600" />
+                <span>Add GPX</span>
+              </button>
+            )}
 
-            <button
-              onClick={onOpenNewRun}
-              className="hidden sm:flex items-center gap-1 px-2.5 sm:px-3 py-1.5 text-xs font-semibold bg-woodland-600 hover:bg-woodland-700 text-white rounded-xl transition shadow-sm cursor-pointer shrink-0"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span className="hidden lg:inline">Schedule Run</span>
-              <span className="lg:hidden">Run</span>
-            </button>
+            {isOrganizerOrAdmin && (
+              <button
+                onClick={onOpenNewRun}
+                className="hidden sm:flex items-center gap-1 px-2.5 sm:px-3 py-1.5 text-xs font-semibold bg-woodland-600 hover:bg-woodland-700 text-white rounded-xl transition shadow-sm cursor-pointer shrink-0"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span className="hidden lg:inline">Schedule Run</span>
+                <span className="lg:hidden">Run</span>
+              </button>
+            )}
 
             {/* USER LOGIN / PROFILE AREA */}
             {isUserLoggedIn ? (

@@ -35,7 +35,7 @@ export const NewRunModal: React.FC<NewRunModalProps> = ({
   const [routeChoices, setRouteChoices] = useState<RunRouteChoice[]>(() => defaultChoices(routes));
   const [codeWord, setCodeWord] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
-  const [description, setDescription] = useState('Weekly group run. Everyone welcome, meet by the trailhead sign!');
+  const [description, setDescription] = useState('Weekly group run. Everyone welcome, meet by the front entrance / patio!');
 
   // Pace groups
   const [paceGroups, setPaceGroups] = useState<PaceGroup[]>([
@@ -198,7 +198,7 @@ export const NewRunModal: React.FC<NewRunModalProps> = ({
               type="text"
               value={address}
               onChange={(e) => setAddress(e.target.value)}
-              placeholder="Address / Trailhead directions (optional)"
+              placeholder="Address / Meetup directions (optional)"
               className="w-full text-xs px-3 py-1.5 border border-stone-200 rounded-lg focus:ring-2 focus:ring-woodland-500 focus:outline-none text-stone-600"
             />
           </div>

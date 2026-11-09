@@ -40,7 +40,7 @@ export function parseGPX(xmlString: string, filename: string): Partial<GPXRoute>
   const routeName = nameNode?.textContent?.trim() || filename.replace(/\.gpx$/i, '');
 
   const descNode = xmlDoc.querySelector('trk > desc') || xmlDoc.querySelector('desc');
-  const routeDesc = descNode?.textContent?.trim() || 'Uploaded GPX trail route';
+  const routeDesc = descNode?.textContent?.trim() || 'Uploaded GPX route';
 
   // Extract track points: trkpt or rtept
   let pointNodes = Array.from(xmlDoc.getElementsByTagName('trkpt'));

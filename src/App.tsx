@@ -159,6 +159,10 @@ export function App() {
   };
 
   const handleSaveRoute = async (routeData: Omit<GPXRoute, 'id'>, existingId?: string) => {
+    if (!isOrganizerOrAdmin) {
+      alert('Only organizers and club administrators can create or edit routes.');
+      return;
+    }
     if (existingId) {
       const updated = await updateRoute(existingId, routeData);
       setSelectedRoute(updated);
@@ -172,6 +176,10 @@ export function App() {
   };
 
   const handleDeleteRoute = async (routeId: string) => {
+    if (!isOrganizerOrAdmin) {
+      alert('Only organizers and club administrators can delete routes.');
+      return;
+    }
     await deleteRoute(routeId);
     if (selectedRoute.id === routeId && routes.length > 1) {
       setSelectedRoute(routes.find((r) => r.id !== routeId) || routes[0]);
@@ -340,21 +348,23 @@ export function App() {
           <div className="space-y-6">
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
               <div>
-                <h3 className="text-xl font-bold text-stone-900 font-display">Woodland GPX Trail Library</h3>
+                <h3 className="text-xl font-bold text-stone-900 font-display">Woodland Run Library</h3>
                 <p className="text-xs text-stone-500">
-                  Interactive OpenStreetMap trail tracks, elevation profiles, and downloadable GPS routes.
+                  Interactive OpenStreetMap run tracks, elevation profiles, and downloadable GPS routes.
                 </p>
               </div>
-              <button
-                onClick={() => {
-                  setEditingRoute(null);
-                  setIsRouteStudioOpen(true);
-                }}
-                className="flex items-center gap-2 px-4 py-2 bg-woodland-800 hover:bg-woodland-900 text-white font-bold text-xs rounded-xl shadow-sm transition"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Upload &amp; Create Route</span>
-              </button>
+              {isOrganizerOrAdmin && (
+                <button
+                  onClick={() => {
+                    setEditingRoute(null);
+                    setIsRouteStudioOpen(true);
+                  }}
+                  className="flex items-center gap-2 px-4 py-2 bg-woodland-800 hover:bg-woodland-900 text-white font-bold text-xs rounded-xl shadow-sm transition"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Upload &amp; Create Route</span>
+                </button>
+              )}
             </div>
 
             {/* Route Selector Tabs */}
@@ -654,7 +664,7 @@ export function App() {
           />
         )}
 
-        {isRouteStudioOpen && (
+        {isRouteStudioOpen && isOrganizerOrAdmin && (
           <RouteStudioModal
             isOpen={isRouteStudioOpen}
             onClose={() => {

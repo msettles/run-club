@@ -190,7 +190,7 @@ export const EditRunModal: React.FC<EditRunModalProps> = ({
               type="text"
               value={address}
               onChange={(e) => setAddress(e.target.value)}
-              placeholder="Address / Trailhead directions"
+              placeholder="Address / Meetup directions"
               className="w-full text-xs px-3 py-1.5 border border-stone-200 rounded-lg focus:ring-2 focus:ring-woodland-500 focus:outline-none text-stone-600"
             />
           </div>

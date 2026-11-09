@@ -360,12 +360,11 @@ service cloud.firestore {
 
     // 2. ROUTES COLLECTION
     // Viewing club maps and elevation profiles is public.
-    // Authenticated members can upload new GPX tracks.
-    // Club organizer (woodlandwoodchuckers@gmail.com) can update or delete routes.
+    // Only Club Admin / Organizer can create, update, or delete routes.
     match /routes/{routeId} {
       allow read: if true;
 
-      allow create: if isAuthenticated() &&
+      allow create: if isAdmin() &&
                        isValidGPXRoute(request.resource.data) &&
                        request.resource.data.id == routeId;
 
