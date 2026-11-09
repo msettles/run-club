@@ -269,7 +269,7 @@ test('duplicate milestone alert is rejected', async () => {
 // ---- Roles: promote / demote ----
 
 const ADMIN = 'admin2@example.com';
-const BOOTSTRAP = 'mattsettles@gmail.com';
+const BOOTSTRAP = 'woodlandwoodchuckers@gmail.com';
 
 async function seedAdmin() {
   await env.withSecurityRulesDisabled(async (c) => {
@@ -332,4 +332,22 @@ test('only bootstrap emails may self-create an admin profile', async () => {
   await assertSucceeds(setDoc(doc(ctx(BOOTSTRAP), 'users', BOOTSTRAP), baseUser(BOOTSTRAP, { role: 'admin' })));
   const carol = 'carol@example.com';
   await assertFails(setDoc(doc(ctx(carol), 'users', carol), baseUser(carol, { role: 'admin' })));
+});
+
+test('a former owner email is a normal admin: demotable, and cannot self-create admin', async () => {
+  const MATT = 'mattsettles@gmail.com';
+  await env.withSecurityRulesDisabled(async (c) => {
+    await setDoc(doc(c.firestore(), 'users', MATT), baseUser(MATT, { role: 'admin' }));
+  });
+  // Still an admin through the profile role
+  await assertSucceeds(updateDoc(doc(ctx(MATT), 'users', ALICE), { role: 'organizer' }));
+  // The club owner can demote them to organizer
+  await assertSucceeds(updateDoc(doc(ctx(BOOTSTRAP), 'users', MATT), { role: 'organizer' }));
+  await assertFails(updateDoc(doc(ctx(MATT), 'users', ALICE), { role: 'member' }));
+  await assertSucceeds(getDoc(doc(ctx(MATT), 'meetup_secrets', DATE)));
+  // Without a profile, it can't sign up as admin any more
+  await env.withSecurityRulesDisabled(async (c) => {
+    await deleteDoc(doc(c.firestore(), 'users', MATT));
+  });
+  await assertFails(setDoc(doc(ctx(MATT), 'users', MATT), baseUser(MATT, { role: 'admin' })));
 });
