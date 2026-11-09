@@ -59,9 +59,11 @@ service cloud.firestore {
       return /databases/$(database)/documents/checkins/$(date + '_' + email);
     }
 
-    // Bootstrap club accounts. Keep in sync with ADMIN_EMAILS in src/utils/roles.ts.
+    // The club owner account: always an admin, can't be demoted.
+    // Everyone else gets admin via role 'admin' on their users doc.
+    // Keep in sync with ADMIN_EMAILS in src/utils/roles.ts.
     function isBootstrapAdminEmail() {
-      return tokenEmail() in ['woodlandwoodchuckers@gmail.com', 'mattsettles@gmail.com'];
+      return tokenEmail() in ['woodlandwoodchuckers@gmail.com'];
     }
 
     function callerRole() {
