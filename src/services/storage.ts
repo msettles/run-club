@@ -477,14 +477,24 @@ export function useClubStore() {
   }, []);
 
   /**
-   * Search unclaimed legacy members by first and/or last name
+   * Search unclaimed legacy members by first and/or last name (flexible multi-word tokens)
    */
   const searchLegacyMatches = (nameQuery: string): LegacyMember[] => {
     if (!nameQuery || nameQuery.trim().length < 2) return [];
     const q = nameQuery.trim().toUpperCase();
-    return legacyMembers.filter(
-      (m) => m.claimedByEmail === null && m.name.toUpperCase().includes(q)
-    );
+    const tokens = q.split(/\s+/).filter(Boolean);
+
+    return legacyMembers.filter((m) => {
+      if (m.claimedByEmail !== null) return false;
+      const memName = m.name.toUpperCase();
+      // Substring match
+      if (memName.includes(q)) return true;
+      // All tokens present in the name
+      if (tokens.length > 1 && tokens.every((t) => memName.includes(t))) return true;
+      // Any token with >= 3 chars present in the name
+      if (tokens.some((t) => t.length >= 3 && memName.includes(t))) return true;
+      return false;
+    });
   };
 
   /**

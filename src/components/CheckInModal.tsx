@@ -280,6 +280,64 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
 
   if (!isOpen) return null;
 
+  if (isGuest) {
+    return (
+      <div className="fixed inset-0 z-50 overflow-y-auto bg-stone-950/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 min-h-screen py-6 sm:py-8">
+        <div className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl border border-stone-200 overflow-hidden animate-in fade-in duration-200 p-6 sm:p-8 text-center space-y-5">
+          <button
+            onClick={onClose}
+            className="absolute top-4 right-4 p-2 text-stone-400 hover:text-stone-700 rounded-full hover:bg-stone-100 transition cursor-pointer"
+          >
+            <X className="w-5 h-5" />
+          </button>
+          
+          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-400 via-amber-500 to-amber-600 text-stone-950 flex items-center justify-center mx-auto shadow-md">
+            <Sparkles className="w-8 h-8 text-stone-950" />
+          </div>
+
+          <div>
+            <h3 className="text-xl font-display font-black text-stone-900 uppercase tracking-wide">
+              Sign In to Check In
+            </h3>
+            <p className="text-xs text-stone-600 mt-2 leading-relaxed">
+              Check into <strong>{activeEvent.title}</strong> ({activeEvent.date}), log your miles, and earn official Woodchucker milestone shirts &amp; badges.
+            </p>
+          </div>
+
+          <div className="bg-amber-50 rounded-2xl p-4 border border-amber-200 text-left space-y-2">
+            <div className="flex items-center gap-2 text-xs font-bold text-amber-950">
+              <ShieldCheck className="w-4 h-4 text-amber-600 shrink-0" />
+              <span>Free Club Membership</span>
+            </div>
+            <p className="text-xs text-amber-900 leading-snug">
+              Sign in with your Google account or email link. If it&apos;s your first time, you&apos;ll set up your runner profile and link past club runs in seconds.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              onClose();
+              onOpenAuthModal?.();
+            }}
+            className="w-full py-3 bg-amber-500 hover:bg-amber-600 text-stone-950 font-black text-xs sm:text-sm rounded-xl transition shadow-sm font-display uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer"
+          >
+            <Sparkles className="w-4 h-4" />
+            <span>Sign In / Join Club to Check In</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-full py-2 text-xs font-bold text-stone-500 hover:text-stone-800 transition cursor-pointer"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   // Real-time legacy matches based on first or last name
   const legacyMatches = (regFirstName.length >= 2 || regLastName.length >= 2)
     ? onSearchLegacy(`${regFirstName} ${regLastName}`.trim())

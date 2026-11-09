@@ -5,7 +5,7 @@ import { loginWithGoogle, sendPasswordlessEmailLink } from '../services/authServ
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onAuthSuccess?: (email: string) => void;
+  onAuthSuccess?: (email: string, displayName?: string | null) => void;
 }
 
 export const AuthModal: React.FC<AuthModalProps> = ({
@@ -27,7 +27,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     try {
       const user = await loginWithGoogle();
       if (user && user.email) {
-        if (onAuthSuccess) onAuthSuccess(user.email);
+        if (onAuthSuccess) onAuthSuccess(user.email, user.displayName);
         onClose();
       }
     } catch (err: any) {

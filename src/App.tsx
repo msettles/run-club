@@ -24,6 +24,7 @@ const FirebaseSetupGuide = lazy(() => import('./components/FirebaseSetupGuide').
 const BrandAssetsModal = lazy(() => import('./components/BrandAssetsModal').then((m) => ({ default: m.BrandAssetsModal })));
 const VersionModal = lazy(() => import('./components/VersionModal').then((m) => ({ default: m.VersionModal })));
 const AuthModal = lazy(() => import('./components/AuthModal').then((m) => ({ default: m.AuthModal })));
+const NewUserModal = lazy(() => import('./components/NewUserModal').then((m) => ({ default: m.NewUserModal })));
 import {
   Plus,
   Compass,
@@ -56,7 +57,6 @@ export function App() {
     addRoute,
     updateRoute,
     deleteRoute,
-    isSyncing,
     isFirebaseConfigured,
     // V2 Relational props
     users,
@@ -77,7 +77,6 @@ export function App() {
   } = useClubStore();
 
   const [activeTab, setActiveTab] = useState<'runs' | 'routes' | 'milestones' | 'leaderboard' | 'admin'>('runs');
-  const [checkInInitialMode, setCheckInInitialMode] = useState<'checkin' | 'register'>('checkin');
   
   // Modals state
   const [selectedRunForCheckIn, setSelectedRunForCheckIn] = useState<RunEvent | null>(null);
@@ -103,38 +102,86 @@ export function App() {
   }, [routes, selectedRoute]);
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
+  const [isOnboardingOpen, setIsOnboardingOpen] = useState<boolean>(false);
+  const [onboardingEmail, setOnboardingEmail] = useState<string>('');
+  const [onboardingDisplayName, setOnboardingDisplayName] = useState<string>('');
+  const [pendingCheckInRun, setPendingCheckInRun] = useState<RunEvent | null>(null);
 
-  const isAdmin = currentUser.role === 'admin' || currentUser.email === 'woodlandwoodchuckers@gmail.com';
-  const isOrganizerOrAdmin = isAdmin || currentUser.role === 'organizer';
+  const isUserLoggedIn = Boolean(firebaseUser || (currentUser && currentUser.email && currentUser.role !== 'guest'));
+  const isAdmin = isUserLoggedIn && (currentUser.role === 'admin' || currentUser.email === 'woodlandwoodchuckers@gmail.com');
+  const isOrganizerOrAdmin = isUserLoggedIn && (isAdmin || currentUser.role === 'organizer');
+
+  // Handle post-auth check: if user has a profile, switch to them; if new, launch onboarding
+  const handleUserAuthenticated = (email: string, displayName?: string | null) => {
+    const cleanEmail = email.trim().toLowerCase();
+    const existingProfile = users.find((u) => u.email.toLowerCase() === cleanEmail);
+    if (existingProfile) {
+      switchCurrentUser(cleanEmail);
+      if (pendingCheckInRun) {
+        setSelectedRunForCheckIn(pendingCheckInRun);
+        setPendingCheckInRun(null);
+      }
+    } else {
+      // First time this email is seen in club profiles! Launch onboarding modal
+      setOnboardingEmail(cleanEmail);
+      setOnboardingDisplayName(displayName || '');
+      setIsOnboardingOpen(true);
+    }
+  };
 
   // Listen to Firebase Auth state & check for passwordless email link sign-in
   useEffect(() => {
     checkAndCompleteEmailLinkSignIn().then((user) => {
       if (user && user.email) {
         console.info('Passwordless sign in verified for:', user.email);
-        switchCurrentUser(user.email);
+        handleUserAuthenticated(user.email, user.displayName);
       }
     }).catch((err) => console.error('Email sign in check error:', err));
 
     const unsubscribe = onAuthChange((user) => {
       setFirebaseUser(user);
       if (user && user.email) {
-        switchCurrentUser(user.email);
+        handleUserAuthenticated(user.email, user.displayName);
+      } else {
+        switchCurrentUser('');
       }
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [users, pendingCheckInRun]);
+
+  const handleOpenCheckIn = (run: RunEvent) => {
+    if (!isUserLoggedIn) {
+      setPendingCheckInRun(run);
+      setIsAuthModalOpen(true);
+    } else {
+      setSelectedRunForCheckIn(run);
+    }
+  };
+
+  const handleOpenRegister = () => {
+    if (isUserLoggedIn) {
+      alert(`You are already a registered Woodchucker (${currentUser.displayName})!`);
+    } else {
+      setIsAuthModalOpen(true);
+    }
+  };
+
+  const handleQuickCheckIn = () => {
+    if (runs.length > 0) {
+      handleOpenCheckIn(runs[0]);
+    }
+  };
 
   // Auto-open check-in modal if scanned from table QR code (e.g. ?checkin=true or #checkin)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('checkin') === 'true' || window.location.hash === '#checkin') {
       if (runs.length > 0) {
-        setSelectedRunForCheckIn(runs[0]);
+        handleOpenCheckIn(runs[0]);
       }
     }
-  }, [runs]);
+  }, [runs, isUserLoggedIn]);
 
   // Scheduling or editing a run also updates that night's check-in event,
   // so runners pick from the run's distance options when they check in.
@@ -188,20 +235,6 @@ export function App() {
     setEditingRoute(null);
   };
 
-  const handleOpenRegister = () => {
-    setCheckInInitialMode('register');
-    if (runs.length > 0) {
-      setSelectedRunForCheckIn(runs[0]);
-    }
-  };
-
-  const handleQuickCheckIn = () => {
-    setCheckInInitialMode('checkin');
-    if (runs.length > 0) {
-      setSelectedRunForCheckIn(runs[0]);
-    }
-  };
-
   return (
     <div className="min-h-screen flex flex-col bg-stone-100 font-sans pb-16 md:pb-0 w-full overflow-x-hidden">
       {/* Mobile PWA Install & Push Notification Banner */}
@@ -213,15 +246,12 @@ export function App() {
         setActiveTab={setActiveTab}
         currentUser={currentUser}
         firebaseUser={firebaseUser}
-        isFirebaseConfigured={isFirebaseConfigured}
-        isSyncing={isSyncing}
         unreadNotifsCount={notifications.length}
         onOpenNewRun={() => setIsNewRunOpen(true)}
         onOpenUploadGpx={() => {
           setEditingRoute(null);
           setIsRouteStudioOpen(true);
         }}
-        onOpenSetupGuide={() => setIsSetupGuideOpen(true)}
         onToggleNotifications={() => setShowNotificationsDrawer(!showNotificationsDrawer)}
         onOpenAuthModal={() => setIsAuthModalOpen(true)}
         onOpenRegister={handleOpenRegister}
@@ -333,7 +363,7 @@ export function App() {
                       choices={choices}
                       currentMember={currentMember}
                       onToggleRSVP={toggleRSVP}
-                      onOpenCheckIn={(r) => setSelectedRunForCheckIn(r)}
+                      onOpenCheckIn={handleOpenCheckIn}
                       onViewRoute={handleViewRouteFromRun}
                     />
                   );
@@ -631,7 +661,6 @@ export function App() {
             users={users}
             routes={routes}
             checkins={checkins}
-            initialMode={checkInInitialMode}
             onCheckInRunner={checkInRunner}
             onRegisterUser={registerUser}
             onSearchLegacy={searchLegacyMatches}
@@ -697,11 +726,34 @@ export function App() {
         <AuthModal
           isOpen={isAuthModalOpen}
           onClose={() => setIsAuthModalOpen(false)}
-          onAuthSuccess={(email) => {
-            switchCurrentUser(email);
+          onAuthSuccess={(email, displayName) => {
             setIsAuthModalOpen(false);
+            handleUserAuthenticated(email, displayName);
           }}
         />
+
+        {/* First-Time Runner Profile Creation & Historical Merge */}
+        {isOnboardingOpen && (
+          <NewUserModal
+            isOpen={isOnboardingOpen}
+            onClose={() => {
+              setIsOnboardingOpen(false);
+              setPendingCheckInRun(null);
+            }}
+            email={onboardingEmail}
+            initialDisplayName={onboardingDisplayName}
+            legacyMembers={legacyMembers}
+            onRegisterUser={registerUser}
+            onSuccess={(newUser) => {
+              switchCurrentUser(newUser.email);
+              setIsOnboardingOpen(false);
+              if (pendingCheckInRun) {
+                setSelectedRunForCheckIn(pendingCheckInRun);
+                setPendingCheckInRun(null);
+              }
+            }}
+          />
+        )}
       </Suspense>
     </div>
   );

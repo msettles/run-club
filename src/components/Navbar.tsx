@@ -8,8 +8,6 @@ import {
   Trophy, 
   Plus, 
   UploadCloud, 
-  Info, 
-  RefreshCw, 
   Shield, 
   Bell, 
   LogIn,
@@ -26,12 +24,9 @@ interface NavbarProps {
   setActiveTab: (tab: 'runs' | 'routes' | 'milestones' | 'leaderboard' | 'admin') => void;
   currentUser: UserProfile;
   firebaseUser: FirebaseUser | null;
-  isFirebaseConfigured: boolean;
-  isSyncing: boolean;
   unreadNotifsCount?: number;
   onOpenNewRun: () => void;
   onOpenUploadGpx: () => void;
-  onOpenSetupGuide: () => void;
   onToggleNotifications?: () => void;
   onOpenAuthModal: () => void;
   onOpenRegister?: () => void;
@@ -44,12 +39,9 @@ export const Navbar: React.FC<NavbarProps> = ({
   setActiveTab,
   currentUser,
   firebaseUser,
-  isFirebaseConfigured,
-  isSyncing,
   unreadNotifsCount = 0,
   onOpenNewRun,
   onOpenUploadGpx,
-  onOpenSetupGuide,
   onToggleNotifications,
   onOpenAuthModal,
   onOpenRegister,
@@ -57,9 +49,9 @@ export const Navbar: React.FC<NavbarProps> = ({
   onLogout,
 }) => {
   const [showProfileMenu, setShowProfileMenu] = useState<boolean>(false);
-  const isAdmin = currentUser.role === 'admin' || currentUser.email === 'woodlandwoodchuckers@gmail.com';
-  const isOrganizerOrAdmin = isAdmin || currentUser.role === 'organizer';
   const isUserLoggedIn = Boolean(firebaseUser || (currentUser && currentUser.email && currentUser.role !== 'guest'));
+  const isAdmin = isUserLoggedIn && (currentUser.role === 'admin' || currentUser.email === 'woodlandwoodchuckers@gmail.com');
+  const isOrganizerOrAdmin = isUserLoggedIn && (isAdmin || currentUser.role === 'organizer');
 
   return (
     <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-stone-200 shadow-xs w-full overflow-x-clip">
@@ -173,27 +165,6 @@ export const Navbar: React.FC<NavbarProps> = ({
                 )}
               </button>
             )}
-
-            {/* Firebase Status Pill */}
-            <button
-              onClick={onOpenSetupGuide}
-              className={`hidden xl:flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold border transition ${
-                isFirebaseConfigured
-                  ? 'bg-woodland-50 border-woodland-300 text-woodland-800'
-                  : 'bg-amber-50 border-amber-300 text-amber-800 hover:bg-amber-100'
-              }`}
-              title="Click for zero-credit-card setup guide"
-            >
-              {isSyncing ? (
-                <RefreshCw className="w-3 h-3 animate-spin text-woodland-600" />
-              ) : isFirebaseConfigured ? (
-                <span className="w-2 h-2 rounded-full bg-woodland-500 animate-pulse" />
-              ) : (
-                <span className="w-2 h-2 rounded-full bg-amber-500" />
-              )}
-              <span>{isFirebaseConfigured ? 'Firebase Spark' : 'Zero-Cost Local'}</span>
-              <Info className="w-3 h-3 opacity-60" />
-            </button>
 
             {/* Quick Actions (Admin / Organizer Only) */}
             {isOrganizerOrAdmin && (
