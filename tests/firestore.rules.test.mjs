@@ -451,3 +451,23 @@ test('runner can refresh badges and streaks but not touch totals that way', asyn
   await assertFails(updateDoc(doc(ctx(ALICE), 'users', ALICE), { unlockedBadgeIds: [], totalRuns: 99 }));
   await assertFails(updateDoc(doc(ctx(ALICE), 'users', ALICE), { legacyEventRuns: 99 }));
 });
+
+test('admin can delete a runner with their check-ins, row and claims; organizer cannot', async () => {
+  await seedLegacy();
+  await assertSucceeds(claimBatch(ctx(ALICE), ALICE, [LP]).commit());
+  await env.withSecurityRulesDisabled(async (c) => {
+    await setDoc(doc(c.firestore(), 'checkins', `${DATE}_${ALICE}`), checkIn(ALICE));
+  });
+  await assertFails(deleteDoc(doc(ctx(ORGANIZER), 'users', ALICE)));
+  await assertFails(deleteDoc(doc(ctx(ORGANIZER), 'members', memberKeyFor(ALICE))));
+
+  const admin = ctx(BOOTSTRAP);
+  const b = writeBatch(admin);
+  b.delete(doc(admin, 'checkins', `${DATE}_${ALICE}`));
+  b.update(doc(admin, 'legacy_profiles', LP.id), { claimedBy: null, claimedAt: null });
+  b.delete(doc(admin, 'members', memberKeyFor(ALICE)));
+  b.delete(doc(admin, 'users', ALICE));
+  await assertSucceeds(b.commit());
+  // The freed legacy name can be claimed by someone else
+  await assertSucceeds(claimBatch(ctx(BOB), BOB, [LP]).commit());
+});

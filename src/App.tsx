@@ -64,6 +64,7 @@ export function App() {
     syncPrivateData,
     clearPrivateData,
     setUserRole,
+    adminDeleteRunner,
     loadLegacyPool,
     adminSetLegacyClaim,
     importLegacyData,
@@ -580,6 +581,7 @@ export function App() {
               onOpenNewRun={() => setIsNewRunOpen(true)}
               onSendBroadcast={sendPushAnnouncement}
               onSetUserRole={setUserRole}
+              onDeleteRunner={adminDeleteRunner}
               onSetLegacyClaim={adminSetLegacyClaim}
               onImportLegacyData={importLegacyData}
               onReloadLegacyPool={loadLegacyPool}
