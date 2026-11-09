@@ -201,6 +201,13 @@ export function toPublicMember(user: UserProfile, memberKey: string): Record<str
   });
 }
 
+/** Staff load this many days of check-ins for the Check-In Log. */
+export const RECENT_CHECKIN_DAYS = 60;
+function recentCheckinCutoff(): string {
+  const d = new Date(Date.now() - RECENT_CHECKIN_DAYS * 86400e3);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 /** Local (in-app) Member record for a profile, keyed by memberKey. */
 function memberFromUser(user: UserProfile, memberKey: string): Member {
   return {
@@ -247,59 +254,6 @@ function saveToStorage<T>(key: string, data: T): void {
   }
 }
 
-const REMOVED_TEST_EMAILS = new Set([
-  'brittney.echols@example.com',
-  'john.conway@example.com',
-  'keith.misner@example.com',
-  'brittney.ecols@example.com',
-  'matt.settles@example.com',
-]);
-
-// One-time client-side purge for mattsettles@gmail.com to enable fresh onboarding test
-const PURGE_KEY = 'woodland_woodchuckers_purged_mattsettles_v1';
-if (typeof window !== 'undefined' && !localStorage.getItem(PURGE_KEY)) {
-  try {
-    const rawUsers = localStorage.getItem(STORAGE_KEYS.USERS);
-    if (rawUsers) {
-      const parsed = JSON.parse(rawUsers);
-      const cleaned = parsed.filter((u: any) => u.email?.toLowerCase() !== 'mattsettles@gmail.com');
-      localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(cleaned));
-    }
-    const rawMembers = localStorage.getItem(STORAGE_KEYS.MEMBERS);
-    if (rawMembers) {
-      const parsed = JSON.parse(rawMembers);
-      const cleaned = parsed.filter((m: any) => m.email?.toLowerCase() !== 'mattsettles@gmail.com');
-      localStorage.setItem(STORAGE_KEYS.MEMBERS, JSON.stringify(cleaned));
-    }
-    const currentEmail = localStorage.getItem(STORAGE_KEYS.CURRENT_USER_EMAIL);
-    if (currentEmail && currentEmail.toLowerCase() === 'mattsettles@gmail.com') {
-      localStorage.removeItem(STORAGE_KEYS.CURRENT_USER_EMAIL);
-    }
-    const currentId = localStorage.getItem(STORAGE_KEYS.CURRENT_USER_ID);
-    if (currentId && currentId.toLowerCase() === 'mattsettles@gmail.com') {
-      localStorage.removeItem(STORAGE_KEYS.CURRENT_USER_ID);
-    }
-    const rawLegacy = localStorage.getItem(STORAGE_KEYS.LEGACY_MEMBERS);
-    if (rawLegacy) {
-      const parsed = JSON.parse(rawLegacy);
-      const cleaned = parsed.map((m: any) => 
-        m.claimedByEmail?.toLowerCase() === 'mattsettles@gmail.com'
-          ? { ...m, claimedByEmail: null, claimedAt: null }
-          : m
-      );
-      localStorage.setItem(STORAGE_KEYS.LEGACY_MEMBERS, JSON.stringify(cleaned));
-    }
-    const rawCheckins = localStorage.getItem(STORAGE_KEYS.CHECKINS);
-    if (rawCheckins) {
-      const parsed = JSON.parse(rawCheckins);
-      const cleaned = parsed.filter((c: any) => c.userEmail?.toLowerCase() !== 'mattsettles@gmail.com');
-      localStorage.setItem(STORAGE_KEYS.CHECKINS, JSON.stringify(cleaned));
-    }
-    localStorage.setItem(PURGE_KEY, 'true');
-  } catch (e) {
-    console.warn('One-time client purge error:', e);
-  }
-}
 
 export function useClubStore() {
   // Legacy / existing state
@@ -312,10 +266,9 @@ export function useClubStore() {
     return [...stored, ...missing];
   });
   const [members, setMembers] = useState<Member[]>(() => {
-    const stored = loadFromStorage<Member[]>(STORAGE_KEYS.MEMBERS, INITIAL_MEMBERS)
-      .filter((m) => !REMOVED_TEST_EMAILS.has(m.email.toLowerCase()));
+    const stored = loadFromStorage<Member[]>(STORAGE_KEYS.MEMBERS, INITIAL_MEMBERS);
     const existingEmails = new Set(stored.map((m) => m.email.toLowerCase()));
-    const missing = INITIAL_MEMBERS.filter((m) => !existingEmails.has(m.email.toLowerCase()) && !REMOVED_TEST_EMAILS.has(m.email.toLowerCase()));
+    const missing = INITIAL_MEMBERS.filter((m) => !existingEmails.has(m.email.toLowerCase()));
     const updated = stored.map((m) => {
       const match = INITIAL_MEMBERS.find((init) => init.email.toLowerCase() === m.email.toLowerCase());
       if (match && m.totalRuns < match.totalRuns) {
@@ -327,9 +280,6 @@ export function useClubStore() {
   });
   const [currentMemberId, setCurrentMemberId] = useState<string>(() => {
     const stored = loadFromStorage<string>(STORAGE_KEYS.CURRENT_USER_ID, '');
-    if (stored && REMOVED_TEST_EMAILS.has(stored.toLowerCase())) {
-      return '';
-    }
     return stored;
   });
   const [badges, setBadges] = useState<Badge[]>(() => {
@@ -349,10 +299,9 @@ export function useClubStore() {
 
   // New Relational Collections state (local testing / offline first)
   const [users, setUsers] = useState<UserProfile[]>(() => {
-    const stored = loadFromStorage<UserProfile[]>(STORAGE_KEYS.USERS, INITIAL_USERS)
-      .filter((u) => !REMOVED_TEST_EMAILS.has(u.email.toLowerCase()));
+    const stored = loadFromStorage<UserProfile[]>(STORAGE_KEYS.USERS, INITIAL_USERS);
     const existingEmails = new Set(stored.map((u) => u.email.toLowerCase()));
-    const missing = INITIAL_USERS.filter((u) => !existingEmails.has(u.email.toLowerCase()) && !REMOVED_TEST_EMAILS.has(u.email.toLowerCase()));
+    const missing = INITIAL_USERS.filter((u) => !existingEmails.has(u.email.toLowerCase()));
     const updated = stored.map((u) => {
       const match = INITIAL_USERS.find((init) => init.email.toLowerCase() === u.email.toLowerCase());
       if (match && u.totalRuns < match.totalRuns) {
@@ -370,10 +319,9 @@ export function useClubStore() {
   // True once the schedule and check-in events have loaded (immediately in local mode).
   const [scheduleLoaded, setScheduleLoaded] = useState<boolean>(!isFirebaseConfigured);
   const [checkins, setCheckins] = useState<CheckInRecord[]>(() => {
-    const stored = loadFromStorage<CheckInRecord[]>(STORAGE_KEYS.CHECKINS, INITIAL_CHECKINS)
-      .filter((c) => !REMOVED_TEST_EMAILS.has(c.userEmail.toLowerCase()));
+    const stored = loadFromStorage<CheckInRecord[]>(STORAGE_KEYS.CHECKINS, INITIAL_CHECKINS);
     const existingIds = new Set(stored.map((c) => c.id));
-    const missing = INITIAL_CHECKINS.filter((c) => !existingIds.has(c.id) && !REMOVED_TEST_EMAILS.has(c.userEmail.toLowerCase()));
+    const missing = INITIAL_CHECKINS.filter((c) => !existingIds.has(c.id));
     return [...stored, ...missing];
   });
   const [legacyPool, setLegacyMembers] = useState<LegacyMember[]>(() => {
@@ -385,18 +333,9 @@ export function useClubStore() {
     const missing = INITIAL_LEGACY_MEMBERS.filter((m) => !existingNames.has(m.name.toUpperCase()));
     const updated = stored.map((m) => {
       const match = INITIAL_LEGACY_MEMBERS.find((init) => init.name.toUpperCase() === m.name.toUpperCase());
-      const base = match ? { ...m, ...match } : m;
-      if (base.claimedByEmail && REMOVED_TEST_EMAILS.has(base.claimedByEmail.toLowerCase())) {
-        return { ...base, claimedByEmail: null, claimedAt: null };
-      }
-      return base;
+      return match ? { ...m, ...match } : m;
     });
-    return [...updated, ...missing].map((m) => {
-      if (m.claimedByEmail && REMOVED_TEST_EMAILS.has(m.claimedByEmail.toLowerCase())) {
-        return { ...m, claimedByEmail: null, claimedAt: null };
-      }
-      return m;
-    });
+    return [...updated, ...missing];
   });
   // Profiles are the source of truth for who claimed what (linkedLegacyIds /
   // linkedLegacyNames); claimedBy on the legacy doc is the server-side lock.
@@ -418,14 +357,11 @@ export function useClubStore() {
 
   const [currentUserEmail, setCurrentUserEmail] = useState<string>(() => {
     const stored = loadFromStorage<string>(STORAGE_KEYS.CURRENT_USER_EMAIL, '');
-    if (stored && REMOVED_TEST_EMAILS.has(stored.toLowerCase())) {
-      return '';
-    }
     return stored;
   });
   const [milestoneAlerts, setMilestoneAlerts] = useState<MilestoneAlert[]>(() => {
     const stored = loadFromStorage<MilestoneAlert[]>(STORAGE_KEYS.MILESTONE_ALERTS, INITIAL_MILESTONE_ALERTS);
-    return stored.filter((a) => !REMOVED_TEST_EMAILS.has(a.userEmail.toLowerCase()));
+    return stored;
   });
 
   // Sync state changes to localStorage
@@ -515,35 +451,12 @@ export function useClubStore() {
         const runsSnap = await getDocs(collection(currentDb, 'runs'));
         setRuns(runsSnap.docs.map((d) => d.data() as RunEvent));
 
+        // Routes: read only. Show what's saved plus any official club route that
+        // isn't saved yet (staff save those when they sign in; see syncPrivateData).
         const routesSnap = await getDocs(collection(currentDb, 'routes'));
-        if (!routesSnap.empty) {
-          const remoteRoutes = routesSnap.docs.map((d) => hydrateRouteFromFirestore(d.data()));
-          const remoteIds = new Set(remoteRoutes.map((r) => r.id));
-          const missing = INITIAL_ROUTES.filter((r) => !remoteIds.has(r.id)).map(hydrateRouteFromFirestore);
-
-          // Seed any missing official club routes to Firestore
-          for (const m of missing) {
-            setDoc(doc(currentDb, 'routes', m.id), formatRouteForFirestore(m)).catch(console.error);
-          }
-
-          setRoutes((prev) => {
-            const localOnly = prev.filter((r) => !remoteIds.has(r.id));
-            const existingIds = new Set([...remoteRoutes.map((r) => r.id), ...localOnly.map((r) => r.id)]);
-            const missingClubRoutes = INITIAL_ROUTES.filter((r) => !existingIds.has(r.id));
-            return [...remoteRoutes, ...localOnly, ...missingClubRoutes];
-          });
-        } else {
-          // If Firestore is empty, preserve local routes and seed missing official routes
-          setRoutes((prev) => {
-            const existingIds = new Set(prev.map((r) => r.id));
-            const missing = INITIAL_ROUTES.filter((r) => !existingIds.has(r.id));
-            const merged = [...prev, ...missing];
-            for (const r of merged) {
-              setDoc(doc(currentDb, 'routes', r.id), formatRouteForFirestore(r)).catch(console.error);
-            }
-            return merged;
-          });
-        }
+        const remoteRoutes = routesSnap.docs.map((d) => hydrateRouteFromFirestore(d.data()));
+        const remoteIds = new Set(remoteRoutes.map((r) => r.id));
+        setRoutes([...remoteRoutes, ...INITIAL_ROUTES.filter((r) => !remoteIds.has(r.id))]);
 
         // Public leaderboard projection (keyed by hashed email, no PII).
         // Ignore any old email-keyed docs left over from the previous schema.
@@ -636,29 +549,41 @@ export function useClubStore() {
 
       const usersSnap = await getDocs(collection(currentDb, 'users'));
       const remoteUsers = usersSnap.docs
-        .map((d) => d.data() as UserProfile)
-        .filter((u) => !REMOVED_TEST_EMAILS.has(u.email.toLowerCase()));
+        .map((d) => d.data() as UserProfile);
       if (remoteUsers.length > 0) {
         const remoteEmails = new Set(remoteUsers.map((u) => u.email.toLowerCase()));
         setUsers((prev) => [...remoteUsers, ...prev.filter((u) => !remoteEmails.has(u.email.toLowerCase()))]);
       }
 
-      const checkinsSnap = await getDocs(collection(currentDb, 'checkins'));
-      const remoteCheckins = checkinsSnap.docs
-        .map((d) => d.data() as CheckInRecord)
-        .filter((c) => !REMOVED_TEST_EMAILS.has(c.userEmail.toLowerCase()));
-      if (remoteCheckins.length > 0) {
-        const remoteIds = new Set(remoteCheckins.map((c) => c.id));
-        setCheckins((prev) => [...remoteCheckins, ...prev.filter((c) => !remoteIds.has(c.id))]);
-      }
+      // Check-ins grow every week: staff load the last RECENT_CHECKIN_DAYS for the
+      // Check-In Log, plus all of their own (for their streaks). Anything that
+      // recalculates another runner's stats queries that runner's check-ins.
+      const [recentSnap, ownSnap2] = await Promise.all([
+        getDocs(query(collection(currentDb, 'checkins'), where('date', '>=', recentCheckinCutoff()))),
+        getDocs(query(collection(currentDb, 'checkins'), where('userEmail', '==', cleanEmail))),
+      ]);
+      const loaded = new Map<string, CheckInRecord>();
+      [...recentSnap.docs, ...ownSnap2.docs].forEach((d) => loaded.set(d.id, d.data() as CheckInRecord));
+      setCheckins([...loaded.values()]);
 
       const alertsSnap = await getDocs(collection(currentDb, 'milestone_alerts'));
       const remoteAlerts = alertsSnap.docs
         .map((d) => d.data() as MilestoneAlert)
-        .filter((a) => a.userEmail && !REMOVED_TEST_EMAILS.has(a.userEmail.toLowerCase()));
+        .filter((a) => Boolean(a.userEmail));
       if (remoteAlerts.length > 0) {
         const remoteIds = new Set(remoteAlerts.map((a) => a.id));
         setMilestoneAlerts((prev) => [...remoteAlerts, ...prev.filter((a) => !remoteIds.has(a.id))]);
+      }
+
+      // Save any official club route that isn't in Firestore yet (staff only; runners can't write routes).
+      const savedRouteIds = new Set((await getDocs(collection(currentDb, 'routes'))).docs.map((d) => d.id));
+      const unsavedOfficial = INITIAL_ROUTES.filter((r) => !savedRouteIds.has(r.id)).map(hydrateRouteFromFirestore);
+      if (unsavedOfficial.length) {
+        const results = await Promise.allSettled(
+          unsavedOfficial.map((r) => setDoc(doc(currentDb, 'routes', r.id), formatRouteForFirestore(r)))
+        );
+        const failed = results.filter((x) => x.status === 'rejected').length;
+        if (failed) console.warn(`Saving official club routes: ${failed} of ${unsavedOfficial.length} failed.`);
       }
 
       // Code words (staff), keyed by run ID.
@@ -752,15 +677,22 @@ export function useClubStore() {
         (freshEvents || prev).map((e) => (codeWords[e.id] ? { ...e, codeWord: codeWords[e.id] } : e))
       );
       if (migrated) {
-        const ciSnap = await getDocs(collection(currentDb, 'checkins'));
+        const ciSnap = await getDocs(query(collection(currentDb, 'checkins'), where('date', '>=', recentCheckinCutoff())));
         setCheckins(ciSnap.docs.map((d) => d.data() as CheckInRecord));
       }
 
       // Make sure every profile has an up-to-date hashed leaderboard row.
       // Only admins may write other people's rows.
-      for (const u of isAdmin ? remoteUsers : []) {
-        const key = await memberKeyFor(u.email);
-        setDoc(doc(currentDb, 'members', key), toPublicMember(u, key)).catch(console.error);
+      // Background maintenance (no one is waiting on it): report failures in one warning.
+      if (isAdmin) {
+        const results = await Promise.allSettled(
+          remoteUsers.map(async (u) => {
+            const key = await memberKeyFor(u.email);
+            await setDoc(doc(currentDb, 'members', key), toPublicMember(u, key));
+          })
+        );
+        const failed = results.filter((r) => r.status === 'rejected').length;
+        if (failed) console.warn(`Leaderboard refresh: ${failed} of ${remoteUsers.length} rows could not be updated.`);
       }
     } catch (err) {
       console.warn('Private Firestore sync failed:', err);
@@ -824,9 +756,17 @@ export function useClubStore() {
   };
 
   /** Recalculate badges + streaks for a profile from all its dated history and save them. */
+  /** All of one runner's check-ins (server query: staff only load recent ones). */
+  const fetchRunnerCheckins = async (email: string): Promise<CheckInRecord[]> => {
+    const clean = email.toLowerCase();
+    if (!isFirebaseConfigured || !db) return checkins.filter((c) => c.userEmail.toLowerCase() === clean);
+    const snap = await getDocs(query(collection(db, 'checkins'), where('userEmail', '==', clean)));
+    return snap.docs.map((d) => d.data() as CheckInRecord);
+  };
+
   const refreshDerivedStats = async (user: UserProfile, legacyEvents?: LegacyEvent[]): Promise<UserProfile> => {
     const events = legacyEvents ?? (await fetchLegacyEvents(user.linkedLegacyIds || []));
-    const own = checkins.filter((c) => c.userEmail.toLowerCase() === user.email.toLowerCase());
+    const own = await fetchRunnerCheckins(user.email);
     const derived = recomputeBadges(user, badges, datedEventsFrom(events, own, meetupEvents));
     const updated: UserProfile = { ...user, ...derived };
     const key = await memberKeyFor(user.email);
@@ -1554,17 +1494,12 @@ export function useClubStore() {
   /**
    * Mark a milestone reward as fulfilled / handed out by an organizer
    */
-  const markMilestoneFulfilled = (alertId: string, fulfilledBy: string) => {
-    setMilestoneAlerts((prev) =>
-      prev.map((a) =>
-        a.id === alertId
-          ? { ...a, fulfilled: true, fulfilledAt: new Date().toISOString(), fulfilledBy }
-          : a
-      )
-    );
+  const markMilestoneFulfilled = async (alertId: string, fulfilledBy: string) => {
+    const fulfilledAt = new Date().toISOString();
     if (isFirebaseConfigured && db) {
-      setDoc(doc(db, 'milestone_alerts', alertId), { fulfilled: true, fulfilledAt: new Date().toISOString(), fulfilledBy }, { merge: true }).catch(console.error);
+      await setDoc(doc(db, 'milestone_alerts', alertId), { fulfilled: true, fulfilledAt, fulfilledBy }, { merge: true });
     }
+    setMilestoneAlerts((prev) => prev.map((a) => (a.id === alertId ? { ...a, fulfilled: true, fulfilledAt, fulfilledBy } : a)));
   };
 
   /**
@@ -1826,41 +1761,33 @@ export function useClubStore() {
   /**
    * Toggle RSVP for a run (legacy support)
    */
+  /** RSVP / un-RSVP the signed-in runner. Saves first; throws if the server refuses. */
   const toggleRSVP = async (runId: string) => {
     if (!currentUserEmail || currentMember.id === 'guest') return;
-    setRuns((prevRuns) =>
-      prevRuns.map((run) => {
-        if (run.id !== runId) return run;
-
-        const isAttending = run.attendees.some((a) => a.memberId === currentMember.id);
-        let updatedAttendees;
-
-        if (isAttending) {
-          updatedAttendees = run.attendees.filter((a) => a.memberId !== currentMember.id);
-        } else {
-          updatedAttendees = [
-            ...run.attendees,
-            {
-              memberId: currentMember.id,
-              name: currentMember.name,
-              checkedIn: false,
-              rsvpDate: new Date().toISOString(),
-            },
-          ];
-        }
-
-        const updatedRun = { ...run, attendees: updatedAttendees };
-        if (isFirebaseConfigured && db) {
-          // Only touch our own attendee entry (rules reject any other change by runners).
-          const mine = isAttending
-            ? run.attendees.find((a) => a.memberId === currentMember.id)
-            : updatedAttendees[updatedAttendees.length - 1];
-          updateDoc(doc(db, 'runs', run.id), {
-            attendees: isAttending ? arrayRemove(mine) : arrayUnion(mine),
-          }).catch(console.error);
-        }
-        return updatedRun;
-      })
+    const run = runs.find((r) => r.id === runId);
+    if (!run) return;
+    const mineBefore = run.attendees.find((a) => a.memberId === currentMember.id);
+    const mine = mineBefore || {
+      memberId: currentMember.id,
+      name: currentMember.name,
+      checkedIn: false,
+      rsvpDate: new Date().toISOString(),
+    };
+    if (isFirebaseConfigured && db) {
+      // Only touch our own attendee entry (rules reject any other change by runners).
+      await updateDoc(doc(db, 'runs', runId), { attendees: mineBefore ? arrayRemove(mine) : arrayUnion(mine) });
+    }
+    setRuns((prev) =>
+      prev.map((r) =>
+        r.id !== runId
+          ? r
+          : {
+              ...r,
+              attendees: mineBefore
+                ? r.attendees.filter((a) => a.memberId !== currentMember.id)
+                : [...r.attendees.filter((a) => a.memberId !== currentMember.id), mine],
+            }
+      )
     );
   };
 
@@ -1962,10 +1889,10 @@ export function useClubStore() {
    * Delete an existing route (Organizer / Admin)
    */
   const deleteRoute = async (routeId: string): Promise<void> => {
-    setRoutes((prev) => prev.filter((r) => r.id !== routeId));
     if (isFirebaseConfigured && db) {
-      deleteDoc(doc(db, 'routes', routeId)).catch(console.error);
+      await deleteDoc(doc(db, 'routes', routeId));
     }
+    setRoutes((prev) => prev.filter((r) => r.id !== routeId));
   };
 
   /**
@@ -2048,7 +1975,7 @@ export function useClubStore() {
         if (userSnap.exists()) {
           const rolled = rollBackCheckIn(userSnap.data() as UserProfile, c);
           const legacy = await fetchLegacyEvents(rolled.linkedLegacyIds || []);
-          const remaining = checkins.filter((x) => x.userEmail.toLowerCase() === email && x.id !== c.id);
+          const remaining = (await fetchRunnerCheckins(email)).filter((x) => x.id !== c.id);
           const final: UserProfile = { ...rolled, ...recomputeBadges(rolled, badges, datedEventsFrom(legacy, remaining, remainingEvents)) };
           const key = await memberKeyFor(email);
           batch.set(doc(currentDb, 'users', email), cleanFirestoreData(final));
@@ -2086,22 +2013,6 @@ export function useClubStore() {
   };
 
   /**
-   * Update member stats or profile (Admin / Member)
-   */
-  const updateMemberStats = async (memberId: string, updates: Partial<Member>) => {
-    setMembers((prev) =>
-      prev.map((m) => {
-        if (m.id !== memberId) return m;
-        const updated = { ...m, ...updates };
-        if (isFirebaseConfigured && db) {
-          setDoc(doc(db, 'members', memberId), updated, { merge: true }).catch(console.error);
-        }
-        return updated;
-      })
-    );
-  };
-
-  /**
    * Send a club-wide push announcement (Admin)
    */
   const sendPushAnnouncement = async (title: string, body: string, targetRunId?: string) => {
@@ -2114,13 +2025,12 @@ export function useClubStore() {
       sender: currentMember.name,
     };
 
+    if (isFirebaseConfigured && db) {
+      await setDoc(doc(db, 'settings', 'latest_announcement'), notif);
+    }
     storeNotification(notif);
     setNotifications((prev) => [notif, ...prev]);
     showLocalNotification(title, body);
-
-    if (isFirebaseConfigured && db) {
-      setDoc(doc(db, 'settings', 'latest_announcement'), notif).catch(console.error);
-    }
   };
 
   /**
@@ -2194,7 +2104,6 @@ export function useClubStore() {
     createRunWithCheckIn,
     updateRun,
     deleteRun,
-    updateMemberStats,
     sendPushAnnouncement,
     addRoute,
     updateRoute,

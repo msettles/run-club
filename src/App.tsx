@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { useClubStore } from './services/storage';
 import { RunEvent, GPXRoute, UserProfile } from './types';
-import { buildMeetupFromRun, getRunChoices, resolveChoices } from './utils/runChoices';
+import { buildMeetupFromRun, deleteRunConfirmMessage, getRunChoices, resolveChoices } from './utils/runChoices';
 import { Navbar } from './components/Navbar';
 import { RunCard } from './components/RunCard';
 import { MapViewer } from './components/MapViewer';
@@ -80,6 +80,7 @@ export function App() {
     checkInRunner,
     saveMeetupEvent,
     resolveRunByCodeWord,
+    countRunCheckIns,
     scheduleLoaded,
     searchLegacyMatches,
     switchCurrentUser,
@@ -275,6 +276,15 @@ export function App() {
           : "Not saved. Please check your connection and try again."
     );
 
+  const handleToggleRSVP = async (runId: string) => {
+    try {
+      await toggleRSVP(runId);
+    } catch (err) {
+      console.error('RSVP failed:', err);
+      alert("Your RSVP couldn't be saved. Please check your connection and try again.");
+    }
+  };
+
   const handleDeleteRun = async (runId: string) => {
     try {
       await deleteRun(runId);
@@ -285,12 +295,15 @@ export function App() {
   };
 
   // Past runs can't be edited; admins can still delete one (check-ins are rolled back).
-  const confirmDeletePastRun = (run: RunEvent) => {
-    const count = checkins.filter((c) => c.runId === run.id).length;
-    const message = count > 0
-      ? `Delete "${run.title}"?\n\n${count} runner${count === 1 ? '' : 's'} checked in. Their check-ins will be removed and their run counts, miles, badges and streaks adjusted. Gear alerts from this run that haven't been handed out yet are removed. This can't be undone.`
-      : `Delete "${run.title}"? This can't be undone.`;
-    if (window.confirm(message)) handleDeleteRun(run.id);
+  const confirmDeletePastRun = async (run: RunEvent) => {
+    // Staff only load recent check-ins, so ask the server how many this run has.
+    let count = checkins.filter((c) => c.runId === run.id).length;
+    try {
+      count = await countRunCheckIns(run.id);
+    } catch (err) {
+      console.warn('Could not count check-ins for this run:', err);
+    }
+    if (window.confirm(deleteRunConfirmMessage(run.title, count))) handleDeleteRun(run.id);
   };
 
   const handleAddRun = async (run: Omit<RunEvent, 'id' | 'attendees'>, codeWord: string) => {
@@ -340,7 +353,13 @@ export function App() {
       alert('Only organizers and club administrators can delete routes.');
       return;
     }
-    await deleteRoute(routeId);
+    try {
+      await deleteRoute(routeId);
+    } catch (err) {
+      console.error('Deleting route failed:', err);
+      alert("The route couldn't be deleted. Please check your connection and try again.");
+      return;
+    }
     if (selectedRoute.id === routeId && routes.length > 1) {
       setSelectedRoute(routes.find((r) => r.id !== routeId) || routes[0]);
     }
@@ -484,7 +503,7 @@ export function App() {
                     route={attachedRoute}
                     choices={choices}
                     currentMember={currentMember}
-                    onToggleRSVP={toggleRSVP}
+                    onToggleRSVP={handleToggleRSVP}
                     onOpenCheckIn={handleOpenCheckIn}
                     onViewRoute={handleViewRouteFromRun}
                     isCheckedIn={myCheckedInRunIds.has(run.id)}
