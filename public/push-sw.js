@@ -50,7 +50,7 @@ self.addEventListener('push', (event) => {
   let payload = {};
   try {
     payload = event.data ? event.data.json() : {};
-  } catch (e) {
+  } catch {
     payload = { notification: { body: event.data ? event.data.text() : '' } };
   }
   // FCM web payloads carry { notification: { title, body, image }, data: {...}, fcmOptions: { link } }

@@ -43,6 +43,9 @@ export const EditRunModal: React.FC<EditRunModalProps> = ({
   const [paceGroups, setPaceGroups] = useState<PaceGroup[]>(run.paceGroups || []);
   const [completed, setCompleted] = useState<boolean>(run.completed || false);
 
+  // Hooks must run before the early return below.
+  const [isSaving, setIsSaving] = useState(false);
+
   if (!isOpen) return null;
 
   const addPaceGroup = () => {
@@ -53,7 +56,6 @@ export const EditRunModal: React.FC<EditRunModalProps> = ({
     setPaceGroups(paceGroups.filter((_, i) => i !== index));
   };
 
-  const [isSaving, setIsSaving] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

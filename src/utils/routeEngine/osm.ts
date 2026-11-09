@@ -290,7 +290,8 @@ export class StreetIndex {
     }
 
     if (best) {
-      let [d, name, kind] = best;
+      const [d, , kind] = best;
+      let name = best[1];
       if (replacements) {
         if (replacements[name]) {
           name = replacements[name];
