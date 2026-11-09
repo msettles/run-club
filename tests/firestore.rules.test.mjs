@@ -594,3 +594,22 @@ test('deleting a run with check-ins: admin rolls back runners; organizer cannot'
   b2.delete(doc(admin, 'meetup_secrets', RUN));
   await assertSucceeds(b2.commit());
 });
+
+test('creating a run with a code word already used that day saves nothing', async () => {
+  const org = ctx(ORGANIZER);
+  const later = { opens: Timestamp.fromMillis(Date.now() + 3600e3), closes: Timestamp.fromMillis(Date.now() + 7200e3) };
+  const create = (id, word) => {
+    const b = writeBatch(org);
+    b.set(doc(org, 'runs', id), { ...run, id, attendees: [] });
+    b.set(doc(org, 'meetup_events', id), { id, runId: id, date: DATE, title: 'X', activeDistances: [], routes: {}, codeWordSet: true, checkInOpensAt: later.opens, checkInClosesAt: later.closes });
+    b.set(doc(org, 'meetup_secrets', id), { codeWord: word });
+    b.set(doc(org, 'meetup_codes', codeKey(DATE, word)), { runId: id, date: DATE });
+    return b.commit();
+  };
+  await assertFails(create('run-dup', 'ACORN')); // ACORN is run-1's word today
+  await env.withSecurityRulesDisabled(async (c) => {
+    const snap = await getDoc(doc(c.firestore(), 'runs', 'run-dup'));
+    if (snap.exists()) throw new Error('run was saved despite the duplicate code word');
+  });
+  await assertSucceeds(create('run-ok', 'WALNUT'));
+});

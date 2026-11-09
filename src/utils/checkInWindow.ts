@@ -52,17 +52,25 @@ export function checkInStatus(ev: Parameters<typeof checkInWindow>[0], now = new
   return 'open';
 }
 
-/** Events whose check-in window is open right now, earliest start first. */
+/** A check-in event is live once its code word is saved (codeWordSet !== false). */
+export const isEventLive = (e: Pick<MeetupEvent, 'codeWordSet'>): boolean => e.codeWordSet !== false;
+
+/** A run is live (shown to runners, reachable by the QR code) once its check-in event and code word exist. */
+export function isRunLive(run: Pick<RunEvent, 'id'>, events: MeetupEvent[]): boolean {
+  return events.some((e) => e.id === run.id && isEventLive(e));
+}
+
+/** Live events whose check-in window is open right now, earliest start first. */
 export function openCheckInEvents(events: MeetupEvent[], now = new Date()): MeetupEvent[] {
   return events
-    .filter((e) => checkInStatus(e, now) === 'open')
+    .filter((e) => isEventLive(e) && checkInStatus(e, now) === 'open')
     .sort((a, b) => eventStart(a.date, a.time).getTime() - eventStart(b.date, b.time).getTime());
 }
 
-/** The next event whose check-in hasn't opened yet. */
+/** The next live event whose check-in hasn't opened yet. */
 export function nextCheckInEvent(events: MeetupEvent[], now = new Date()): MeetupEvent | undefined {
   return events
-    .filter((e) => checkInStatus(e, now) === 'not_open')
+    .filter((e) => isEventLive(e) && checkInStatus(e, now) === 'not_open')
     .sort((a, b) => checkInWindow(a).opensAt.getTime() - checkInWindow(b).opensAt.getTime())[0];
 }
 

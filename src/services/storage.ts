@@ -18,6 +18,7 @@ import {
 } from '../types';
 import { calculateAge } from '../utils/dateUtils';
 import { computeCheckInWindow, eventStart } from '../utils/checkInWindow';
+import { buildMeetupFromRun } from '../utils/runChoices';
 import {
   buildLegacyImport,
   datedEventsFrom,
@@ -1595,6 +1596,8 @@ export function useClubStore() {
         {
           ...cleanFirestoreData(publicEvent),
           codeWord: deleteField(),
+          // Live only once its code word is saved; a change that fails below leaves it not live.
+          codeWordSet: !wordOrDateChanged && Boolean(oldWord || previous?.codeWordSet),
           checkInOpensAt: Timestamp.fromDate(win.opensAt),
           checkInClosesAt: Timestamp.fromDate(win.closesAt),
         },
@@ -1618,9 +1621,11 @@ export function useClubStore() {
           );
         }
         await setDoc(doc(db, 'meetup_secrets', runId), { codeWord: newWord });
+        await updateDoc(doc(db, 'meetup_events', runId), { codeWordSet: true });
       }
     }
 
+    event = { ...event, codeWordSet: Boolean(newWord || oldWord) };
     setMeetupEvents((prev) => (prev.some((e) => e.id === runId) ? prev.map((e) => (e.id === runId ? event : e)) : [event, ...prev]));
   };
 
@@ -1860,25 +1865,54 @@ export function useClubStore() {
   /**
    * Add a new scheduled run
    */
-  const addRun = async (newRun: Omit<RunEvent, 'id' | 'attendees'>) => {
+  /**
+   * Create a run together with its check-in event, code word and code word
+   * lookup key in ONE write, so a run never exists without a working check-in.
+   * If the code word is already used by another run that day, nothing is saved.
+   * The creator is not RSVP'd automatically.
+   */
+  const createRunWithCheckIn = async (newRun: Omit<RunEvent, 'id' | 'attendees'>, codeWord: string): Promise<RunEvent> => {
+    const word = codeWord.trim().toUpperCase();
+    if (!word) throw new Error('Enter the check-in code word.');
+    const duplicateError = () =>
+      Object.assign(new Error(`The code word ${word} is already used by another run on ${newRun.date}. Pick a different word.`), {
+        code: 'duplicate-code-word',
+      });
+    if (meetupEvents.some((e) => e.date === newRun.date && (e.codeWord || '').toUpperCase() === word)) throw duplicateError();
+
     const id = `run-${Date.now()}`;
-    const run: RunEvent = {
-      ...newRun,
-      id,
-      attendees: [
-        {
-          memberId: currentMember.id,
-          name: currentMember.name,
-          checkedIn: false,
-          rsvpDate: new Date().toISOString(),
-        },
-      ],
+    const run: RunEvent = { ...newRun, id, attendees: [] };
+    const win = computeCheckInWindow(run.date, run.time);
+    const event: MeetupEvent = {
+      ...buildMeetupFromRun(run, routes, word),
+      codeWordSet: true,
+      checkInOpensAt: win.opensAt.toISOString(),
+      checkInClosesAt: win.closesAt.toISOString(),
     };
 
     if (isFirebaseConfigured && db) {
-      await setDoc(doc(db, 'runs', id), cleanFirestoreData(run));
+      const key = await codeKeyFor(run.date, word);
+      if ((await getDoc(doc(db, 'meetup_codes', key))).exists()) throw duplicateError();
+      const { codeWord: _cw, checkInOpensAt: _o, checkInClosesAt: _c, ...publicEvent } = event;
+      const batch = writeBatch(db);
+      batch.set(doc(db, 'runs', id), cleanFirestoreData(run));
+      batch.set(doc(db, 'meetup_events', id), {
+        ...cleanFirestoreData(publicEvent),
+        checkInOpensAt: Timestamp.fromDate(win.opensAt),
+        checkInClosesAt: Timestamp.fromDate(win.closesAt),
+      });
+      batch.set(doc(db, 'meetup_secrets', id), { codeWord: word });
+      batch.set(doc(db, 'meetup_codes', key), { runId: id, date: run.date });
+      try {
+        await batch.commit();
+      } catch (err: any) {
+        // The lookup key already existing is the only expected refusal here.
+        if (err?.code === 'permission-denied') throw duplicateError();
+        throw err;
+      }
     }
     setRuns((prev) => [run, ...prev]);
+    setMeetupEvents((prev) => [event, ...prev.filter((e) => e.id !== id)]);
     return run;
   };
 
@@ -1941,10 +1975,10 @@ export function useClubStore() {
    * Update an existing run (Admin)
    */
   const updateRun = async (updatedRun: RunEvent) => {
-    setRuns((prev) => prev.map((r) => (r.id === updatedRun.id ? updatedRun : r)));
     if (isFirebaseConfigured && db) {
-      setDoc(doc(db, 'runs', updatedRun.id), cleanFirestoreData(updatedRun), { merge: true }).catch(console.error);
+      await setDoc(doc(db, 'runs', updatedRun.id), cleanFirestoreData(updatedRun), { merge: true });
     }
+    setRuns((prev) => prev.map((r) => (r.id === updatedRun.id ? updatedRun : r)));
   };
 
   /**
@@ -2160,7 +2194,7 @@ export function useClubStore() {
     currentMemberId,
     setCurrentMemberId,
     toggleRSVP,
-    addRun,
+    createRunWithCheckIn,
     updateRun,
     deleteRun,
     updateMemberStats,

@@ -10,7 +10,7 @@ interface EditRunModalProps {
   routes: GPXRoute[];
   isOpen: boolean;
   onClose: () => void;
-  onSave: (updatedRun: RunEvent, codeWord: string) => void;
+  onSave: (updatedRun: RunEvent, codeWord: string) => Promise<void>;
   onDelete?: (runId: string) => void;
   checkInCount?: number; // Runners checked into this run (their stats are rolled back on delete)
   specialEvents?: SpecialEventDefinition[];
@@ -53,7 +53,9 @@ export const EditRunModal: React.FC<EditRunModalProps> = ({
     setPaceGroups(paceGroups.filter((_, i) => i !== index));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const [isSaving, setIsSaving] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const resolved = resolveChoices(routeChoices, routes);
     if (resolved.length === 0) {
@@ -64,7 +66,10 @@ export const EditRunModal: React.FC<EditRunModalProps> = ({
       setFormError('Enter the check-in code word.');
       return;
     }
-    onSave({
+    setIsSaving(true);
+    setFormError(null);
+    try {
+      await onSave({
       ...run,
       title,
       date,
@@ -78,8 +83,13 @@ export const EditRunModal: React.FC<EditRunModalProps> = ({
       paceGroups,
       completed,
       specialEvent: specialEvent !== 'none' ? specialEvent : undefined,
-    }, codeWord);
-    onClose();
+      }, codeWord);
+      onClose();
+    } catch (err: any) {
+      setFormError(err?.message || 'Not saved. Please try again.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -312,9 +322,10 @@ export const EditRunModal: React.FC<EditRunModalProps> = ({
               </button>
               <button
                 type="submit"
-                className="px-5 py-2 text-xs font-semibold bg-woodland-600 text-white rounded-lg hover:bg-woodland-700 shadow-sm"
+                disabled={isSaving}
+                className="px-5 py-2 text-xs font-semibold bg-woodland-600 text-white rounded-lg hover:bg-woodland-700 shadow-sm disabled:opacity-50"
               >
-                Save Changes
+                {isSaving ? 'Saving…' : 'Save Changes'}
               </button>
             </div>
           </div>
