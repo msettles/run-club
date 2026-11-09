@@ -47,6 +47,7 @@ import {
   collection,
   getDocs,
   getDoc,
+  getCountFromServer,
   setDoc,
   updateDoc,
   deleteDoc,
@@ -1566,6 +1567,12 @@ export function useClubStore() {
     setMeetupEvents((prev) => (prev.some((e) => e.id === runId) ? prev.map((e) => (e.id === runId ? event : e)) : [event, ...prev]));
   };
 
+  /** How many signed-in devices have signed up for phone notifications (admins). */
+  const countPushDevices = async (): Promise<number> => {
+    if (!isFirebaseConfigured || !db) return 0;
+    return (await getCountFromServer(collection(db, 'push_devices'))).data().count;
+  };
+
   /** Which run a code word belongs to on a date (signed-in lookup; never lists code words). */
   const resolveRunByCodeWord = async (date: string, codeWord: string): Promise<string | null> => {
     const word = codeWord.trim().toUpperCase();
@@ -2080,6 +2087,7 @@ export function useClubStore() {
     checkInRunner,
     saveMeetupEvent,
     resolveRunByCodeWord,
+    countPushDevices,
     countRunCheckIns,
     searchLegacyMatches,
     switchCurrentUser,

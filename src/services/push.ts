@@ -1,0 +1,98 @@
+/**
+ * Phone / browser push notifications via Firebase Cloud Messaging (FCM).
+ *
+ * Option A (free, Spark plan): devices sign up here; an admin sends from the
+ * Firebase console (Messaging → New campaign → Notifications, target this web
+ * app). Nothing in the app can send pushes: that needs server credentials.
+ *
+ * Each device: browser permission → push service worker (/push-sw.js, scope
+ * /push/) → FCM token. Signed-in runners' devices are recorded in
+ * push_devices/{sha256(token)} so admins can see how many are signed up.
+ */
+import { getMessaging, getToken, deleteToken, isSupported } from 'firebase/messaging';
+import { doc, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
+import { app, db, isFirebaseConfigured } from './firebase';
+
+const VAPID_KEY = import.meta.env.VITE_FIREBASE_VAPID_KEY || '';
+const ENABLED_KEY = 'woodchuckers_push_device_v1'; // this device signed up (token saved)
+
+export type PushStatus = 'unsupported' | 'needs-install' | 'not-configured' | 'blocked' | 'off' | 'on';
+
+const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent);
+const isStandalone = () =>
+  window.matchMedia('(display-mode: standalone)').matches || Boolean((navigator as any).standalone);
+
+async function sha256Hex(text: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+/** Where this device stands. iPhones only support web push from the Home Screen app. */
+export async function getPushStatus(): Promise<PushStatus> {
+  if (typeof window === 'undefined' || !('Notification' in window) || !('serviceWorker' in navigator)) {
+    return isIOS() && !isStandalone() ? 'needs-install' : 'unsupported';
+  }
+  if (!isFirebaseConfigured || !app || !VAPID_KEY) return 'not-configured';
+  if (!(await isSupported().catch(() => false))) return isIOS() && !isStandalone() ? 'needs-install' : 'unsupported';
+  if (Notification.permission === 'denied') return 'blocked';
+  return Notification.permission === 'granted' && localStorage.getItem(ENABLED_KEY) ? 'on' : 'off';
+}
+
+async function pushRegistration(): Promise<ServiceWorkerRegistration> {
+  return navigator.serviceWorker.register('/push-sw.js', { scope: '/push/' });
+}
+
+/**
+ * Sign this device up for club notifications. Must be called from a tap
+ * (browsers only show the permission prompt in response to a user gesture).
+ */
+export async function enablePushOnThisDevice(account?: { email?: string; memberKey?: string }): Promise<PushStatus> {
+  const status = await getPushStatus();
+  if (status === 'unsupported' || status === 'needs-install' || status === 'not-configured' || status === 'blocked') {
+    return status;
+  }
+  const permission = await Notification.requestPermission();
+  if (permission !== 'granted') return permission === 'denied' ? 'blocked' : 'off';
+
+  const registration = await pushRegistration();
+  const token = await getToken(getMessaging(app!), { vapidKey: VAPID_KEY, serviceWorkerRegistration: registration });
+  if (!token) throw new Error('Could not get a notification token for this device.');
+
+  if (db && account?.email) {
+    await setDoc(doc(db, 'push_devices', await sha256Hex(token)), {
+      token,
+      userEmail: account.email.toLowerCase(),
+      memberKey: account.memberKey || null,
+      platform: isIOS() ? 'ios' : /android/i.test(navigator.userAgent) ? 'android' : 'desktop',
+      updatedAt: serverTimestamp(),
+    });
+  }
+  try {
+    localStorage.setItem(ENABLED_KEY, '1');
+  } catch {
+    // ignore
+  }
+  return 'on';
+}
+
+/** Turn notifications off on this device. */
+export async function disablePushOnThisDevice(): Promise<void> {
+  if (!app) return;
+  try {
+    const registration = await pushRegistration();
+    const messaging = getMessaging(app);
+    const token = await getToken(messaging, { vapidKey: VAPID_KEY, serviceWorkerRegistration: registration }).catch(() => null);
+    if (token && db) {
+      await deleteDoc(doc(db, 'push_devices', await sha256Hex(token))).catch(() => {});
+    }
+    await deleteToken(messaging).catch(() => {});
+  } finally {
+    try {
+      localStorage.removeItem(ENABLED_KEY);
+    } catch {
+      // ignore
+    }
+  }
+}

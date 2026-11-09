@@ -80,6 +80,7 @@ export function App() {
     checkInRunner,
     saveMeetupEvent,
     resolveRunByCodeWord,
+    countPushDevices,
     countRunCheckIns,
     scheduleLoaded,
     searchLegacyMatches,
@@ -370,7 +371,9 @@ export function App() {
   return (
     <div className="min-h-screen flex flex-col bg-stone-100 font-sans pb-16 md:pb-0 w-full overflow-x-hidden">
       {/* Mobile PWA Install & Push Notification Banner */}
-      <InstallPwaBanner />
+      <InstallPwaBanner
+        pushAccount={isUserLoggedIn && currentUser.email ? { email: currentUser.email, memberKey: currentMember.id } : undefined}
+      />
 
       {/* Top Navigation */}
       <Navbar
@@ -719,6 +722,7 @@ export function App() {
               onSetLegacyClaim={adminSetLegacyClaim}
               onImportLegacyData={importLegacyData}
               onReloadLegacyPool={loadLegacyPool}
+              onCountPushDevices={countPushDevices}
             />
           </Suspense>
         )}

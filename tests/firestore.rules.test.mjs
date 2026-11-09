@@ -655,3 +655,26 @@ test('past runs can\'t be edited; RSVP clean-up and admin delete still work', as
   await assertSucceeds(deleteDoc(doc(admin, 'meetup_events', 'run-past')));
   await assertSucceeds(deleteDoc(doc(admin, 'runs', 'run-past')));
 });
+
+// ---- Push devices ----
+
+test('runners record their own push device; only admins can read the list', async () => {
+  const { serverTimestamp } = await import('firebase/firestore');
+  const token = 'fcm-token-abc123';
+  const id = createHash('sha256').update(token).digest('hex');
+  const device = (email) => ({ token, userEmail: email, memberKey: memberKeyFor(email), platform: 'android', updatedAt: serverTimestamp() });
+  const alice = ctx(ALICE);
+  await assertSucceeds(setDoc(doc(alice, 'push_devices', id), device(ALICE)));
+  // Wrong doc ID for the token, or someone else's email: refused
+  await assertFails(setDoc(doc(alice, 'push_devices', 'not-the-hash'), device(ALICE)));
+  await assertFails(setDoc(doc(alice, 'push_devices', id), device(BOB)));
+  // Shared phone: Bob, holding the same token, can take it over
+  await assertSucceeds(setDoc(doc(ctx(BOB), 'push_devices', id), device(BOB)));
+  // Runners and organizers can't list devices; admins can
+  await assertFails(getDocs(collection(alice, 'push_devices')));
+  await assertFails(getDocs(collection(ctx(ORGANIZER), 'push_devices')));
+  await assertSucceeds(getDocs(collection(ctx(BOOTSTRAP), 'push_devices')));
+  // Owner can remove it; anonymous can't write
+  await assertSucceeds(deleteDoc(doc(ctx(BOB), 'push_devices', id)));
+  await assertFails(setDoc(doc(env.unauthenticatedContext().firestore(), 'push_devices', id), device(ALICE)));
+});

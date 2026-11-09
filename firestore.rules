@@ -730,7 +730,25 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-    // 12. DEFAULT DENY
+    // 12. PUSH DEVICES — phones/browsers signed up for club notifications.
+    // Doc ID = sha256(FCM token). Sending happens from the Firebase console;
+    // these docs only let admins see how many devices are signed up.
+    match /push_devices/{deviceId} {
+      allow read: if isAdmin();
+      // Writing requires the token itself (its hash is the doc ID), so a shared
+      // phone can be taken over by whoever is signed in on it.
+      allow create, update: if hasVerifiedEmail() &&
+                               request.resource.data.keys().hasOnly(['token', 'userEmail', 'memberKey', 'platform', 'updatedAt']) &&
+                               request.resource.data.token is string &&
+                               request.resource.data.token.size() <= 4096 &&
+                               hashing.sha256(request.resource.data.token).toHexString().lower() == deviceId &&
+                               request.resource.data.userEmail == tokenEmail() &&
+                               request.resource.data.platform in ['ios', 'android', 'desktop'] &&
+                               request.resource.data.updatedAt == request.time;
+      allow delete: if isAdmin() || (hasVerifiedEmail() && resource.data.userEmail == tokenEmail());
+    }
+
+    // 13. DEFAULT DENY
     match /{document=**} {
       allow read, write: if false;
     }

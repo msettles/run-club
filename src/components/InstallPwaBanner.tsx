@@ -1,22 +1,31 @@
 import React, { useEffect, useState } from 'react';
 import { Download, Bell, BellRing, Smartphone, X } from 'lucide-react';
-import { 
-  isPushNotificationSupported, 
-  getPushPermissionStatus, 
-  requestPushPermission 
-} from '../services/notifications';
+import { enablePushOnThisDevice, getPushStatus, type PushStatus } from '../services/push';
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
 }
 
-export const InstallPwaBanner: React.FC = () => {
+interface InstallPwaBannerProps {
+  // Signed-in runner, so their device is recorded for the admin count (optional).
+  pushAccount?: { email: string; memberKey?: string };
+}
+
+const PUSH_MESSAGES: Partial<Record<PushStatus, string>> = {
+  'needs-install': 'On iPhone, notifications only work from the Home Screen app. Add Woodchuckers to your Home Screen, open it from there, then tap Enable Alerts.',
+  blocked: 'Notifications are blocked for this site. Allow them in your browser or phone settings, then tap Enable Alerts again.',
+  unsupported: "This browser doesn't support push notifications.",
+};
+
+export const InstallPwaBanner: React.FC<InstallPwaBannerProps> = ({ pushAccount }) => {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [isInstalled, setIsInstalled] = useState<boolean>(false);
   const [isIOS, setIsIOS] = useState<boolean>(false);
   const [showIOSGuide, setShowIOSGuide] = useState<boolean>(false);
-  const [pushStatus, setPushStatus] = useState<NotificationPermission>('default');
+  const [pushStatus, setPushStatus] = useState<PushStatus>('off');
+  const [pushMessage, setPushMessage] = useState<string | null>(null);
+  const [pushBusy, setPushBusy] = useState<boolean>(false);
   const [dismissed, setDismissed] = useState<boolean>(() => {
     return localStorage.getItem('woodchuckers_pwa_banner_dismissed') === 'true';
   });
@@ -40,9 +49,7 @@ export const InstallPwaBanner: React.FC = () => {
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
 
-    if (isPushNotificationSupported()) {
-      setPushStatus(getPushPermissionStatus());
-    }
+    getPushStatus().then(setPushStatus).catch(() => setPushStatus('unsupported'));
 
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
@@ -63,8 +70,19 @@ export const InstallPwaBanner: React.FC = () => {
   };
 
   const handleEnablePush = async () => {
-    const granted = await requestPushPermission();
-    setPushStatus(granted ? 'granted' : 'denied');
+    setPushMessage(null);
+    setPushBusy(true);
+    try {
+      const status = await enablePushOnThisDevice(pushAccount);
+      setPushStatus(status);
+      if (status === 'needs-install') setShowIOSGuide(true);
+      setPushMessage(status === 'on' ? null : PUSH_MESSAGES[status] || null);
+    } catch (err) {
+      console.error('Enabling notifications failed:', err);
+      setPushMessage("Couldn't turn on notifications. Please check your connection and try again.");
+    } finally {
+      setPushBusy(false);
+    }
   };
 
   const handleDismiss = () => {
@@ -72,7 +90,7 @@ export const InstallPwaBanner: React.FC = () => {
     localStorage.setItem('woodchuckers_pwa_banner_dismissed', 'true');
   };
 
-  if (dismissed && (isInstalled || pushStatus === 'granted')) {
+  if (dismissed && (isInstalled || pushStatus === 'on')) {
     return null;
   }
 
@@ -96,18 +114,19 @@ export const InstallPwaBanner: React.FC = () => {
 
         <div className="flex items-center gap-2 ml-auto">
           {/* Notification Button */}
-          {pushStatus !== 'granted' && (
+          {pushStatus !== 'on' && pushStatus !== 'not-configured' && pushStatus !== 'unsupported' && (
             <button
               onClick={handleEnablePush}
+              disabled={pushBusy}
               className="flex items-center gap-1.5 px-3 py-1 bg-amber-500 hover:bg-amber-600 text-stone-950 font-bold rounded-lg transition shadow-xs"
               title="Enable Run Reminders and Alerts"
             >
               <Bell className="w-3.5 h-3.5" />
-              <span>Enable Alerts</span>
+              <span>{pushBusy ? 'Enabling…' : 'Enable Alerts'}</span>
             </button>
           )}
 
-          {pushStatus === 'granted' && (
+          {pushStatus === 'on' && (
             <span className="hidden sm:flex items-center gap-1 text-[11px] text-woodland-200 bg-woodland-950/40 px-2 py-0.5 rounded border border-woodland-700/50">
               <BellRing className="w-3 h-3 text-woodland-400" />
               <span>Push Active</span>
@@ -135,6 +154,12 @@ export const InstallPwaBanner: React.FC = () => {
         </div>
       </div>
 
+      {pushMessage && (
+        <div className="max-w-7xl mx-auto mt-2 text-[11px] text-amber-100" role="status">
+          {pushMessage}
+        </div>
+      )}
+
       {/* iOS Safari Guide Modal/Tooltip */}
       {showIOSGuide && (
         <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-stone-900/70 p-4">
@@ -154,6 +179,7 @@ export const InstallPwaBanner: React.FC = () => {
               <li>In Safari, tap the <strong>Share</strong> button at the bottom of the screen (the square with an arrow pointing up).</li>
               <li>Scroll down the menu and tap <strong>&quot;Add to Home Screen&quot;</strong>.</li>
               <li>Tap <strong>&quot;Add&quot;</strong> in the top-right corner.</li>
+              <li>Open Woodchuckers from your Home Screen and tap <strong>Enable Alerts</strong> to get club notifications.</li>
             </ol>
             <button
               onClick={() => setShowIOSGuide(false)}

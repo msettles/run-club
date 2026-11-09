@@ -78,6 +78,7 @@ interface AdminDashboardProps {
     onProgress?: (msg: string) => void
   ) => Promise<{ names: number; events: number; duplicatesDropped: number; oldRuns: number }>;
   onReloadLegacyPool?: () => Promise<unknown>;
+  onCountPushDevices?: () => Promise<number>;
 }
 
 type AssignableRole = 'member' | 'organizer' | 'admin';
@@ -204,6 +205,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onDeleteRunner,
   onImportLegacyData,
   onReloadLegacyPool,
+  onCountPushDevices,
 }) => {
   const [adminTab, setAdminTab] = useState<'events' | 'badges' | 'checkins' | 'milestones' | 'members' | 'notifications'>('events');
   const [memberSearch, setMemberSearch] = useState<string>('');
@@ -214,6 +216,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [notifTitle, setNotifTitle] = useState<string>('🦫 Run Tonight: Wednesday Code Word!');
   const [notifBody, setNotifBody] = useState<string>('Meet at 6:00 PM on Blue Note Brewing patio. Check-in is live!');
   const [broadcastSent, setBroadcastSent] = useState<boolean>(false);
+  const [pushDeviceCount, setPushDeviceCount] = useState<number | null>(null);
+  useEffect(() => {
+    if (adminTab !== 'notifications' || !onCountPushDevices) return;
+    onCountPushDevices()
+      .then(setPushDeviceCount)
+      .catch((err) => {
+        console.warn('Counting push devices failed:', err);
+        setPushDeviceCount(0);
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [adminTab]);
 
   // Badge & Special Event Creator State
   const [newBadgeName, setNewBadgeName] = useState<string>('');
@@ -2075,16 +2088,47 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       {/* ============================================================== */}
       {adminTab === 'notifications' && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="lg:col-span-2 bg-amber-50 rounded-2xl p-6 border border-amber-200 space-y-3 text-xs text-stone-700">
+            <h4 className="font-bold text-stone-900 uppercase tracking-wider flex items-center gap-1.5">
+              <Bell className="w-4 h-4 text-amber-600" />
+              <span>Phone notifications</span>
+            </h4>
+            <p>
+              <strong>{pushDeviceCount === null ? '…' : pushDeviceCount}</strong> signed-in device{pushDeviceCount === 1 ? '' : 's'} signed up
+              (runners tap <strong>Enable Alerts</strong> in the banner; iPhones must add the app to their Home Screen first).
+            </p>
+            <ol className="list-decimal list-inside space-y-1">
+              <li>
+                Open{' '}
+                <a
+                  href="https://console.firebase.google.com/project/woodland-woodchuckers/messaging"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="font-bold text-woodland-700 underline"
+                >
+                  Firebase console → Messaging
+                </a>{' '}
+                and click <strong>New campaign → Notifications</strong>.
+              </li>
+              <li>Enter the title and text, then <strong>Next</strong>.</li>
+              <li>Under <strong>Target</strong>, choose <strong>User segment</strong> and select the Woodchuckers <strong>web</strong> app.</li>
+              <li>Schedule <strong>Now</strong> and <strong>Review → Publish</strong>.</li>
+            </ol>
+          </div>
+
           <div className="bg-white rounded-2xl p-6 shadow-sm border border-stone-200 space-y-4">
             <h4 className="text-xs font-bold text-stone-800 uppercase tracking-wider flex items-center gap-1.5">
               <Send className="w-4 h-4 text-woodland-600" />
-              <span>Broadcast Web Push Notification</span>
+              <span>Post Announcement</span>
             </h4>
+            <p className="text-xs text-stone-500">
+              Posts to the in-app announcement feed. To reach phones, also send it from the Firebase console (see below).
+            </p>
 
             {broadcastSent && (
               <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-xs font-semibold flex items-center gap-2">
                 <CheckCircle className="w-4 h-4 text-emerald-600" />
-                <span>Announcement broadcast to all installed PWA devices!</span>
+                <span>Posted to the in-app announcement feed.</span>
               </div>
             )}
 
@@ -2121,7 +2165,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   className="flex items-center gap-2 px-5 py-2.5 bg-woodland-700 hover:bg-woodland-800 text-white font-bold text-xs rounded-xl shadow-md transition"
                 >
                   <Send className="w-4 h-4" />
-                  <span>Send Push Alert Now</span>
+                  <span>Post Announcement</span>
                 </button>
               </div>
             </form>
