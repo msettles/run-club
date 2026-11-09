@@ -113,7 +113,7 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
   };
 
   const isGuest = currentUser.role === 'guest' || !currentUser.email;
-  const isOrganizerOrAdmin = currentUser.role === 'admin' || currentUser.role === 'organizer' || currentUser.email === 'woodlandwoodchuckers@gmail.com';
+  const isOrganizerOrAdmin = currentUser.role === 'admin' || currentUser.role === 'organizer' || currentUser.email === 'woodlandwoodchuckers@gmail.com' || currentUser.email === 'mattsettles@gmail.com';
 
   // Check if current user is already checked in for this event date
   const existingCheckIn = useMemo(() => {
@@ -848,30 +848,38 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
                   </p>
                 </div>
 
-                {/* Membership Sign-Up Promotion (Available 24/7/365) */}
-                <div className="bg-amber-50 rounded-2xl p-4 border border-amber-200 text-left space-y-2">
-                  <div className="flex items-center gap-2 text-xs font-bold text-amber-950">
-                    <Sparkles className="w-4 h-4 text-amber-600 shrink-0" />
-                    <span>Not a Member Yet? Join Anytime!</span>
+                {/* Logged-In Runner Status Card */}
+                <div className="bg-stone-50 border border-stone-200 rounded-2xl p-4 text-left space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-9 h-9 rounded-full bg-woodland-800 text-white flex items-center justify-center font-bold text-xs shadow-xs">
+                        {currentUser.firstName?.[0] || 'W'}
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold text-stone-900 flex items-center gap-1.5">
+                          <span>{currentUser.displayName}</span>
+                          <span className="text-[10px] bg-amber-100 text-amber-900 font-bold px-2 py-0.5 rounded-full">
+                            {currentUser.totalRuns} Runs
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-stone-500 font-mono truncate">{currentUser.email}</div>
+                      </div>
+                    </div>
+                    <span className="inline-flex items-center gap-1 text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2.5 py-1 rounded-full uppercase tracking-wider">
+                      ✓ Member Ready
+                    </span>
                   </div>
-                  <p className="text-xs text-amber-900 leading-relaxed font-sans">
-                    Club membership is 100% free with zero fees! You can register your profile right now so check-in is 1 tap tonight at the brewery!
+                  <p className="text-[11px] text-stone-600 leading-snug pt-1 border-t border-stone-200/60">
+                    You&apos;re signed in and ready! Check-in unlocks 2 hours before the run (Wednesday at 4:00 PM). Meet us on the patio at Blue Note Brewing to get the code word and check in with 1 tap.
                   </p>
-                  <button
-                    onClick={() => setViewMode('register')}
-                    className="w-full mt-2 py-2.5 bg-amber-500 hover:bg-amber-600 text-stone-950 font-bold text-xs rounded-xl transition shadow-sm font-display uppercase tracking-wider flex items-center justify-center gap-1.5"
-                  >
-                    <span>Register Member Profile Ahead of Time</span>
-                    <ChevronRight className="w-4 h-4" />
-                  </button>
                 </div>
 
                 {/* Organizer Early Bypass Option */}
-                {isOrganizerOrAdmin && (
+                {(isOrganizerOrAdmin || isDevOrTest) && (
                   <div className="pt-2 border-t border-stone-100">
                     <button
                       onClick={() => setOrganizerBypass(true)}
-                      className="text-xs text-stone-600 hover:text-stone-900 font-bold underline flex items-center justify-center gap-1 mx-auto"
+                      className="w-full py-2.5 bg-amber-50 hover:bg-amber-100 text-amber-950 font-bold text-xs rounded-xl border border-amber-300 transition flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
                     >
                       <Unlock className="w-3.5 h-3.5 text-amber-600" />
                       <span>Organizer / Admin Early Test Bypass</span>

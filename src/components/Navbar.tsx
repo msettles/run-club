@@ -51,7 +51,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 }) => {
   const [showProfileMenu, setShowProfileMenu] = useState<boolean>(false);
   const isUserLoggedIn = Boolean(firebaseUser || (currentUser && currentUser.email && currentUser.role !== 'guest'));
-  const isAdmin = isUserLoggedIn && (currentUser.role === 'admin' || currentUser.email === 'woodlandwoodchuckers@gmail.com');
+  const isAdmin = isUserLoggedIn && (currentUser.role === 'admin' || currentUser.email === 'woodlandwoodchuckers@gmail.com' || currentUser.email === 'mattsettles@gmail.com');
   const isOrganizerOrAdmin = isUserLoggedIn && (isAdmin || currentUser.role === 'organizer');
 
   return (

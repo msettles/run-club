@@ -111,7 +111,7 @@ export function App() {
   const [pendingCheckInRun, setPendingCheckInRun] = useState<RunEvent | null>(null);
 
   const isUserLoggedIn = Boolean(firebaseUser || (currentUser && currentUser.email && currentUser.role !== 'guest'));
-  const isAdmin = isUserLoggedIn && (currentUser.role === 'admin' || currentUser.email === 'woodlandwoodchuckers@gmail.com');
+  const isAdmin = isUserLoggedIn && (currentUser.role === 'admin' || currentUser.email === 'woodlandwoodchuckers@gmail.com' || currentUser.email === 'mattsettles@gmail.com');
   const isOrganizerOrAdmin = isUserLoggedIn && (isAdmin || currentUser.role === 'organizer');
 
   // Handle post-auth check: if user has a profile, switch to them; if new, launch onboarding

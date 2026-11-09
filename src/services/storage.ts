@@ -621,7 +621,7 @@ export function useClubStore() {
       linkedLegacyNames: claimedRecords.map((r) => r.name),
       unlockedBadgeIds: initialBadgeIds,
       badgeCounts: initialBadgeCounts,
-      role: cleanEmail === 'woodlandwoodchuckers@gmail.com' ? 'admin' : 'member',
+      role: (cleanEmail === 'woodlandwoodchuckers@gmail.com' || cleanEmail === 'mattsettles@gmail.com') ? 'admin' : 'member',
       createdAt: new Date().toISOString(),
     };
 
