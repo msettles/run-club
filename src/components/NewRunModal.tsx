@@ -39,9 +39,9 @@ export const NewRunModal: React.FC<NewRunModalProps> = ({
 
   // Pace groups
   const [paceGroups, setPaceGroups] = useState<PaceGroup[]>([
-    { label: 'Pace 2', targetPace: '8:00 - 9:45 /mi' },
-    { label: 'Pace 3', targetPace: '10:00 - 11:00 /mi' },
-    { label: 'Pace 3 (jog/walk)', targetPace: '11:30+ /mi' },
+    { label: 'Pace 1', targetPace: '< 9:30 /mi' },
+    { label: 'Pace 2', targetPace: '9:30 - 11:00 /mi' },
+    { label: 'Pace 3 (jog/walk)', targetPace: '11:00+ /mi' },
   ]);
 
   if (!isOpen) return null;
