@@ -18,6 +18,7 @@ import { ClubNotification } from '../services/notifications';
 import { calculateAge } from '../utils/dateUtils';
 import { ADMIN_EMAILS } from '../utils/roles';
 import { isLegacyClaimed, matchLegacyNames } from '../utils/legacy';
+import { RECENT_CHECKIN_DAYS } from '../services/storage';
 import { 
   Calendar, 
   Users, 
@@ -65,9 +66,9 @@ interface AdminDashboardProps {
     createSpecialEventOption?: boolean;
   }) => Promise<Badge>;
   onDeleteBadge?: (badgeId: string) => Promise<void>;
-  onMarkMilestoneFulfilled?: (alertId: string, fulfilledBy: string) => void;
+  onMarkMilestoneFulfilled?: (alertId: string, fulfilledBy: string) => Promise<void> | void;
   onOpenNewRun?: () => void;
-  onSendBroadcast: (title: string, body: string) => void;
+  onSendBroadcast: (title: string, body: string) => Promise<void> | void;
   onSetUserRole?: (email: string, role: AssignableRole) => Promise<void>;
   onSetLegacyClaim?: (legacyId: string, toEmail: string | null) => Promise<void>;
   onDeleteRunner?: (email: string) => Promise<void>;
@@ -433,9 +434,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const handleSendBroadcast = (e: React.FormEvent) => {
     e.preventDefault();
     if (!notifTitle.trim() || !notifBody.trim()) return;
-    onSendBroadcast(notifTitle, notifBody);
-    setBroadcastSent(true);
-    setTimeout(() => setBroadcastSent(false), 4000);
+    Promise.resolve(onSendBroadcast(notifTitle, notifBody))
+      .then(() => {
+        setBroadcastSent(true);
+        setTimeout(() => setBroadcastSent(false), 4000);
+      })
+      .catch((err) => {
+        console.error('Announcement failed:', err);
+        alert("The announcement couldn't be sent. Only admins can send announcements; please try again.");
+      });
   };
 
   return (
@@ -1442,7 +1449,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 Check-In Single Entry Event Log
               </h3>
               <p className="text-xs text-stone-500">
-                Every granular check-in record capturing date, runner, run/walk, distance choice, and actual measured GPS miles.
+                Check-ins from the last {RECENT_CHECKIN_DAYS} days: date, runner, run/walk, distance choice and measured miles.
               </p>
             </div>
 
@@ -1667,7 +1674,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     <button
                       onClick={() => {
                         if (onMarkMilestoneFulfilled) {
-                          onMarkMilestoneFulfilled(alert.id, currentUser?.displayName || currentUser?.email || 'Organizer');
+                          Promise.resolve(
+                            onMarkMilestoneFulfilled(alert.id, currentUser?.displayName || currentUser?.email || 'Organizer')
+                          ).catch((err) => {
+                            console.error('Marking gear handed out failed:', err);
+                            window.alert("Couldn't save that the gear was handed out. Please try again.");
+                          });
                         }
                       }}
                       className="w-full py-2.5 bg-stone-950 hover:bg-stone-800 text-amber-300 font-bold text-xs rounded-xl transition shadow-md flex items-center justify-center gap-2 cursor-pointer uppercase tracking-wider"

@@ -1,6 +1,7 @@
 import React from 'react';
 import { RunEvent, Member, GPXRoute } from '../types';
 import { ResolvedChoice } from '../utils/runChoices';
+import { buildRunIcs } from '../utils/calendar';
 import { Clock, MapPin, Mountain, Check, CalendarPlus, Map, Pencil } from 'lucide-react';
 
 interface RunCardProps {
@@ -55,21 +56,10 @@ export const RunCard: React.FC<RunCardProps> = ({
 
   // Generate .ics calendar invite file
   const handleAddToCalendar = () => {
-    const startIso = `${run.date.replace(/-/g, '')}T${run.time.includes('PM') ? '180000' : '080000'}`;
-    const icsContent = [
-      'BEGIN:VCALENDAR',
-      'VERSION:2.0',
-      'PRODID:-//Woodland Woodchuckers Run Club//NONSGML v1.0//EN',
-      'BEGIN:VEVENT',
-      `SUMMARY:🦫 Woodchuckers: ${run.title}`,
-      `DESCRIPTION:${run.description}\\nDistance: ${choices.length ? choices.map((c) => `${c.miles.toFixed(1)} mi (${c.route.name})`).join(', ') : `${(Math.round(run.distanceMiles * 10) / 10).toFixed(1)} miles`}\\nSurface: ${run.surface}`,
-      `LOCATION:${run.locationName}, ${run.address}`,
-      `DTSTART:${startIso}`,
-      `DTEND:${startIso}`,
-      'STATUS:CONFIRMED',
-      'END:VEVENT',
-      'END:VCALENDAR',
-    ].join('\r\n');
+    const distanceText = choices.length
+      ? choices.map((c) => `${c.miles.toFixed(1)} mi (${c.route.name})`).join(', ')
+      : `${(Math.round(run.distanceMiles * 10) / 10).toFixed(1)} miles`;
+    const icsContent = buildRunIcs(run, distanceText);
 
     const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
     const url = URL.createObjectURL(blob);
