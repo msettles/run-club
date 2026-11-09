@@ -312,15 +312,16 @@ export function useClubStore() {
 
     async function syncFromFirestore() {
       if (!db) return;
+      const currentDb = db;
       setIsSyncing(true);
       try {
-        const runsSnap = await getDocs(collection(db, 'runs'));
+        const runsSnap = await getDocs(collection(currentDb, 'runs'));
         if (!runsSnap.empty) {
           const remoteRuns = runsSnap.docs.map((d) => d.data() as RunEvent);
           setRuns(remoteRuns);
         }
 
-        const routesSnap = await getDocs(collection(db, 'routes'));
+        const routesSnap = await getDocs(collection(currentDb, 'routes'));
         if (!routesSnap.empty) {
           const remoteRoutes = routesSnap.docs.map((d) => hydrateRouteFromFirestore(d.data()));
           const remoteIds = new Set(remoteRoutes.map((r) => r.id));
@@ -328,15 +329,26 @@ export function useClubStore() {
 
           // Seed any missing official club routes to Firestore
           for (const m of missing) {
-            setDoc(doc(db, 'routes', m.id), formatRouteForFirestore(m)).catch(console.error);
+            setDoc(doc(currentDb, 'routes', m.id), formatRouteForFirestore(m)).catch(console.error);
           }
 
-          setRoutes([...remoteRoutes, ...missing]);
+          setRoutes((prev) => {
+            const localOnly = prev.filter((r) => !remoteIds.has(r.id));
+            const existingIds = new Set([...remoteRoutes.map((r) => r.id), ...localOnly.map((r) => r.id)]);
+            const missingClubRoutes = INITIAL_ROUTES.filter((r) => !existingIds.has(r.id));
+            return [...remoteRoutes, ...localOnly, ...missingClubRoutes];
+          });
         } else {
-          for (const r of INITIAL_ROUTES) {
-            setDoc(doc(db, 'routes', r.id), formatRouteForFirestore(r)).catch(console.error);
-          }
-          setRoutes(INITIAL_ROUTES);
+          // If Firestore is empty, preserve local routes and seed missing official routes
+          setRoutes((prev) => {
+            const existingIds = new Set(prev.map((r) => r.id));
+            const missing = INITIAL_ROUTES.filter((r) => !existingIds.has(r.id));
+            const merged = [...prev, ...missing];
+            for (const r of merged) {
+              setDoc(doc(currentDb, 'routes', r.id), formatRouteForFirestore(r)).catch(console.error);
+            }
+            return merged;
+          });
         }
 
         const membersSnap = await getDocs(collection(db, 'members'));

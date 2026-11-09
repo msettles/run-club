@@ -12,6 +12,7 @@ import {
   SpecialEventDefinition
 } from '../types';
 import { THE_123_ROUTE } from './the123Route';
+import { WOODCHUCKER_OPERA_1_MILE, WOODCHUCKER_OPERA_3_MILE, ROAD_TO_EL_DORADO_1_MILE } from './operaRoutes';
 
 // Center anchor: Woodland area coordinates (Woodland, CA approx 38.678, -121.773)
 const BASE_LAT = 38.6780;
@@ -346,6 +347,9 @@ export const INITIAL_MILESTONE_ALERTS: MilestoneAlert[] = [
 
 export const INITIAL_ROUTES: GPXRoute[] = [
   THE_123_ROUTE,
+  WOODCHUCKER_OPERA_1_MILE,
+  WOODCHUCKER_OPERA_3_MILE,
+  ROAD_TO_EL_DORADO_1_MILE,
   {
     id: 'route-river-loop',
     name: 'Woodchuck Burrow River Loop',
