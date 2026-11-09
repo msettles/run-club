@@ -66,7 +66,7 @@ interface AdminDashboardProps {
     createSpecialEventOption?: boolean;
   }) => Promise<Badge>;
   onDeleteBadge?: (badgeId: string) => Promise<void>;
-  onSaveMeetupEvent: (event: MeetupEvent) => void;
+  onSaveMeetupEvent: (event: MeetupEvent) => Promise<void> | void;
   onMarkMilestoneFulfilled?: (alertId: string, fulfilledBy: string) => void;
   onOpenNewRun?: () => void;
   onSendBroadcast: (title: string, body: string) => void;
@@ -380,9 +380,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       notes: eventNotes,
     };
 
-    onSaveMeetupEvent(newEvent);
-    setEventSavedToast(true);
-    setTimeout(() => setEventSavedToast(false), 3000);
+    Promise.resolve(onSaveMeetupEvent(newEvent))
+      .then(() => {
+        setEventSavedToast(true);
+        setTimeout(() => setEventSavedToast(false), 3000);
+      })
+      .catch((err: any) => {
+        alert(
+          err?.code === 'permission-denied'
+            ? "Not saved: the code word is locked once that run's check-in has opened."
+            : 'Not saved. Please check your connection and try again.'
+        );
+      });
   };
 
   // Export CSV functions

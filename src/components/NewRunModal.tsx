@@ -62,6 +62,10 @@ export const NewRunModal: React.FC<NewRunModalProps> = ({
       setFormError('Add at least one distance option with a route.');
       return;
     }
+    if (!codeWord.trim()) {
+      setFormError('Enter the check-in code word. It can be changed until check-in opens.');
+      return;
+    }
     const stats = deriveRunStats(resolved);
 
     onAddRun({
@@ -176,6 +180,7 @@ export const NewRunModal: React.FC<NewRunModalProps> = ({
             <input
               type="text"
               value={codeWord}
+              required
               onChange={(e) => setCodeWord(e.target.value)}
               placeholder="Announced at the run, e.g. TURKEY"
               className="w-full text-sm px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-woodland-500 focus:outline-none uppercase"

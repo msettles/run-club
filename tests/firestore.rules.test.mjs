@@ -243,7 +243,8 @@ test('runner can toggle only their own RSVP', async () => {
 test('staff cannot put the code word on the public meetup doc', async () => {
   const org = ctx(ORGANIZER);
   await assertFails(setDoc(doc(org, 'meetup_events', DATE), { id: DATE, date: DATE, codeWord: 'ACORN' }));
-  await assertSucceeds(setDoc(doc(org, 'meetup_secrets', DATE), { codeWord: 'OAK' }));
+  // Tonight's check-in is open, so its code word is locked (see the code word lock test)
+  await assertFails(setDoc(doc(org, 'meetup_secrets', DATE), { codeWord: 'OAK' }));
 });
 
 test('same-night edit keeps run count and needs the code word', async () => {
@@ -470,4 +471,28 @@ test('admin can delete a runner with their check-ins, row and claims; organizer 
   await assertSucceeds(b.commit());
   // The freed legacy name can be claimed by someone else
   await assertSucceeds(claimBatch(ctx(BOB), BOB, [LP]).commit());
+});
+
+// ---- Code word lock ----
+
+test('code word can change before check-in opens, and is locked after', async () => {
+  const FUTURE = '2099-01-07';
+  await env.withSecurityRulesDisabled(async (c) => {
+    const db = c.firestore();
+    await setDoc(doc(db, 'meetup_events', FUTURE), {
+      id: FUTURE, date: FUTURE, title: 'Later', activeDistances: [], routes: {},
+      checkInOpensAt: Timestamp.fromMillis(Date.now() + 86400e3),
+      checkInClosesAt: Timestamp.fromMillis(Date.now() + 2 * 86400e3),
+    });
+    await setDoc(doc(db, 'meetup_secrets', FUTURE), { codeWord: 'ACORN' });
+  });
+  const org = ctx(ORGANIZER);
+  // Not open yet: can change
+  await assertSucceeds(setDoc(doc(org, 'meetup_secrets', FUTURE), { codeWord: 'PINECONE' }));
+  // Tonight's event (seeded with an open window): locked, but re-saving the same word is fine
+  await assertFails(setDoc(doc(org, 'meetup_secrets', DATE), { codeWord: 'CHANGED' }));
+  await assertSucceeds(setDoc(doc(org, 'meetup_secrets', DATE), { codeWord: 'ACORN' }));
+  await assertFails(setDoc(doc(ctx(BOOTSTRAP), 'meetup_secrets', DATE), { codeWord: 'CHANGED' }));
+  // Runners can't touch it at all
+  await assertFails(setDoc(doc(ctx(ALICE), 'meetup_secrets', FUTURE), { codeWord: 'X' }));
 });
