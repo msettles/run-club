@@ -70,6 +70,31 @@ export async function sendPasswordlessEmailLink(email: string): Promise<void> {
 }
 
 /**
+ * Plain-language message for a failed "email me a link" request.
+ * Firebase's own text ("Firebase: Error (auth/quota-exceeded).") means nothing to runners.
+ */
+export function emailLinkErrorMessage(error: unknown): string {
+  const code = (error as { code?: string } | null)?.code || '';
+  switch (code) {
+    case 'auth/quota-exceeded':
+    case 'auth/too-many-requests':
+      return "We can't send any more sign-in emails right now (the daily limit was reached). Please use “Continue with Google”, or try the email link again tomorrow.";
+    case 'auth/invalid-email':
+    case 'auth/missing-email':
+      return "That doesn't look like a valid email address. Please check it and try again.";
+    case 'auth/network-request-failed':
+      return "Couldn't reach the sign-in service. Please check your connection and try again.";
+    case 'auth/operation-not-allowed':
+    case 'auth/unauthorized-continue-uri':
+    case 'auth/invalid-continue-uri':
+    case 'auth/unauthorized-domain':
+      return "Email sign-in isn't available right now. Please use “Continue with Google”, and let a club organizer know.";
+    default:
+      return "Couldn't send the sign-in link. Please try again, or use “Continue with Google”.";
+  }
+}
+
+/**
  * Check and complete passwordless email sign-in if the user opened a magic link
  */
 export async function checkAndCompleteEmailLinkSignIn(): Promise<FirebaseUser | null> {

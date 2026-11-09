@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { X, Mail, Sparkles, CheckCircle, AlertCircle, ArrowRight } from 'lucide-react';
-import { loginWithGoogle, sendPasswordlessEmailLink } from '../services/authService';
+import { emailLinkErrorMessage, loginWithGoogle, sendPasswordlessEmailLink } from '../services/authService';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -50,9 +50,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     try {
       await sendPasswordlessEmailLink(emailInput);
       setEmailSentSuccess(true);
-    } catch (err: any) {
-      console.error(err);
-      setErrorMsg(err.message || 'Failed to send magic sign-in link.');
+    } catch (err) {
+      console.error('Sending sign-in link failed:', err);
+      setErrorMsg(emailLinkErrorMessage(err));
     } finally {
       setIsSubmittingEmail(false);
     }
@@ -140,6 +140,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               </p>
               <p className="text-[11px] text-emerald-700">
                 Tap the link in your email on this phone to log in instantly. You won't need to enter a password!
+              </p>
+              <p className="text-[11px] text-emerald-900 bg-emerald-100/70 rounded-lg px-3 py-2 text-left">
+                <strong>Not there in a few minutes?</strong> Check your Spam, Junk or Promotions folder for an email
+                from <span className="font-mono break-all">noreply@woodland-woodchuckers.firebaseapp.com</span>.
+                Still nothing? Use <strong>Continue with Google</strong> above instead.
               </p>
               <button
                 type="button"
