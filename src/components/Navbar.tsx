@@ -3,6 +3,8 @@ import { UserProfile } from '../types';
 import { User as FirebaseUser } from 'firebase/auth';
 import { FULL_VERSION } from '../utils/version';
 import { calculateAge } from '../utils/dateUtils';
+import { isAdminProfile } from '../utils/roles';
+import { isFirebaseConfigured } from '../services/firebase';
 import { 
   Calendar, 
   Map, 
@@ -50,8 +52,12 @@ export const Navbar: React.FC<NavbarProps> = ({
   onLogout,
 }) => {
   const [showProfileMenu, setShowProfileMenu] = useState<boolean>(false);
-  const isUserLoggedIn = Boolean(firebaseUser || (currentUser && currentUser.email && currentUser.role !== 'guest'));
-  const isAdmin = isUserLoggedIn && (currentUser.role === 'admin' || currentUser.email === 'woodlandwoodchuckers@gmail.com' || currentUser.email === 'mattsettles@gmail.com');
+  const isUserLoggedIn = isFirebaseConfigured
+    ? Boolean(firebaseUser)
+    : Boolean(currentUser && currentUser.email && currentUser.role !== 'guest');
+  const isAdmin = isUserLoggedIn &&
+    (!isFirebaseConfigured || firebaseUser?.email?.toLowerCase() === currentUser.email.toLowerCase()) &&
+    isAdminProfile(currentUser);
   const isOrganizerOrAdmin = isUserLoggedIn && (isAdmin || currentUser.role === 'organizer');
 
   return (

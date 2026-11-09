@@ -3,6 +3,7 @@ import confetti from 'canvas-confetti';
 import { MeetupEvent, UserProfile, RouteOption, ActivityType, DistanceChoice, CheckInRecord, LegacyMember, Badge, GPXRoute } from '../types';
 import { CLUB_MILESTONES } from '../data/initialData';
 import { calculateAge } from '../utils/dateUtils';
+import { isStaffProfile } from '../utils/roles';
 import { MapViewer } from './MapViewer';
 import { downloadGPXFile } from '../utils/gpxParser';
 import { 
@@ -29,7 +30,6 @@ interface CheckInModalProps {
   meetupEvents: MeetupEvent[];
   eventDate?: string; // Date of the run being checked into; falls back to the latest event
   currentUser: UserProfile;
-  users: UserProfile[];
   routes?: GPXRoute[];
   checkins?: CheckInRecord[];
   initialMode?: 'checkin' | 'register';
@@ -64,7 +64,6 @@ interface CheckInModalProps {
     claimedLegacyNames?: string[]
   ) => Promise<UserProfile>;
   onSearchLegacy: (query: string) => LegacyMember[];
-  onSwitchUser: (email: string) => void;
   onOpenAuthModal?: () => void;
 }
 
@@ -91,14 +90,12 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
   meetupEvents,
   eventDate,
   currentUser,
-  users,
   routes,
   checkins,
   initialMode = 'checkin',
   onCheckInRunner,
   onRegisterUser,
   onSearchLegacy,
-  onSwitchUser,
   onOpenAuthModal,
 }) => {
   // Current active meetup event (default to most recent or upcoming)
@@ -113,7 +110,7 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
   };
 
   const isGuest = currentUser.role === 'guest' || !currentUser.email;
-  const isOrganizerOrAdmin = currentUser.role === 'admin' || currentUser.role === 'organizer' || currentUser.email === 'woodlandwoodchuckers@gmail.com' || currentUser.email === 'mattsettles@gmail.com';
+  const isOrganizerOrAdmin = isStaffProfile(currentUser);
 
   // Check if current user is already checked in for this event date
   const existingCheckIn = useMemo(() => {
@@ -153,7 +150,7 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
   }, [activeEvent]);
 
   // State
-  const [viewMode, setViewMode] = useState<'checkin' | 'register' | 'switch'>(
+  const [viewMode, setViewMode] = useState<'checkin' | 'register'>(
     initialMode === 'register' || isGuest ? 'register' : 'checkin'
   );
   const [codeWordInput, setCodeWordInput] = useState<string>('');
@@ -426,7 +423,7 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
 
   const handlePerformCheckIn = async () => {
     setErrorMsg(null);
-    const effectiveCodeWord = codeWordInput.trim() || (existingCheckIn ? activeEvent.codeWord : '');
+    const effectiveCodeWord = codeWordInput.trim() || (existingCheckIn ? (existingCheckIn.codeWord || activeEvent.codeWord) : '');
     if (!effectiveCodeWord) {
       setErrorMsg("Please enter today's code word!");
       return;
@@ -934,13 +931,6 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
                     </>
                   )}
                   <button
-                    onClick={() => setViewMode('switch')}
-                    className="text-[11px] text-stone-600 hover:text-stone-900 font-semibold hover:underline"
-                  >
-                    Switch
-                  </button>
-                  <span className="text-stone-300">|</span>
-                  <button
                     onClick={() => setViewMode('register')}
                     className="text-[11px] text-amber-700 hover:text-amber-900 font-semibold hover:underline"
                   >
@@ -981,7 +971,7 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
                     <span>Code Word Verified for Today:</span>
                   </div>
                   <span className="font-mono font-bold bg-emerald-200/90 text-emerald-950 px-2.5 py-0.5 rounded-lg text-xs tracking-wider">
-                    {activeEvent.codeWord}
+                    {existingCheckIn.codeWord || activeEvent.codeWord || '✓'}
                   </span>
                 </div>
               ) : (
@@ -1475,52 +1465,7 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
                 <ChevronRight className="w-4 h-4" />
               </button>
             </form>
-          ) : (
-            /* VIEW 4: SWITCH RUNNER (FOR TESTING) */
-            <div className="space-y-3">
-              <div className="border-b border-stone-200 pb-2 flex items-center justify-between">
-                <div>
-                  <h3 className="text-sm font-extrabold text-stone-900">Switch Testing Runner</h3>
-                  <p className="text-xs text-stone-500">Pick an active dummy runner to test check-in:</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setViewMode('checkin')}
-                  className="text-xs font-semibold text-stone-500 hover:text-stone-800"
-                >
-                  Back
-                </button>
-              </div>
-
-              <div className="space-y-2 max-h-60 overflow-y-auto">
-                {users.map((u) => (
-                  <button
-                    key={u.email}
-                    onClick={() => {
-                      onSwitchUser(u.email);
-                      setViewMode('checkin');
-                    }}
-                    className={`w-full p-3 rounded-xl border text-left flex items-center justify-between transition ${
-                      currentUser.email.toLowerCase() === u.email.toLowerCase()
-                        ? 'bg-amber-50 border-amber-400 font-bold'
-                        : 'bg-white border-stone-200 hover:bg-stone-50'
-                    }`}
-                  >
-                    <div>
-                      <div className="text-xs text-stone-900">{u.displayName} ({u.shirtSize})</div>
-                      <div className="text-[11px] text-stone-500">{u.email}</div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-xs font-mono font-bold text-woodland-800">
-                        {u.totalRuns} runs
-                      </div>
-                      <div className="text-[10px] text-stone-400">{u.totalMiles} mi</div>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
+          ) : null}
         </div>
       </div>
     </div>

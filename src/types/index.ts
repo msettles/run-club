@@ -213,6 +213,8 @@ export interface CheckInRecord {
   withPet?: boolean;         // Checked if runner/walker brought a pet
   source: 'pwa' | 'admin' | 'legacy_import';
   createdAt: string;         // ISO timestamp
+  updatedAt?: string;        // ISO timestamp of the last edit (required by Firestore rules)
+  codeWord?: string;         // Code word the runner entered (verified by Firestore rules)
 }
 
 export interface UserProfile {
@@ -240,6 +242,7 @@ export interface UserProfile {
   petRunCount?: number;      // Total runs/walks with a pet
   distanceCounts?: Record<string, number>; // Route choices count (e.g. { '1': 4, '3': 10, '5': 2 })
   firstRunDate?: string;     // Earliest recorded check-in date
+  lastCheckInDate?: string;  // Date of the check-in that last changed these stats
   // Legacy Link
   linkedLegacyNames: string[]; // Claimed historical names (e.g. ["MATT SETTLES"])
   unlockedBadgeIds: string[];

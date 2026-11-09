@@ -6,14 +6,12 @@ interface LeaderboardProps {
   members: Member[];
   badges: Badge[];
   currentMember: Member;
-  onSelectMember: (memberId: string) => void;
 }
 
 export const Leaderboard: React.FC<LeaderboardProps> = ({
   members,
   badges,
   currentMember,
-  onSelectMember,
 }) => {
   const [activeTab, setActiveTab] = useState<'miles' | 'runs' | 'streak'>('miles');
 
@@ -271,16 +269,6 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
                       {member.unlockedBadgeIds.length} badges
                     </span>
                   </div>
-
-                  {!isMe && (
-                    <button
-                      onClick={() => onSelectMember(member.id)}
-                      className="text-xs px-2.5 py-1 bg-stone-100 text-stone-700 hover:bg-stone-200 rounded-lg font-medium transition"
-                      title="Switch active user profile"
-                    >
-                      Switch
-                    </button>
-                  )}
                 </div>
               </div>
             );
