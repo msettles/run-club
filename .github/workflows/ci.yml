@@ -36,6 +36,9 @@ jobs:
 
       - run: npm ci
 
+      - name: Dependency audit (moderate and above fail)
+        run: npm run audit:dependencies
+
       - name: Type-check
         run: npm run typecheck
 
