@@ -2094,8 +2094,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               <span>Phone notifications</span>
             </h4>
             <p>
-              <strong>{pushDeviceCount === null ? '…' : pushDeviceCount}</strong> signed-in device{pushDeviceCount === 1 ? '' : 's'} signed up
-              (runners tap <strong>Enable Alerts</strong> in the banner; iPhones must add the app to their Home Screen first).
+              <strong>{pushDeviceCount === null ? '…' : pushDeviceCount}</strong> device{pushDeviceCount === 1 ? ' has' : 's have'} notifications turned on
+              (signed-in runners only). Being signed in isn&apos;t enough: each runner turns them on per device with{' '}
+              <strong>Enable Alerts</strong> in the top banner, or in their profile menu under <strong>Notifications on this device</strong>.
+              iPhones must add the app to their Home Screen first.
             </p>
             <ol className="list-decimal list-inside space-y-1">
               <li>
