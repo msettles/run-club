@@ -283,4 +283,3 @@ export const GUEST_USER: UserProfile = {
   role: 'guest',
   createdAt: '2026-11-06T18:00:00Z',
 };
-

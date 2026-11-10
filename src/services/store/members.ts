@@ -108,7 +108,7 @@ export function createMemberOps(ctx: StoreState & ReturnType<typeof createLegacy
     }) : newUser;
     assertSession();
     setUsers((prev) => [registered, ...prev.filter((u) => u.email.toLowerCase() !== cleanEmail)]);
-    setMembers((prev) => [memberFromUser(registered, memberKey), ...prev.filter((m) => m.id !== memberKey)]);
+    setMembers((prev) => [memberFromUser(registered, memberKey, isFirebaseConfigured), ...prev.filter((m) => m.id !== memberKey)]);
     setCurrentUserEmail(cleanEmail);
 
     // Claim the selected old profiles one by one; a name someone else grabbed

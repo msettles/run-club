@@ -1,11 +1,16 @@
 import { routeVersionLabel } from '../utils/runChoices';
 import { formatMiles } from '../utils/miles';
-import React from 'react';
+import React, { useState } from 'react';
 import { GPXRoute, RunRouteChoice } from '../types';
 import { resolveChoices, deriveRunStats } from '../utils/runChoices';
 import { Plus, Trash2, Mountain, Compass, MapPin } from 'lucide-react';
 
-interface RouteChoicesEditorProps {
+export interface RouteCatalogPaginationProps {
+  onLoadMoreRoutes?: () => Promise<void>;
+  hasMoreRoutes?: boolean;
+  routesLoading?: boolean;
+}
+interface RouteChoicesEditorProps extends RouteCatalogPaginationProps {
   routes: GPXRoute[];
   choices: RunRouteChoice[];
   onChange: (choices: RunRouteChoice[]) => void;
@@ -20,7 +25,8 @@ export function defaultChoices(routes: GPXRoute[]): RunRouteChoice[] {
   }));
 }
 
-export const RouteChoicesEditor: React.FC<RouteChoicesEditorProps> = ({ routes, choices, onChange }) => {
+export const RouteChoicesEditor: React.FC<RouteChoicesEditorProps> = ({ routes, choices, onChange, onLoadMoreRoutes, hasMoreRoutes, routesLoading }) => {
+  const [catalogError, setCatalogError] = useState<string>();
   const resolved = resolveChoices(choices, routes);
   const stats = deriveRunStats(resolved);
 
@@ -64,7 +70,9 @@ export const RouteChoicesEditor: React.FC<RouteChoicesEditorProps> = ({ routes, 
         )}
       </div>
 
-      {routes.length === 0 && (
+      {hasMoreRoutes && onLoadMoreRoutes && <button type="button" disabled={routesLoading} className="text-xs font-bold underline disabled:opacity-50" onClick={() => { setCatalogError(undefined); void onLoadMoreRoutes().catch(() => setCatalogError('More routes could not be loaded. Please retry.')); }}>{routesLoading ? 'Loading library routes…' : 'Load more library routes'}</button>}
+      {catalogError && <p role="alert" className="text-xs text-amber-800">{catalogError}</p>}
+      {routes.length === 0 && !routesLoading && (
         <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-xl p-3">
           No routes in the library yet. Create one with "Create &amp; Upload Club Route" first.
         </p>
@@ -130,7 +138,7 @@ export const RouteChoicesEditor: React.FC<RouteChoicesEditorProps> = ({ routes, 
                   <span className="font-medium text-stone-700 bg-stone-100 px-1.5 py-0.5 rounded border border-stone-200 text-[11px]">
                     {r.surface}
                   </span>
-                  {r.directions && r.directions.length > 0 ? (
+                  {r.detailsLoaded === false ? <span className="text-stone-500">Map and directions load when opened</span> : r.directions && r.directions.length > 0 ? (
                     <span className="flex items-center gap-1 text-[11px] text-stone-600">
                       <Compass className="w-3 h-3 text-stone-400" /> {r.directions.length} turns
                     </span>

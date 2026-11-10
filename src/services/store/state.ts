@@ -16,7 +16,12 @@ import {
   type LegacyEvent,
 } from '../../utils/legacy';
 import { INITIAL_BADGES, INITIAL_SPECIAL_EVENTS, GUEST_USER } from '../../data/catalog';
-import { isFirebaseConfigured } from '../firebase';
+import { createRouteCatalogClient, RouteDetailsCache } from '../routeCatalog';
+import type { DocumentData, QueryDocumentSnapshot } from 'firebase/firestore';
+import { clubYmd } from '../../utils/dateUtils';
+import { RUN_PAGE_SIZE } from './scheduleLoading';
+import { fetchFullRoute } from './routeLoading';
+import { isFirebaseConfigured, db } from '../firebase';
 import { memberKeyFor } from '../../utils/memberKey';
 import {
   ClubNotification,
@@ -70,6 +75,16 @@ export function useStoreState() {
   const [routes, setRoutes] = useState<GPXRoute[]>(() =>
     (LOCAL_MODE ? loadMerged(STORAGE_KEYS.ROUTES, [], idOf) : []).map(hydrateRouteFromFirestore)
   );
+  const routeCatalogClient = useMemo(() => isFirebaseConfigured && db ? createRouteCatalogClient(`https://firestore.googleapis.com/v1/projects/${db.app.options.projectId}/databases/(default)/documents`) : null, []);
+  const routeDetailsCache = useMemo(() => new RouteDetailsCache(fetchFullRoute), []);
+  const routePageToken = useRef<string | undefined>();
+  const routePagePending = useRef(false);
+  const routeCatalogComplete = useRef(false);
+  const [hasMoreRoutes, setHasMoreRoutes] = useState(isFirebaseConfigured);
+  const [routesLoading, setRoutesLoading] = useState(false);
+  const [routeCatalogError, setRouteCatalogError] = useState<string | null>(null);
+  const [leaderboardLoaded, setLeaderboardLoaded] = useState(LOCAL_MODE);
+  const [leaderboardError, setLeaderboardError] = useState<string | null>(null);
   const [members, setMembers] = useState<Member[]>(() => (LOCAL_MODE ? loadMerged<Member>(STORAGE_KEYS.MEMBERS, [], emailOf) : []));
   // The built-in badge catalog is part of the app; admin-made badges come from Firestore.
   const [badges, setBadges] = useState<Badge[]>(() => (LOCAL_MODE ? loadMerged(STORAGE_KEYS.BADGES, INITIAL_BADGES, idOf) : INITIAL_BADGES));
@@ -122,7 +137,21 @@ export function useStoreState() {
     privateSessionEpoch.current++;
     privateUnsubscribers.current.splice(0).forEach((stop) => stop());
   }, []);
-  const [scheduleLoaded, setScheduleLoaded] = useState<boolean>(false);
+  const [badgeCatalogLoaded, setBadgeCatalogLoaded] = useState(LOCAL_MODE);
+  const [scheduleDataLoaded, setScheduleDataLoaded] = useState(LOCAL_MODE);
+  const scheduleLoaded = LOCAL_MODE ? localReady : badgeCatalogLoaded && scheduleDataLoaded;
+  const [scheduleError, setScheduleError] = useState<string | null>(null);
+  const [clubToday, setClubToday] = useState(() => clubYmd());
+  useEffect(() => { const timer = setInterval(() => setClubToday(clubYmd()), 60000); return () => clearInterval(timer); }, []);
+  const [upcomingRunLimit, setUpcomingRunLimit] = useState(RUN_PAGE_SIZE);
+  const [hasMoreUpcomingRuns, setHasMoreUpcomingRuns] = useState(false);
+  const priorRunsCursor = useRef<QueryDocumentSnapshot<DocumentData>>();
+  const priorRunsPending = useRef(false);
+  const priorRunsComplete = useRef(LOCAL_MODE);
+  const [priorRunsLoaded, setPriorRunsLoaded] = useState(LOCAL_MODE);
+  const [priorRunsLoading, setPriorRunsLoading] = useState(false);
+  const [hasMorePriorRuns, setHasMorePriorRuns] = useState(!LOCAL_MODE);
+  const [priorRunsError, setPriorRunsError] = useState<string | null>(null);
   const [checkins, setCheckins] = useState<CheckInRecord[]>(() => (LOCAL_MODE ? loadMerged<CheckInRecord>(STORAGE_KEYS.CHECKINS, [], idOf) : []));
   // With Firebase the pool comes from Firestore (loadLegacyPool).
   const [legacyPool, setLegacyMembers] = useState<LegacyMember[]>(() =>
@@ -141,7 +170,7 @@ export function useStoreState() {
       setCheckins(loadMerged(STORAGE_KEYS.CHECKINS, seed.INITIAL_CHECKINS, idOf));
       setLegacyMembers(loadMerged(STORAGE_KEYS.LEGACY_MEMBERS, seed.INITIAL_LEGACY_MEMBERS, (m) => m.name.toUpperCase()));
       setMilestoneAlerts(loadFromStorage(STORAGE_KEYS.MILESTONE_ALERTS, seed.INITIAL_MILESTONE_ALERTS));
-      setScheduleLoaded(true);
+      setScheduleDataLoaded(true);
       setLocalReady(true);
     }).catch((err) => { console.warn('Local sample load failed:', err); if (active) setSyncError('Local club data could not be loaded. Please reload.'); });
     return () => { active = false; };
@@ -208,17 +237,19 @@ export function useStoreState() {
 
   const currentMember: Member = useMemo(() => {
     if (!currentUserEmail || !currentMemberKey || currentUser === GUEST_USER) return GUEST_MEMBER;
-    const row = members.find((m) => m.id === currentMemberKey);
-    return { ...memberFromUser(currentUser, currentMemberKey), ...(row ? { streak: row.streak } : {}) };
-  }, [currentUserEmail, currentMemberKey, currentUser, members]);
+    return memberFromUser(currentUser, currentMemberKey);
+  }, [currentUserEmail, currentMemberKey, currentUser]);
 
   return {
     runs,
     setRuns,
     routes,
     setRoutes,
+    routeCatalogClient, routeDetailsCache, routePageToken, routePagePending, routeCatalogComplete,
+    hasMoreRoutes, setHasMoreRoutes, routesLoading, setRoutesLoading, routeCatalogError, setRouteCatalogError,
     members,
     setMembers,
+    leaderboardLoaded, setLeaderboardLoaded, leaderboardError, setLeaderboardError,
     badges,
     setBadges,
     specialEvents,
@@ -238,7 +269,10 @@ export function useStoreState() {
     privateSessionEpoch,
     scheduleLoaded,
     syncError, setSyncError, privateSyncError, setPrivateSyncError, syncAttempt, retrySync, privateUnsubscribers,
-    setScheduleLoaded,
+    badgeCatalogLoaded, setBadgeCatalogLoaded, scheduleDataLoaded, setScheduleDataLoaded, scheduleError, setScheduleError,
+    clubToday, upcomingRunLimit, setUpcomingRunLimit, hasMoreUpcomingRuns, setHasMoreUpcomingRuns,
+    priorRunsCursor, priorRunsPending, priorRunsComplete, priorRunsLoaded, setPriorRunsLoaded,
+    priorRunsLoading, setPriorRunsLoading, hasMorePriorRuns, setHasMorePriorRuns, priorRunsError, setPriorRunsError,
     checkins,
     setCheckins,
     legacyPool,

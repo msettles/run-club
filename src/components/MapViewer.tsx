@@ -6,7 +6,7 @@ import { downloadGPXFile } from '../utils/gpxParser';
 import { addBaseLayers, drawRoute, drawTurnPins } from '../utils/mapLayers';
 import { CARTO_VOYAGER_NOLABELS_URL, OSM_URL, TOPO_URL } from '../utils/mapConfig';
 
-interface MapViewerProps {
+export interface MapViewerProps {
   route: GPXRoute;
   height?: string;
   showElevationProfile?: boolean;

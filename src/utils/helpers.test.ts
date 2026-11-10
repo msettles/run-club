@@ -44,9 +44,20 @@ it('reuses a member hash for repeated normalized emails', () => {
 
 it('omits raw GPX and serializes nested geometry before saving a route', async () => {
   const { formatRouteForFirestore, assertRouteFitsFirestore } = await import('../services/store/helpers');
-  const formatted = formatRouteForFirestore({ gpxXml: 'x'.repeat(1024 * 1024), points: [{ lat: 38, lon: -121 }], geoJson: { coordinates: [[-121, 38], [-122, 39]] }, directions: [] });
+  const formatted = formatRouteForFirestore({ detailsLoaded: false, gpxXml: 'x'.repeat(1024 * 1024), points: [{ lat: 38, lon: -121 }], geoJson: { coordinates: [[-121, 38], [-122, 39]] }, directions: [] });
   expect(formatted.gpxXml).toBeUndefined();
+  expect(formatted.detailsLoaded).toBeUndefined();
   expect(typeof formatted.geoJson).toBe('string');
   expect(() => assertRouteFitsFirestore(formatted)).not.toThrow();
   expect(() => assertRouteFitsFirestore({ geoJson: 'x'.repeat(901 * 1024) })).toThrow('too detailed');
+});
+
+it('keeps private profile fields out of deferred public leaderboard state', async () => {
+  const { memberFromUser } = await import('../services/store/helpers');
+  const { GUEST_USER } = await import('../data/catalog');
+  const row = memberFromUser({ ...GUEST_USER, email: 'private@example.com', displayName: 'Runner', birthday: '1980-01-01', emergencyContact: { name: 'Private', phone: '555-1234' } }, 'public-key', true);
+  expect(row.email).toBe('');
+  expect(row.birthday).toBeUndefined();
+  expect(row.emergencyContact).toBeUndefined();
+  expect(row.name).toBe('Runner');
 });

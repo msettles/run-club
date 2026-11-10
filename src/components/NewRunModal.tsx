@@ -1,12 +1,12 @@
 import { nextClubRunDate } from '../utils/checkInWindow';
 import React, { useState } from 'react';
 import { RunEvent, GPXRoute, PaceGroup, SpecialEventType, SpecialEventDefinition, RunRouteChoice } from '../types';
-import { RouteChoicesEditor, defaultChoices } from './RouteChoicesEditor';
+import { type RouteCatalogPaginationProps, RouteChoicesEditor, defaultChoices } from './RouteChoicesEditor';
 import { resolveChoices, routeChoiceError, deriveRunStats } from '../utils/runChoices';
 import { INITIAL_SPECIAL_EVENTS } from '../data/catalog';
 import { X, Calendar, Clock, MapPin, Plus, Trash2, Sparkles, KeyRound } from 'lucide-react';
 
-interface NewRunModalProps {
+interface NewRunModalProps extends RouteCatalogPaginationProps {
   isOpen: boolean;
   onClose: () => void;
   routes: GPXRoute[];
@@ -19,6 +19,7 @@ export const NewRunModal: React.FC<NewRunModalProps> = ({
   isOpen,
   onClose,
   routes,
+  onLoadMoreRoutes, hasMoreRoutes, routesLoading,
   organizerName,
   onAddRun,
   specialEvents = INITIAL_SPECIAL_EVENTS,
@@ -173,6 +174,7 @@ export const NewRunModal: React.FC<NewRunModalProps> = ({
           {/* Distance options: each is a library route; distance, elevation and surface come from the routes */}
           <RouteChoicesEditor
             routes={routes}
+            onLoadMoreRoutes={onLoadMoreRoutes} hasMoreRoutes={hasMoreRoutes} routesLoading={routesLoading}
             choices={routeChoices}
             onChange={(c) => {
               setRouteChoices(c);

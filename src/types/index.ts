@@ -44,6 +44,7 @@ export interface RouteExternalLinks {
 }
 
 export interface GPXRoute {
+  detailsLoaded?: boolean; // Client-only: false for metadata projections
   referenced?: boolean;
   id: string;
   name: string;

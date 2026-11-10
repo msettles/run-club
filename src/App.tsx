@@ -1,3 +1,4 @@
+import { LazyRouteMap } from './components/LazyRouteMap';
 import { routeVersionLabel } from './utils/runChoices';
 import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { useClubStore } from './services/storage';
@@ -21,7 +22,6 @@ import { isAdminProfile, isStaffProfile } from './utils/roles';
 import { formatOpening, nextCheckInEvent, openCheckInEvents, checkInWindow, upcomingRuns, priorRuns, isRunLive } from './utils/checkInWindow';
 
 // Lazy-loaded heavy components & modals (saves >60% initial mobile bundle size)
-const MapViewer = lazy(() => import('./components/MapViewer').then((m) => ({ default: m.MapViewer })));
 const AdminDashboard = lazy(() => import('./components/AdminDashboard').then((m) => ({ default: m.AdminDashboard })));
 const RouteStudioModal = lazy(() => import('./components/RouteStudioModal').then((m) => ({ default: m.RouteStudioModal })));
 const CheckInModal = lazy(() => import('./components/CheckInModal').then((m) => ({ default: m.CheckInModal })));
@@ -49,10 +49,14 @@ import {
 } from 'lucide-react';
 
 export function App() {
+  const [activeTab, setActiveTab] = useState<'runs' | 'routes' | 'milestones' | 'leaderboard' | 'admin'>('runs');
+
   const {
     runs,
     members,
+    leaderboardLoaded, leaderboardError,
     routes,
+    loadRoute, refreshRoutes, loadMoreRoutes, hasMoreRoutes, routesLoading,
     badges,
     notifications,
     currentMember,
@@ -88,6 +92,7 @@ export function App() {
     countPushDevices,
     countRunCheckIns,
     scheduleLoaded,
+    loadPriorRuns, loadMoreUpcomingRuns, hasMoreUpcomingRuns, priorRunsLoaded, priorRunsLoading, hasMorePriorRuns, priorRunsError,
     syncError,
     syncRevision,
     retrySync,
@@ -97,9 +102,8 @@ export function App() {
     specialEvents,
     createBadge,
     deleteBadge,
-  } = useClubStore();
+  } = useClubStore({ loadLeaderboard: activeTab === 'leaderboard' });
 
-  const [activeTab, setActiveTab] = useState<'runs' | 'routes' | 'milestones' | 'leaderboard' | 'admin'>('runs');
   
   // Modals state
   // Which run a check-in is for: one run, or (when several are open at once) the
@@ -111,6 +115,9 @@ export function App() {
   const [isNewRunOpen, setIsNewRunOpen] = useState<boolean>(false);
   const [editingRun, setEditingRun] = useState<RunEvent | null>(null);
   const [isRouteStudioOpen, setIsRouteStudioOpen] = useState<boolean>(false);
+  const [routeActionId, setRouteActionId] = useState<string | null>(null);
+  const [routeActionError, setRouteActionError] = useState<string>();
+  const routeActionPending = useRef(false);
   const [editingRoute, setEditingRoute] = useState<GPXRoute | null>(null);
   const [isSetupGuideOpen, setIsSetupGuideOpen] = useState<boolean>(false);
   const [isBrandAssetsOpen, setIsBrandAssetsOpen] = useState<boolean>(false);
@@ -398,6 +405,17 @@ export function App() {
     setActiveTab('routes');
   };
 
+  const handleRouteAction = async (route: GPXRoute, action: 'edit' | 'download') => {
+    if (routeActionPending.current) return;
+    routeActionPending.current = true; setRouteActionId(route.id); setRouteActionError(undefined);
+    try {
+      const full = await loadRoute(route.id);
+      if (action === 'download') downloadGPXFile(full);
+      else { setEditingRoute(full); setIsRouteStudioOpen(true); }
+    } catch (cause) { setRouteActionError(cause instanceof Error ? cause.message : 'Route details could not be loaded. Please retry.'); }
+    finally { routeActionPending.current = false; setRouteActionId(null); }
+  };
+
   const handleSaveRoute = async (routeData: Omit<GPXRoute, 'id'>, existingId?: string) => {
     if (!isOrganizerOrAdmin) {
       alert('Only organizers and club administrators can create or edit routes.');
@@ -602,26 +620,31 @@ export function App() {
                   {upcoming.length === 0 ? (
                     <div className="text-center py-12 bg-white rounded-2xl border border-stone-200 p-6 space-y-3">
                       <AlertCircle className="w-8 h-8 text-stone-400 mx-auto" />
-                      <p className="text-stone-600 font-medium text-sm">No upcoming runs scheduled.</p>
+                      <p className="text-stone-600 font-medium text-sm">{scheduleLoaded ? 'No upcoming runs scheduled.' : syncError ? 'The run schedule is unavailable. Please retry loading.' : 'Loading run schedule…'}</p>
                     </div>
                   ) : (
                     upcoming.map((r) => renderRun(r))
                   )}
 
-                  {prior.length > 0 && (
+                  {hasMoreUpcomingRuns && <button type="button" onClick={loadMoreUpcomingRuns} className="rounded-xl border bg-white px-4 py-2 text-sm font-bold">Load more upcoming runs</button>}
+                  {(prior.length > 0 || isFirebaseConfigured) && (
                     <div className="pt-2 space-y-4">
                       <button
                         type="button"
-                        onClick={() => setShowPriorRuns((v) => !v)}
+                        onClick={() => { if (!showPriorRuns && !priorRunsLoaded) void loadPriorRuns().catch(() => {}); setShowPriorRuns((v) => !v); }}
                         aria-expanded={showPriorRuns}
                         className="w-full py-2.5 text-xs font-bold text-stone-600 hover:text-stone-900 bg-white border border-stone-200 rounded-xl transition"
                       >
-                        {showPriorRuns ? 'Hide prior runs' : `Show prior runs (${prior.length})`}
+                        {showPriorRuns ? 'Hide prior runs' : 'Show prior runs'}
                       </button>
                       {showPriorRuns && (
                         <>
                           <h4 className="text-sm font-bold text-stone-500 uppercase tracking-wider">Prior Runs</h4>
                           {prior.map((r) => renderRun(r, true))}
+                          {priorRunsError && <p role="alert" className="text-sm text-amber-900">{priorRunsError}</p>}
+                          {priorRunsLoading && <p role="status" className="text-sm text-stone-500">Loading prior runs…</p>}
+                          {!priorRunsLoading && priorRunsLoaded && !prior.length && !priorRunsError && <p className="text-sm text-stone-500">No published prior runs on this page.</p>}
+                          {(hasMorePriorRuns || priorRunsError) && <button type="button" disabled={priorRunsLoading} onClick={() => { void loadPriorRuns().catch(() => {}); }} className="rounded-xl border bg-white px-4 py-2 text-sm font-bold disabled:opacity-50">{priorRunsError ? 'Retry prior runs' : 'Load more prior runs'}</button>}
                         </>
                       )}
                     </div>
@@ -678,12 +701,19 @@ export function App() {
               ))}
             </div>
 
+            {isFirebaseConfigured && <button type="button" disabled={routesLoading} onClick={() => { void refreshRoutes().catch(() => {}); }} className="rounded-xl border border-stone-200 bg-white px-4 py-2 text-sm font-bold disabled:opacity-50">Refresh route library</button>}
+            {hasMoreRoutes && <button type="button" disabled={routesLoading} onClick={() => { void loadMoreRoutes().catch(() => {}); }} className="rounded-xl border border-stone-200 bg-white px-4 py-2 text-sm font-bold disabled:opacity-50">{routesLoading ? 'Loading routes…' : 'Load more library routes'}</button>}
+
+            {routeActionId && <p role="status" className="text-sm text-stone-600">Loading route details…</p>}
+            {routeActionError && <p role="alert" className="text-sm text-amber-900">{routeActionError}</p>}
+
             {/* Selected Route Map Viewer */}
             {selectedRoute && (
               <Suspense
                 fallback={<div className="h-[480px] rounded-2xl bg-white border border-stone-200 animate-pulse" aria-label="Loading map" />}
               >
-                <MapViewer
+                <LazyRouteMap
+                  loadRoute={loadRoute}
                   route={selectedRoute}
                   height="480px"
                   showElevationProfile={true}
@@ -728,10 +758,10 @@ export function App() {
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            setEditingRoute(r);
-                            setIsRouteStudioOpen(true);
+                            void handleRouteAction(r, 'edit');
                           }}
                           className="text-stone-400 hover:text-woodland-800 p-1"
+                          disabled={Boolean(routeActionId)}
                           title="Edit Route Details & Directions"
                         >
                           <Edit3 className="w-3.5 h-3.5" />
@@ -740,9 +770,10 @@ export function App() {
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          downloadGPXFile(r);
+                          void handleRouteAction(r, 'download');
                         }}
                         className="text-stone-400 hover:text-stone-800 p-1"
+                        disabled={Boolean(routeActionId)}
                         title="Download GPX"
                       >
                         <Download className="w-3.5 h-3.5" />
@@ -768,6 +799,7 @@ export function App() {
         {activeTab === 'leaderboard' && (
           <Leaderboard
             members={members}
+            loading={!leaderboardLoaded} error={leaderboardError} onRetry={retrySync}
             badges={badges}
             currentMember={currentMember}
           />
@@ -806,6 +838,7 @@ export function App() {
               onImportLegacyData={importLegacyData}
               onReloadLegacyPool={loadLegacyPool}
               onCountPushDevices={countPushDevices}
+              onLoadPriorRuns={loadPriorRuns} priorRunsLoading={priorRunsLoading} hasMorePriorRuns={hasMorePriorRuns} priorRunsError={priorRunsError}
             />
           </Suspense>
         )}
@@ -1006,6 +1039,7 @@ export function App() {
             routes={routes}
             checkins={checkins}
             onCheckInRunner={checkInRunner}
+            onLoadRoute={loadRoute}
             onOpenAuthModal={() => { setPendingCheckInRun(selectedRunForCheckIn); handleOpenRegister(); }}
           />
         )}
@@ -1016,6 +1050,7 @@ export function App() {
             onClose={() => setIsNewRunOpen(false)}
             routes={routes}
             organizerName={currentMember.name}
+            onLoadMoreRoutes={loadMoreRoutes} hasMoreRoutes={hasMoreRoutes} routesLoading={routesLoading}
             onAddRun={handleAddRun}
             specialEvents={specialEvents}
           />
@@ -1029,6 +1064,7 @@ export function App() {
             onClose={() => setEditingRun(null)}
             onSave={handleUpdateRun}
             onDelete={handleDeleteRun}
+            onLoadMoreRoutes={loadMoreRoutes} hasMoreRoutes={hasMoreRoutes} routesLoading={routesLoading}
             checkInCount={checkins.filter((c) => c.runId === editingRun.id).length}
             specialEvents={specialEvents}
             currentCodeWord={meetupEvents.find((e) => e.id === editingRun.id)?.codeWord || ''}

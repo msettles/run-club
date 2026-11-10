@@ -1,10 +1,12 @@
 import { useEffect } from 'react';
-import { RunEvent, Badge, SpecialEventDefinition } from '../types';
+import { Badge, SpecialEventDefinition } from '../types';
 import { INITIAL_BADGES, INITIAL_SPECIAL_EVENTS } from '../data/catalog';
 import { isFirebaseConfigured, db } from './firebase';
 import { collection, type DocumentData, orderBy, limit, onSnapshot, query } from 'firebase/firestore';
 import { ClubNotification, showLocalNotification } from './notifications';
 import { useStoreState } from './store/state';
+import { createScheduleLoadingOps, subscribeSchedule } from './store/scheduleLoading';
+import { createRouteLoadingOps } from './store/routeLoading';
 import { createLegacyOps } from './store/legacy';
 import { createPrivateSyncOps } from './store/privateSync';
 import { createMemberOps } from './store/members';
@@ -13,7 +15,7 @@ import { createEventOps } from './store/events';
 import { createBadgeOps } from './store/badges';
 import { createRunOps } from './store/runs';
 import { createAnnouncementOps } from './store/announcements';
-import { hydrateRouteFromFirestore, meetupFromPublicDoc, memberFromPublicDoc } from './store/helpers';
+import { memberFromPublicDoc } from './store/helpers';
 // Re-exported for existing importers.
 export { cleanFirestoreData, formatRouteForFirestore, hydrateRouteFromFirestore, toPublicMember, RECENT_CHECKIN_DAYS } from './store/helpers';
 
@@ -23,26 +25,22 @@ function withCatalog<T extends { id: string }>(remote: T[], builtIn: T[]): T[] {
   return [...builtIn.filter((x) => !ids.has(x.id)), ...remote];
 }
 
-export function useClubStore() {
+export function useClubStore({ loadLeaderboard = true } = {}) {
   const s = useStoreState();
   const {
-    setRuns,
-    setRoutes,
-    setMembers,
     setBadges,
     setSpecialEvents,
     setNotifications,
     setIsSyncing,
-    setMeetupEvents,
-    setScheduleLoaded,
+    setBadgeCatalogLoaded,
     setSyncError,
     syncAttempt,
-    staffCodeWords,
   } = s;
 
   // Each group of operations can use the state and every group created before it.
   // Extend one context in dependency order; each operation sees current render state.
-  const c1 = Object.assign(s, createLegacyOps(s));
+  const c0 = Object.assign(s, createRouteLoadingOps(s), createScheduleLoadingOps(s));
+  const c1 = Object.assign(c0, createLegacyOps(c0));
   const c2 = Object.assign(c1, createPrivateSyncOps(c1));
   const c3 = Object.assign(c2, createMemberOps(c2));
   const c4 = Object.assign(c3, createCheckInOps(c3));
@@ -58,20 +56,14 @@ export function useClubStore() {
 
     setIsSyncing(true);
     setSyncError(null);
-    setScheduleLoaded(false);
+    setBadgeCatalogLoaded(false);
     const loaded = new Set<string>();
     const errors = new Set<string>();
     const subscriptions: Array<() => void> = [];
     const handlers = {
-      runs: (docs: DocumentData[]) => setRuns(docs as RunEvent[]),
-      routes: (docs: DocumentData[]) => setRoutes(docs.map(hydrateRouteFromFirestore)),
-      members: (docs: DocumentData[]) => setMembers(docs.filter((d) => !String(d.id).includes('@')).map(memberFromPublicDoc)),
       badges: (docs: DocumentData[]) => setBadges(withCatalog(docs as Badge[], INITIAL_BADGES)),
       special_events: (docs: DocumentData[]) => setSpecialEvents(withCatalog(docs as SpecialEventDefinition[], INITIAL_SPECIAL_EVENTS)),
-      meetup_events: (docs: DocumentData[]) => setMeetupEvents((prev) => docs.map((d) => {
-        const m = meetupFromPublicDoc(d);
-        return { ...m, codeWord: prev.find((p) => p.id === m.id)?.codeWord || staffCodeWords.current[m.id] || '' };
-      })),
+
     };
     for (const [name, apply] of Object.entries(handlers)) {
       subscriptions.push(onSnapshot(collection(currentDb, name), (snap) => {
@@ -79,16 +71,19 @@ export function useClubStore() {
         loaded.add(name);
         errors.delete(name);
         setSyncError(errors.size ? `Club data could not be loaded (${[...errors].join(', ')}).` : null);
-        setScheduleLoaded(['runs', 'meetup_events', 'badges'].every((name) => loaded.has(name) && !errors.has(name)));
+        if (name === 'badges') setBadgeCatalogLoaded(true);
         setIsSyncing(loaded.size + errors.size < Object.keys(handlers).length);
       }, (err) => {
         console.warn(`${name} subscription failed:`, err);
         errors.add(name);
         setSyncError(`Club data could not be loaded (${[...errors].join(', ')}). Please retry.`);
-        if (['runs', 'meetup_events', 'badges'].includes(name)) setScheduleLoaded(false);
+        if (name === 'badges') setBadgeCatalogLoaded(false);
         setIsSyncing(false);
       }));
     }
+
+    // Route metadata is projected and paged; map geometry is fetched only on demand.
+    if (!s.routePagePending.current && !s.routeCatalogComplete.current) void store.loadMoreRoutes().catch(() => {});
 
     // Club announcements (public, latest 30), live: new ones appear in everyone's bell.
     let unsubscribeAnnouncements: (() => void) | undefined;
@@ -122,11 +117,39 @@ export function useClubStore() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [syncAttempt]);
 
+  const { setMembers, setLeaderboardLoaded, setLeaderboardError } = s;
+  useEffect(() => {
+    if (!isFirebaseConfigured || !db || !loadLeaderboard) return;
+    setLeaderboardLoaded(false); setLeaderboardError(null);
+    return onSnapshot(collection(db, 'members'), { includeMetadataChanges: true }, (snapshot) => {
+      if (snapshot.metadata.fromCache && snapshot.empty) return;
+      setMembers(snapshot.docs.filter((doc) => !doc.id.includes('@')).map((doc) => memberFromPublicDoc({ ...doc.data(), id: doc.id })));
+      setLeaderboardLoaded(true);
+    }, () => { setLeaderboardError('The member leaderboard could not be loaded. Please retry.'); setLeaderboardLoaded(false); });
+  }, [loadLeaderboard, syncAttempt, setMembers, setLeaderboardLoaded, setLeaderboardError]);
+
+  const { clubToday, upcomingRunLimit, setScheduleDataLoaded, setScheduleError, setHasMoreUpcomingRuns, setRuns, setMeetupEvents, staffCodeWords } = s;
+  useEffect(() => subscribeSchedule({ upcomingRunLimit, setScheduleDataLoaded, setScheduleError, setHasMoreUpcomingRuns, setRuns, setMeetupEvents, staffCodeWords }, clubToday),
+    [clubToday, upcomingRunLimit, setScheduleDataLoaded, setScheduleError, setHasMoreUpcomingRuns, setRuns, setMeetupEvents, staffCodeWords, syncAttempt]);
+
+  useEffect(() => {
+    const ids = s.runs.flatMap((run) => [...(run.routeChoices || []).map((choice) => choice.routeId), ...(run.routeId ? [run.routeId] : [])]);
+    void store.ensureRouteSummaries(ids).catch(() => s.setRouteCatalogError('Some scheduled route information could not be loaded. Please retry.'));
+    // Only schedule changes or an explicit retry need to resolve references.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [s.runs, syncAttempt]);
+
   return {
     // State
     runs: store.runs,
     routes: store.routes,
+    loadRoute: store.loadRoute,
+    refreshRoutes: store.refreshRoutes,
+    loadMoreRoutes: store.loadMoreRoutes,
+    hasMoreRoutes: store.hasMoreRoutes,
+    routesLoading: store.routesLoading,
     members: store.members,
+    leaderboardLoaded: store.leaderboardLoaded, leaderboardError: store.leaderboardError,
     badges: store.badges,
     notifications: store.notifications,
     bellItems: store.bellItems,
@@ -142,7 +165,10 @@ export function useClubStore() {
     currentMember: store.currentMember,
     isSyncing: store.isSyncing,
     scheduleLoaded: store.scheduleLoaded,
-    syncError: store.syncError || store.privateSyncError,
+    loadPriorRuns: store.loadPriorRuns, loadMoreUpcomingRuns: store.loadMoreUpcomingRuns,
+    hasMoreUpcomingRuns: store.hasMoreUpcomingRuns, priorRunsLoaded: store.priorRunsLoaded,
+    priorRunsLoading: store.priorRunsLoading, hasMorePriorRuns: store.hasMorePriorRuns, priorRunsError: store.priorRunsError,
+    syncError: store.syncError || store.scheduleError || store.privateSyncError || store.routeCatalogError,
     syncRevision: store.syncAttempt,
     retrySync: store.retrySync,
     isFirebaseConfigured,

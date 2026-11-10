@@ -21,6 +21,7 @@ import {
   where,
   runTransaction,
 } from 'firebase/firestore';
+import { fetchMeetups } from './scheduleLoading';
 import { sha256Hex } from '../../utils/hash';
 import { prepareRewardProofs } from './rewardProofs';
 import { memberKeyFor } from '../../utils/memberKey';
@@ -90,7 +91,16 @@ export function createLegacyOps(ctx: StoreState) {
     const clean = email.toLowerCase();
     if (!isFirebaseConfigured || !db) return checkins.filter((c) => c.userEmail.toLowerCase() === clean);
     const snap = await getDocs(query(collection(db, 'checkins'), where('userEmail', '==', clean)));
-    return snap.docs.map((d) => d.data() as CheckInRecord);
+    const records = snap.docs.map((d) => d.data() as CheckInRecord);
+    const known = new Map(meetupEvents.map((event) => [event.id, event]));
+    const missing = [...new Set(records.filter((record) => record.runId && record.eventTitle === undefined && !known.has(record.runId)).map((record) => record.runId!))];
+    const fetched = await fetchMeetups(missing);
+    const meetups = new Map([...meetupEvents, ...fetched].map((event) => [event.id, event]));
+    if (fetched.length) ctx.setMeetupEvents((previous) => [...new Map([...previous, ...fetched.map((event) => ({ ...event, codeWord: ctx.staffCodeWords?.current[event.id] || previous.find((old) => old.id === event.id)?.codeWord || '' }))].map((event) => [event.id, event])).values()]);
+    return records.map((record) => {
+      const event = meetups.get(record.runId || '');
+      return event && record.eventTitle === undefined ? { ...record, eventTitle: event.title, eventSpecial: event.specialEvent || 'none' } : record;
+    });
   };
 
   /** Recalculate badges + streaks for a profile from all its dated history and save them. */
@@ -140,7 +150,7 @@ export function createLegacyOps(ctx: StoreState) {
     } else updated = await calculate(user);
     if (epoch !== ctx.privateSessionEpoch?.current) return updated;
     setUsers((prev) => prev.map((u) => (u.email.toLowerCase() === user.email.toLowerCase() ? updated : u)));
-    setMembers((prev) => [memberFromUser(updated, key), ...prev.filter((m) => m.id !== key)]);
+    setMembers((prev) => [memberFromUser(updated, key, isFirebaseConfigured), ...prev.filter((m) => m.id !== key)]);
     if (user.email.toLowerCase() === currentUserEmail.toLowerCase()) setOwnLegacyEvents(events);
     return updated;
   };
