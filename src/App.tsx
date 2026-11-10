@@ -18,6 +18,7 @@ import { reconcilePushAccount, disablePushOnThisDevice, getPushStatus } from './
 import { onAuthChange, logoutUser, checkAndCompleteEmailLinkSignIn } from './services/authService';
 import { User as FirebaseUser } from 'firebase/auth';
 import { db } from './services/firebase';
+import { rewardsAreCurrent } from './services/store/rewardSync';
 import { doc, getDoc } from 'firebase/firestore';
 import { downloadGPXFile } from './utils/gpxParser';
 import { isAdminProfile, isStaffProfile } from './utils/roles';
@@ -286,12 +287,23 @@ export function App() {
   // Role changes must replace subscriptions as well as update navigation.
   useEffect(() => {
     if (!isFirebaseConfigured || !authReady || !currentUser.email || currentUser.role === 'guest') return;
-    void syncPrivateData(currentUser.email, isStaffProfile(currentUser), isAdminProfile(currentUser)).then(() => {
-      void refreshDerivedStats(currentUser).catch((err) => console.warn('Reward refresh needs a retry:', err));
-    });
+    void syncPrivateData(currentUser.email, isStaffProfile(currentUser), isAdminProfile(currentUser));
     // The operation closures change each render; only identity/role changes restart listeners.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authReady, currentUser.email, currentUser.role, syncRevision]);
+
+  // Badges and streaks are recalculated from the runner's whole history, which is
+  // many reads. Skip it when this device already refreshed against the same profile
+  // state and badge catalog (the catalog is part of scheduleLoaded).
+  useEffect(() => {
+    if (!isFirebaseConfigured || !authReady || !scheduleLoaded || !currentUser.email || currentUser.role === 'guest') return;
+    let active = true;
+    void rewardsAreCurrent(currentUser, badges).then((current) => {
+      if (active && !current) return refreshDerivedStats(currentUser);
+    }).catch((err) => console.warn('Reward refresh needs a retry:', err));
+    return () => { active = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authReady, scheduleLoaded, currentUser.email, currentUser.role, syncRevision]);
 
   const openCheckInFor = (target: CheckInTarget) => {
     if (!isUserLoggedIn || currentUser.role === 'guest') {

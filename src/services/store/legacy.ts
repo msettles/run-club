@@ -24,6 +24,7 @@ import {
 import { fetchMeetups } from './scheduleLoading';
 import { sha256Hex } from '../../utils/hash';
 import { prepareRewardProofs } from './rewardProofs';
+import { rememberRewardSync } from './rewardSync';
 import { memberKeyFor } from '../../utils/memberKey';
 import { assertDocumentFitsFirestore, cleanFirestoreData, memberFromUser, toPublicMember } from './helpers';
 import type { StoreState } from './state';
@@ -151,7 +152,11 @@ export function createLegacyOps(ctx: StoreState) {
     if (epoch !== ctx.privateSessionEpoch?.current) return updated;
     setUsers((prev) => prev.map((u) => (u.email.toLowerCase() === user.email.toLowerCase() ? updated : u)));
     setMembers((prev) => [memberFromUser(updated, key, isFirebaseConfigured), ...prev.filter((m) => m.id !== key)]);
-    if (user.email.toLowerCase() === currentUserEmail.toLowerCase()) setOwnLegacyEvents(events);
+    if (user.email.toLowerCase() === currentUserEmail.toLowerCase()) {
+      setOwnLegacyEvents(events);
+      // Lets the next sign-in on this device skip the refresh while nothing has changed.
+      await rememberRewardSync(updated, badges);
+    }
     return updated;
   };
 

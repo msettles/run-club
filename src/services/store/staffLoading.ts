@@ -6,7 +6,11 @@ import type { StoreState } from './state';
 export const STAFF_PAGE_SIZE = 50;
 export type StaffSearchRole = 'all' | 'member' | 'organizer' | 'admin';
 export interface StaffSearchResult { users: UserProfile[]; total: number; hasMore: boolean }
-export interface StaffSearchCache { rows?: UserProfile[]; pending?: Promise<UserProfile[]>; expires: number }
+export interface StaffSearchCache { rows?: UserProfile[]; pending?: Promise<UserProfile[]>; expires: number; loadedAt?: number }
+/** The roster is one read per runner, so a loaded copy is kept for a while. */
+export const STAFF_SEARCH_CACHE_MS = 15 * 60_000;
+/** A search that finds nobody re-reads the roster once it is this old (a runner may have just joined). */
+export const STAFF_SEARCH_RECHECK_MS = 2 * 60_000;
 export const newStaffSearchCache = (): StaffSearchCache => ({ expires: 0 });
 const searchText = (value: string) => value.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase();
 export function matchesStaffSearch(user: UserProfile, term: string, role: StaffSearchRole = 'all'): boolean {
@@ -107,20 +111,25 @@ export function createStaffLoadingOps(ctx: StoreState) {
     if (!term.trim()) return { users: [], total: 0, hasMore: false };
     const epoch = ctx.privateSyncEpoch.current;
     const cache = ctx.staffSearchCache.current;
-    if (!cache.rows || cache.expires <= Date.now()) {
+    const changed = () => ctx.privateSyncEpoch.current !== epoch || ctx.staffSearchCache.current !== cache;
+    const load = async () => {
       if (!cache.pending) {
         const pending = exportStaffUsers().then((rows) => {
-          if (ctx.privateSyncEpoch.current !== epoch || ctx.staffSearchCache.current !== cache) throw new Error('Your staff session changed. Please retry.');
-          cache.rows = rows; cache.expires = Date.now() + 120_000;
+          if (changed()) throw new Error('Your staff session changed. Please retry.');
+          cache.rows = rows; cache.loadedAt = Date.now(); cache.expires = cache.loadedAt + STAFF_SEARCH_CACHE_MS;
           return rows;
         }).finally(() => { cache.pending = undefined; });
         cache.pending = pending;
       }
       await cache.pending;
-    }
-    if (ctx.privateSyncEpoch.current !== epoch || ctx.staffSearchCache.current !== cache) throw new Error('Your staff session changed. Please retry.');
-    const available = [...new Map([...cache.rows!, ...ctx.users].map((user) => [user.email.toLowerCase(), user])).values()];
-    const matches = available.filter((user) => matchesStaffSearch(user, term, role)).sort((a, b) => a.displayName.localeCompare(b.displayName) || a.email.localeCompare(b.email));
+      if (changed()) throw new Error('Your staff session changed. Please retry.');
+    };
+    const find = () => [...new Map([...cache.rows!, ...ctx.users].map((user) => [user.email.toLowerCase(), user])).values()]
+      .filter((user) => matchesStaffSearch(user, term, role)).sort((a, b) => a.displayName.localeCompare(b.displayName) || a.email.localeCompare(b.email));
+    if (!cache.rows || cache.expires <= Date.now()) await load();
+    if (changed()) throw new Error('Your staff session changed. Please retry.');
+    let matches = find();
+    if (!matches.length && Date.now() - (cache.loadedAt || 0) > STAFF_SEARCH_RECHECK_MS) { await load(); matches = find(); }
     const start = Math.max(0, Math.trunc(offset));
     const users = matches.slice(start, start + STAFF_PAGE_SIZE);
     ctx.setUsers((previous) => [...new Map([...users.filter((user) => user.email.toLowerCase() !== ctx.currentUser.email.toLowerCase()), ...previous].map((user) => [user.email.toLowerCase(), user])).values()]);
