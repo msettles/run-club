@@ -16,7 +16,7 @@ Starting another club? See [`docs/new-club-setup.md`](docs/new-club-setup.md) (f
 
 **Live:** https://woodland-woodchuckers.web.app · **Stack:** React 18 · TypeScript · Vite 6 · Tailwind 3 · Firebase 13 (Spark plan: Auth, Firestore, Hosting, Cloud Messaging) · Leaflet / OpenStreetMap
 
-![CI](https://github.com/msettles/woodland_woodchuckers/actions/workflows/ci.yml/badge.svg)
+![CI](https://github.com/msettles/run-club/actions/workflows/ci.yml/badge.svg)
 
 ---
 

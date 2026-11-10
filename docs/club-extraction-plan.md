@@ -84,11 +84,10 @@ Each phase is its own branch and PR, leaves the Woodland app unchanged on screen
 - **Installed apps.** The manifest output for Woodland must be byte-for-byte the same name, short name, colours and icon paths, so installed copies are not disturbed.
 - **Time zone tests.** `vitest.config.ts` pins `TZ`; tests should read the club's zone rather than a literal.
 - **Out of scope.** Runtime multi-club hosting, a club-admin setup screen, and the social preview work in [social-sharing-enhancement.md](social-sharing-enhancement.md) (which should read its title, description and image from this setup once both exist).
-- **Not part of this plan:** renaming the GitHub repository, creating Firebase projects, or changing the live hosting site. Each needs the owner's explicit go-ahead. The [go-live policy](go-live-policy.md) is unaffected; nothing here touches stored data.
+- **Not part of this plan:** creating Firebase projects, or changing the live hosting site. Each needs the owner's explicit go-ahead. The [go-live policy](go-live-policy.md) is unaffected; nothing here touches stored data.
 
 ## Open questions for the owner
 
-1. Repository name: rename `woodland_woodchuckers` to `run-club` (GitHub redirects the old URL), or create a fresh `run-club` platform repository and keep this one as Woodland's fork?
-2. Should forks pull platform updates from the platform repository (keeping `club/` as the only difference makes that a clean merge), and who publishes those updates?
-3. The repository has no `LICENSE` file although the README says MIT. Forking by other clubs needs one.
-4. Should "Built with Run Club" link anywhere (for example the platform repository)?
+1. Should forks pull platform updates from the platform repository (keeping `club/` as the only difference makes that a clean merge), and who publishes those updates?
+2. The repository has no `LICENSE` file although the README says MIT. Forking by other clubs needs one.
+3. Should "Built with Run Club" link anywhere (for example the platform repository)?
