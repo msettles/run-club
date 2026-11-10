@@ -1,3 +1,4 @@
+import { Modal } from './Modal';
 import React, { useState } from 'react';
 import { X, Mail, Sparkles, CheckCircle, AlertCircle, ArrowRight } from 'lucide-react';
 import { emailLinkErrorMessage, loginWithGoogle, sendPasswordlessEmailLink } from '../services/authService';
@@ -59,12 +60,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[1000] overflow-y-auto bg-stone-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <Modal title="Sign in" onClose={onClose} className="fixed inset-0 z-[1000] overflow-y-auto bg-stone-950/80 backdrop-blur-sm flex items-center justify-center p-4">
       <div className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl border border-stone-200 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
         
         {/* Header */}
         <div className="bg-gradient-to-r from-woodland-950 via-woodland-900 to-[#13495d] px-6 py-6 text-white text-center relative">
-          <button
+          <button aria-label="Close window"
             onClick={onClose}
             className="absolute top-4 right-4 p-2 text-stone-300 hover:text-white rounded-full hover:bg-white/10 transition"
           >
@@ -195,6 +196,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           </div>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 };

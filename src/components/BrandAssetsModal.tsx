@@ -1,3 +1,4 @@
+import { Modal } from './Modal';
 import React, { useState } from 'react';
 import { X, Download, Copy, Check, ExternalLink, Sparkles, Palette, Type, Award } from 'lucide-react';
 
@@ -63,7 +64,7 @@ export const BrandAssetsModal: React.FC<BrandAssetsModalProps> = ({ isOpen, onCl
   ];
 
   return (
-    <div className="fixed inset-0 z-[1100] flex items-center justify-center p-3 sm:p-4 bg-stone-900/60 backdrop-blur-xs animate-in fade-in duration-150 overflow-y-auto">
+    <Modal title="Club brand assets" onClose={onClose} className="fixed inset-0 z-[1100] flex items-center justify-center p-3 sm:p-4 bg-stone-900/60 backdrop-blur-xs animate-in fade-in duration-150 overflow-y-auto">
       <div className="relative w-full max-w-4xl bg-white rounded-2xl shadow-2xl border border-stone-200 overflow-hidden my-6 max-h-[92vh] flex flex-col">
         {/* Header */}
         <div className="px-6 py-5 bg-gradient-to-r from-woodland-950 via-woodland-900 to-woodland-800 text-white flex items-center justify-between shrink-0 border-b border-woodland-700/50">
@@ -85,7 +86,7 @@ export const BrandAssetsModal: React.FC<BrandAssetsModalProps> = ({ isOpen, onCl
               </p>
             </div>
           </div>
-          <button
+          <button aria-label="Close window"
             onClick={onClose}
             className="p-2 rounded-xl text-woodland-200 hover:text-white hover:bg-white/10 transition"
           >
@@ -357,6 +358,6 @@ export const BrandAssetsModal: React.FC<BrandAssetsModalProps> = ({ isOpen, onCl
           </button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 };
