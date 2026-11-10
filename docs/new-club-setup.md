@@ -73,7 +73,7 @@ Edit these in your fork. (This list is what the extraction plan replaces with on
 
 Leave these alone:
 
-- `public/runclub-icon.png`, `public/runclub.png` and the footer's "Built with Run Club" credit: that is the platform's branding.
+- `public/runclub-icon.png`, `public/runclub.png` and the footer's "Built with Run Club" credit and its link to the platform repository: that is the platform's branding.
 - The `woodchuckers` prefix in browser storage keys and in the leaderboard key (`src/utils/memberKey.ts` and `firestore.rules`). It is invisible to runners. A brand-new club may change it before its first sign-up, in both places together; never after.
 
 Several tests assert on the current club's wording and owner email (`tests/firestore.rules.test.mjs`, the store integration tests, a few unit tests). Update them alongside your edits.

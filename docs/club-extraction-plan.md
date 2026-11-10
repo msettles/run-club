@@ -90,4 +90,3 @@ Each phase is its own branch and PR, leaves the Woodland app unchanged on screen
 
 1. Should forks pull platform updates from the platform repository (keeping `club/` as the only difference makes that a clean merge), and who publishes those updates?
 2. The repository has no `LICENSE` file although the README says MIT. Forking by other clubs needs one.
-3. Should "Built with Run Club" link anywhere (for example the platform repository)?
