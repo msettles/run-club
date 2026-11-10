@@ -53,6 +53,7 @@ export function App() {
 
   const {
     runs,
+    linkedRunId, linkedRunLoading, linkedRunError,
     members,
     leaderboardLoaded, leaderboardError,
     routes,
@@ -613,11 +614,16 @@ export function App() {
               };
               // Runs without a saved code word aren't live: only staff see them (to finish setting them up).
               const visible = runs.filter((r) => isOrganizerOrAdmin || isRunLive(r, meetupEvents));
-              const upcoming = upcomingRuns(visible);
-              const prior = priorRuns(visible);
+              const shared = visible.find((run) => run.id === linkedRunId);
+              const upcoming = upcomingRuns(visible.filter((run) => run.id !== shared?.id));
+              const prior = priorRuns(visible.filter((run) => run.id !== shared?.id));
               return (
                 <div className="space-y-4">
-                  {upcoming.length === 0 ? (
+                  {linkedRunId && <section aria-label="Shared run" className="space-y-3 rounded-2xl border-2 border-woodland-600 p-3">
+                    <h3 className="text-xl font-bold">Shared run</h3>
+                    {linkedRunLoading ? <p role="status">Loading shared run…</p> : linkedRunError ? <p role="alert">{linkedRunError} <button type="button" onClick={retrySync} className="underline">Retry</button></p> : shared ? renderRun(shared, priorRuns([shared]).length > 0) : <p>This run is unavailable or is no longer published.</p>}
+                  </section>}
+                  {upcoming.length === 0 && !shared ? (
                     <div className="text-center py-12 bg-white rounded-2xl border border-stone-200 p-6 space-y-3">
                       <AlertCircle className="w-8 h-8 text-stone-400 mx-auto" />
                       <p className="text-stone-600 font-medium text-sm">{scheduleLoaded ? 'No upcoming runs scheduled.' : syncError ? 'The run schedule is unavailable. Please retry loading.' : 'Loading run schedule…'}</p>

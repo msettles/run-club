@@ -1,5 +1,6 @@
 import { formatMiles, roundMiles } from '../utils/miles';
-import React from 'react';
+import React, { useState } from 'react';
+import { runShareUrl } from '../utils/runLinks';
 import { RunEvent, Member, GPXRoute } from '../types';
 import { ResolvedChoice } from '../utils/runChoices';
 import { buildRunIcs } from '../utils/calendar';
@@ -32,6 +33,19 @@ export const RunCard: React.FC<RunCardProps> = ({
   onEdit,
   onDelete,
 }) => {
+  const [shareStatus, setShareStatus] = useState('');
+  const [manualLink, setManualLink] = useState('');
+  const shareRun = async () => {
+    const url = runShareUrl(run.id, window.location.origin);
+    setShareStatus(''); setManualLink('');
+    try {
+      if (navigator.share) { await navigator.share({ title: run.title, text: `Join us for ${run.title} on ${run.date}!`, url }); setShareStatus('Run shared.'); }
+      else { await navigator.clipboard.writeText(url); setShareStatus('Run link copied.'); }
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') return;
+      setManualLink(url); setShareStatus('Copy this run link:');
+    }
+  };
   const isAttending = run.attendees.some((a) => a.memberId === currentMember.id);
   const checkedInCount = run.attendees.filter((a) => a.checkedIn).length;
 
@@ -307,6 +321,7 @@ export const RunCard: React.FC<RunCardProps> = ({
         </button>
       </div>
 
+      {(shareStatus || manualLink) && <div className="px-5 pb-3 text-sm"><p role="status">{shareStatus}</p>{manualLink && <input aria-label="Run share link" readOnly value={manualLink} onFocus={(event) => event.target.select()} className="mt-2 w-full rounded border p-2" />}</div>}
       {/* Footer Actions */}
       <div className="p-4 bg-stone-50 border-t border-stone-200 flex flex-wrap items-center justify-between gap-3">
         <div className="text-xs text-stone-500 font-medium flex items-center gap-1.5">
@@ -315,6 +330,7 @@ export const RunCard: React.FC<RunCardProps> = ({
         </div>
 
         <div className="flex items-center gap-2">
+          <button type="button" onClick={() => { void shareRun(); }} className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-white border border-stone-300" aria-label={`Share ${run.title}`}>Share run</button>
           {/* RSVP Toggle */}
           <button
             onClick={() => onToggleRSVP(run.id)}
