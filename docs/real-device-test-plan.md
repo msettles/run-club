@@ -1,6 +1,6 @@
 # Real-device acceptance test plan
 
-Priority: highest. Prepared November 10, 2026 for the v1.2.5 release.
+Priority: highest. Prepared November 10, 2026 for the v1.2.5 release; section H added the same day for v1.2.6.
 
 Status: **Not executed.** Automated browser results are separate evidence and do not establish that these real-device cases pass.
 
@@ -126,6 +126,22 @@ Update safety is an acceptance target, **not a verified feature**. The current V
 | SEARCH-01 | P0 | As staff, search for a known runner beyond the first 50 by partial first name, surname, mixed case, reversed words and partial email. Use role filters and Previous/Next matches. | Matching covers all registered profiles; page counts and identities are correct. No need to manually load the runner's roster page first. |
 | SEARCH-02 | P1 | Type quickly, clear the query, search for a nonexistent runner, and retry after a connection failure. Refresh after changing a profile/role from the other device. | Old responses never replace a newer query. Errors differ from no matches. Refresh gets current data; the brief search cache is not mistaken for a live directory. |
 | SEARCH-03 | P0 | Search as staff, then sign out/change to an ordinary runner. | No private cached roster or staff search UI remains accessible to the new session. |
+
+## H. Release regression: v1.2.6
+
+These cases cover changes that automated tests exercise only against the local emulator or a local build. Each needs a signed-in session on the deployed site. Run the member cases with an ordinary runner account: organizers and admins pass through different server rules, so a staff account cannot show whether a member-only path works.
+
+| ID | Priority | Steps | Pass criteria |
+| --- | --- | --- | --- |
+| REL-01 | P0 | As an ordinary runner (not organizer or admin), check into an open run. Use Change Distance / Update Check-In to switch between running and walking, and save. Repeat after a second runner has checked into the same run. | Each edit saves with "Check-in updated!". Run count stays the same and activity totals and mileage follow the edit. The runner appears once in the run's attendee list. |
+| REL-02 | P0 | As an ordinary runner, RSVP to a run created after the v1.2.6 deploy, cancel the RSVP, then RSVP again. Repeat on a run created before the deploy. | Each RSVP and cancellation saves without an error. The runner is listed once. Record separately any failure that occurs only on the older run. |
+| REL-03 | P0 | Schedule a run using a loop route whose limit is 3. As a runner, open check-in for it. Then check in on a loop route saved before the deploy. | Exactly three loop buttons and no plus/minus stepper. Credited mileage is base distance × loops. The older route offers its saved limit, or four when it has none. |
+| REL-04 | P0 | Sign in as a runner with claimed historical attendance. Wait for loading to finish, then reload the app twice. Check in to an open run and wait on the confirmation screen for rewards to finish; then reload again. | The check-in shows no "Rewards or leaderboard data could not be refreshed" notice, and the streak and any newly earned badge appear. Reloads leave badges and streaks unchanged. A refresh that fails at sign-in is only written to the browser console, so the check-in step is the one that proves it; where a console is available, also confirm there is no "Reward refresh needs a retry" warning. |
+| REL-05 | P1 | Sign in as the same runner on a second device or browser that has not been used before. | Badges and streaks match the first device once loading finishes; no refresh notice. |
+| REL-06 | P0 | As an organizer, delete a run whose check-in has not opened. Then try to delete a run whose check-in has opened. | The first run is removed. The second is refused with a message that an admin is required, and its check-ins and totals are untouched. |
+| REL-07 | P1 | As an organizer or admin, edit the name of a route no run has used and save. Then edit a route that a scheduled run uses. | The unused route keeps a single library entry with the new name. The used route's edit appears as a second entry with an "Updated" label, and the scheduled run still shows its original route. |
+| REL-08 | P1 | As staff, search the roster for a runner who registered within the last few minutes. Change a runner's role, then search for them again without pressing Refresh. | The new runner is found. The role shown in results matches the change. |
+| REL-09 | P1 | In the installed app, sign in as an admin and open the admin dashboard, Route Studio and New Run. Go offline and reopen the admin dashboard. | Each screen opens on first use while online. The dashboard already opened reopens offline, or shows the loading-recovery message; it never shows a blank screen. |
 
 ## Exit criteria and evidence
 
