@@ -35,14 +35,26 @@ export const RunCard: React.FC<RunCardProps> = ({
 }) => {
   const [shareStatus, setShareStatus] = useState('');
   const [manualLink, setManualLink] = useState('');
+  // Only the link is handed over: a share sheet's "Copy" copies everything it's given,
+  // and any title or message pasted into an address bar becomes part of the run ID.
   const shareRun = async () => {
     const url = runShareUrl(run.id, window.location.origin);
     setShareStatus(''); setManualLink('');
     try {
-      if (navigator.share) { await navigator.share({ title: run.title, text: `Join us for ${run.title} on ${run.date}!`, url }); setShareStatus('Run shared.'); }
+      if (navigator.share) { await navigator.share({ url }); setShareStatus('Run shared.'); }
       else { await navigator.clipboard.writeText(url); setShareStatus('Run link copied.'); }
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') return;
+      setManualLink(url); setShareStatus('Copy this run link:');
+    }
+  };
+  const copyRunLink = async () => {
+    const url = runShareUrl(run.id, window.location.origin);
+    setShareStatus(''); setManualLink('');
+    try {
+      await navigator.clipboard.writeText(url);
+      setShareStatus('Run link copied.');
+    } catch {
       setManualLink(url); setShareStatus('Copy this run link:');
     }
   };
@@ -330,6 +342,7 @@ export const RunCard: React.FC<RunCardProps> = ({
         </div>
 
         <div className="flex items-center gap-2">
+          <button type="button" onClick={() => { void copyRunLink(); }} className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-white border border-stone-300" aria-label={`Copy link to ${run.title}`}>Copy link</button>
           <button type="button" onClick={() => { void shareRun(); }} className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-white border border-stone-300" aria-label={`Share ${run.title}`}>Share run</button>
           {/* RSVP Toggle */}
           <button
