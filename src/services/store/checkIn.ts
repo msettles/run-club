@@ -98,7 +98,7 @@ export function createCheckInOps(ctx: StoreState & ReturnType<typeof createLegac
       }
       ctx.setCheckins((prev) => [newCheckIn, ...prev.filter((c) => c.id !== id)]);
       ctx.setUsers((prev) => [updatedUser, ...prev.filter((u) => u.email.toLowerCase() !== email)]);
-      ctx.setMembers((prev) => [memberFromUser(updatedUser, key), ...prev.filter((m) => m.id !== key)]);
+      ctx.setMembers((prev) => [memberFromUser(updatedUser, key, isFirebaseConfigured), ...prev.filter((m) => m.id !== key)]);
       if (unlockedMilestone) ctx.setMilestoneAlerts((prev) => [unlockedMilestone, ...prev.filter((a) => a.id !== unlockedMilestone.id)]);
       }
       return { rewardsReady, success: true, message: isUpdate ? 'Check-in updated!' : 'Checked in successfully!', checkIn: newCheckIn, user: rewardPreview || updatedUser, route: creditedRoute, newBadges: earnedBadges, milestoneAlert: unlockedMilestone };

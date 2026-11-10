@@ -7,7 +7,7 @@ import {
 import type { AdminDashboardProps } from '../AdminDashboard';
 
 export const EventsTab: React.FC<AdminDashboardProps> = (props) => {
-  const {
+  const { onLoadPriorRuns, priorRunsLoading, hasMorePriorRuns, priorRunsError,
     meetupEvents,
     specialEvents = INITIAL_SPECIAL_EVENTS,
     onOpenNewRun,
@@ -58,6 +58,8 @@ export const EventsTab: React.FC<AdminDashboardProps> = (props) => {
         </div>
 
         <div className="space-y-2.5 max-h-[500px] overflow-y-auto">
+          {onLoadPriorRuns && hasMorePriorRuns && <button type="button" disabled={priorRunsLoading} className="text-xs font-bold underline disabled:opacity-50" onClick={() => { void onLoadPriorRuns().catch(() => {}); }}>{priorRunsLoading ? 'Loading prior meetups…' : 'Load prior meetups'}</button>}
+          {priorRunsError && <p role="alert" className="text-xs text-amber-800">{priorRunsError}</p>}
           {meetupEvents.map((evt) => (
             <div
               key={evt.id}

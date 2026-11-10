@@ -4,6 +4,9 @@ import { Trophy, Flame, Award } from 'lucide-react';
 import { liveStreak } from '../utils/legacy';
 
 interface LeaderboardProps {
+  loading?: boolean;
+  error?: string | null;
+  onRetry?: () => void;
   members: Member[];
   badges: Badge[];
   currentMember: Member;
@@ -13,7 +16,9 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
   members,
   badges,
   currentMember,
+  loading, error, onRetry,
 }) => {
+  const [visibleCount, setVisibleCount] = useState(25);
   const [activeTab, setActiveTab] = useState<'miles' | 'runs' | 'streak'>('miles');
 
   // Streaks as of today (a stored streak ends once the runner misses a week)
@@ -25,6 +30,9 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
     if (activeTab === 'runs') return b.totalRuns - a.totalRuns;
     return streakOf(b) - streakOf(a);
   });
+
+  if (error) return <div role="alert" className="rounded-xl bg-amber-50 p-4 text-sm">{error} <button type="button" onClick={onRetry} className="font-bold underline">Retry leaderboard</button></div>;
+  if (loading) return <div role="status" className="rounded-xl bg-white p-6 text-sm text-stone-600">Loading the club leaderboard…</div>;
 
   return (
     <div className="space-y-6">
@@ -141,7 +149,7 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
           {/* Sort Tabs */}
           <div className="flex bg-stone-100 p-1 rounded-xl text-xs font-semibold">
             <button
-              onClick={() => setActiveTab('miles')}
+              onClick={() => { setActiveTab('miles'); setVisibleCount(25); }}
               className={`px-3 py-1.5 rounded-lg transition ${
                 activeTab === 'miles'
                   ? 'bg-white text-stone-900 shadow-xs'
@@ -151,7 +159,7 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
               Miles Logged
             </button>
             <button
-              onClick={() => setActiveTab('runs')}
+              onClick={() => { setActiveTab('runs'); setVisibleCount(25); }}
               className={`px-3 py-1.5 rounded-lg transition ${
                 activeTab === 'runs'
                   ? 'bg-white text-stone-900 shadow-xs'
@@ -161,7 +169,7 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
               Total Runs
             </button>
             <button
-              onClick={() => setActiveTab('streak')}
+              onClick={() => { setActiveTab('streak'); setVisibleCount(25); }}
               className={`px-3 py-1.5 rounded-lg transition ${
                 activeTab === 'streak'
                   ? 'bg-white text-stone-900 shadow-xs'
@@ -175,7 +183,7 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
 
         {/* Member Roster List */}
         <div className="divide-y divide-stone-100">
-          {sortedMembers.map((member, index) => {
+          {sortedMembers.slice(0, visibleCount).map((member, index) => {
             const isMe = member.id === currentMember.id;
             return (
               <div
@@ -277,6 +285,7 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
               </div>
             );
           })}
+          {visibleCount < sortedMembers.length && <button type="button" className="w-full p-4 text-sm font-bold text-woodland-800" onClick={() => setVisibleCount((count) => count + 25)}>Show more members ({Math.min(visibleCount, sortedMembers.length)} of {sortedMembers.length})</button>}
         </div>
       </div>
     </div>

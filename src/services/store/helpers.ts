@@ -39,7 +39,7 @@ export function cleanFirestoreData<T>(obj: T): T {
 export function formatRouteForFirestore(route: Partial<GPXRoute>): any {
   // The raw GPX file isn't stored: it can be bigger than Firestore's 1 MiB document
   // limit, and downloads rebuild it from the points (see downloadGPXFile).
-  const { gpxXml: _gpx, ...rest } = route;
+  const { gpxXml: _gpx, detailsLoaded: _loaded, ...rest } = route;
   const cleaned = cleanFirestoreData(rest);
   const formatted: any = { ...cleaned };
 
@@ -169,7 +169,8 @@ export function recentCheckinCutoff(): string {
 }
 
 /** Local (in-app) Member record for a profile, keyed by memberKey. */
-export function memberFromUser(user: UserProfile, memberKey: string): Member {
+export function memberFromUser(user: UserProfile, memberKey: string, publicOnly = false): Member {
+  if (publicOnly) return memberFromPublicDoc(toPublicMember(user, memberKey));
   return {
     ...user,
     id: memberKey,

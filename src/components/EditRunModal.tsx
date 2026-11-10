@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import { RunEvent, GPXRoute, PaceGroup, SpecialEventType, SpecialEventDefinition, RunRouteChoice } from '../types';
-import { RouteChoicesEditor } from './RouteChoicesEditor';
+import { type RouteCatalogPaginationProps, RouteChoicesEditor } from './RouteChoicesEditor';
 import { getRunChoices, resolveChoices, routeChoiceError, deriveRunStats, deleteRunConfirmMessage } from '../utils/runChoices';
 import { INITIAL_SPECIAL_EVENTS } from '../data/catalog';
 import { X, Calendar, Clock, MapPin, Plus, Trash2, Sparkles, KeyRound } from 'lucide-react';
 
-interface EditRunModalProps {
+interface EditRunModalProps extends RouteCatalogPaginationProps {
   run: RunEvent;
   routes: GPXRoute[];
   isOpen: boolean;
@@ -21,6 +21,7 @@ interface EditRunModalProps {
 export const EditRunModal: React.FC<EditRunModalProps> = ({
   run,
   routes,
+  onLoadMoreRoutes, hasMoreRoutes, routesLoading,
   isOpen,
   onClose,
   onSave,
@@ -175,6 +176,7 @@ export const EditRunModal: React.FC<EditRunModalProps> = ({
           {/* Distance options: each is a library route; distance, elevation and surface come from the routes */}
           <RouteChoicesEditor
             routes={routes}
+            onLoadMoreRoutes={onLoadMoreRoutes} hasMoreRoutes={hasMoreRoutes} routesLoading={routesLoading}
             choices={routeChoices}
             onChange={(c) => {
               setRouteChoices(c);

@@ -50,6 +50,7 @@ interface CheckInModalProps {
     newBadges?: Badge[];
     milestoneAlert?: any;
   }>;
+  onLoadRoute?: (id: string) => Promise<GPXRoute>;
   onOpenAuthModal?: () => void;
 }
 
@@ -66,6 +67,7 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
   checkins,
   onCheckInRunner,
   onOpenAuthModal,
+  onLoadRoute,
 }) => {
   // The check-in event for exactly this run. Never fall back to another run:
   // that showed the wrong routes and the server rejected the check-in.
@@ -174,6 +176,7 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
     modalBodyRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
   }, [errorMsg, postCheckInStep, isEditingCheckIn]);
 
+  const [loadedInfoRoute, setLoadedInfoRoute] = useState<GPXRoute>();
   const matchedGpxRoute: GPXRoute = useMemo(() => {
     const activeRec = successResult?.checkIn || existingCheckIn;
     const optRoute = isEditingCheckIn
@@ -194,6 +197,7 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
     }
 
 
+    if (loadedInfoRoute && (loadedInfoRoute.id === optRoute?.routeId || loadedInfoRoute.id === found?.id)) found = loadedInfoRoute;
     const extLinks = {
       stravaUrl: found?.externalLinks?.stravaUrl || optRoute?.externalLinks?.stravaUrl || (optRoute?.routeUrl?.includes('strava') ? optRoute.routeUrl : undefined),
       garminUrl: found?.externalLinks?.garminUrl || optRoute?.externalLinks?.garminUrl || (optRoute?.routeUrl?.includes('garmin') ? optRoute.routeUrl : undefined),
@@ -212,7 +216,8 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
     }
 
     return {
-      id: 'default-route',
+      id: optRoute?.routeId || 'default-route',
+      detailsLoaded: false,
       name: optRoute?.name || 'Woodland Woodchuckers Route',
       description: optRoute?.directions || 'Route details are not available for this check-in.',
       distanceMiles: optRoute?.actualMiles || creditedMiles,
@@ -225,7 +230,19 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
       directions: optRoute?.directionsList,
       createdAt: new Date().toISOString(),
     };
-  }, [successResult, existingCheckIn, isEditingCheckIn, selectedOption, routes, creditedMiles, activeEvent.routes]);
+  }, [successResult, existingCheckIn, isEditingCheckIn, selectedOption, routes, creditedMiles, activeEvent.routes, loadedInfoRoute]);
+  const [routeInfoError, setRouteInfoError] = useState<string>();
+  const [routeInfoAttempt, setRouteInfoAttempt] = useState(0);
+  const routeLoader = useRef(onLoadRoute); routeLoader.current = onLoadRoute;
+  useEffect(() => {
+    if (!isOpen || (!successResult && !existingCheckIn) || isEditingCheckIn || postCheckInStep !== 'run_info' || matchedGpxRoute.detailsLoaded !== false || matchedGpxRoute.id === 'default-route' || !routeLoader.current) return;
+    let current = true; setRouteInfoError(undefined);
+    routeLoader.current(matchedGpxRoute.id).then((full) => { if (current) setLoadedInfoRoute(full); }).catch((cause) => { if (current) setRouteInfoError(cause instanceof Error ? cause.message : 'The route map could not be loaded.'); });
+    return () => { current = false; };
+    // Reward/state updates must not restart the same public detail request.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, Boolean(successResult || existingCheckIn), isEditingCheckIn, postCheckInStep, matchedGpxRoute.id, matchedGpxRoute.detailsLoaded, routeInfoAttempt]);
+
 
   if (!isOpen) return null;
 
@@ -639,7 +656,7 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
                     )}
 
                     {/* Download GPX */}
-                    {matchedGpxRoute.points.length > 0 && (
+                {matchedGpxRoute.points.length > 0 && (
                     <button
                       type="button"
                       onClick={() => downloadGPXFile(matchedGpxRoute)}
@@ -656,6 +673,8 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
                 </div>
 
                 {/* 2) Map of the run & 3) Turn by turn instructions */}
+                    {matchedGpxRoute.detailsLoaded === false && matchedGpxRoute.id !== 'default-route' && onLoadRoute && <div role={routeInfoError ? 'alert' : 'status'} className="rounded-xl bg-stone-50 p-3 text-sm text-stone-600">{routeInfoError || 'Loading route map and directions…'}{routeInfoError && <button type="button" className="ml-2 font-bold underline" onClick={() => setRouteInfoAttempt((n) => n + 1)}>Retry map</button>}</div>}
+
                 {matchedGpxRoute.points.length > 0 && (
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between text-xs font-bold text-stone-700 px-0.5">

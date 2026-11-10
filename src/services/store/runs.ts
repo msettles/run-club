@@ -6,6 +6,7 @@ import {
   MeetupEvent,
   CheckInRecord,
 } from '../../types';
+import { routeSummary } from '../routeCatalog';
 import { computeCheckInWindow } from '../../utils/checkInWindow';
 import { buildMeetupFromRun } from '../../utils/runChoices';
 import {
@@ -148,7 +149,8 @@ export function createRunOps(ctx: StoreState & ReturnType<typeof createLegacyOps
       assertRouteFitsFirestore(formatted);
       await setDoc(doc(db, 'routes', newRoute.id), formatted);
     }
-    setRoutes((prev) => [newRoute, ...prev]);
+    ctx.routeDetailsCache?.prime(newRoute);
+    setRoutes((prev) => [isFirebaseConfigured ? routeSummary(newRoute) : newRoute, ...prev]);
     return newRoute;
   };
 
@@ -170,7 +172,8 @@ export function createRunOps(ctx: StoreState & ReturnType<typeof createLegacyOps
       // Replace the complete route so cleared links and old raw GPX fields disappear.
       await setDoc(doc(db, 'routes', nextId), formatted);
     }
-    setRoutes((prev) => [updatedObj, ...prev]);
+    ctx.routeDetailsCache?.prime(updatedObj);
+    setRoutes((prev) => [isFirebaseConfigured ? routeSummary(updatedObj) : updatedObj, ...prev]);
     return updatedObj;
   };
 
@@ -191,6 +194,7 @@ export function createRunOps(ctx: StoreState & ReturnType<typeof createLegacyOps
         tx.delete(ref);
       });
     } else if (referencedBy(runs)) throw new Error(message);
+    ctx.routeDetailsCache?.forget(routeId);
     setRoutes((prev) => prev.filter((r) => r.id !== routeId));
   };
 
@@ -319,7 +323,7 @@ export function createRunOps(ctx: StoreState & ReturnType<typeof createLegacyOps
       setUsers((prev) => prev.map((u) => byEmail.get(u.email.toLowerCase()) || u));
       const keyed = await Promise.all(touchedUsers.map(async (u) => [await memberKeyFor(u.email), u] as const));
       setMembers((prev) => [
-        ...keyed.map(([key, u]) => memberFromUser(u, key)),
+        ...keyed.map(([key, u]) => memberFromUser(u, key, isFirebaseConfigured)),
         ...prev.filter((m) => !keyed.some(([key]) => key === m.id)),
       ]);
     }

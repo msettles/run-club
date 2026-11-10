@@ -33,6 +33,10 @@ import {
 } from 'lucide-react';
 
 export interface AdminDashboardProps {
+  onLoadPriorRuns?: () => Promise<void>;
+  priorRunsLoading?: boolean;
+  hasMorePriorRuns?: boolean;
+  priorRunsError?: string | null;
   routes?: GPXRoute[];
   notifications: ClubNotification[];
   // Relational V2 props
