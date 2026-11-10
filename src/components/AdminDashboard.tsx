@@ -1,3 +1,4 @@
+import type { StaffSearchResult, StaffSearchRole } from '../services/store/staffLoading';
 import { roundMiles } from '../utils/miles';
 import React, { useState } from 'react';
 import { 
@@ -42,6 +43,7 @@ export interface AdminDashboardProps {
   // Relational V2 props
   meetupEvents: MeetupEvent[];
   checkins: CheckInRecord[];
+  onSearchStaffUsers?: (term: string, role?: StaffSearchRole, offset?: number) => Promise<StaffSearchResult>;
   staffRosterLoaded?: boolean;
   onRefreshStaffUsers?: () => Promise<void>;
   onRefreshGearHistory?: () => Promise<void>;

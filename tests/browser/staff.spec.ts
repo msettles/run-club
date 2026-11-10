@@ -13,10 +13,14 @@ async function openAdmin(page: import('@playwright/test').Page) {
 test('staff roster identifies loaded scope, resolves an email and exports profiles', async ({ page }) => {
   await openAdmin(page);
   await page.getByRole('button', { name: /Runners & Claims/ }).click();
-  await expect(page.getByText(/Filters and role counts apply to these rows/)).toBeVisible();
-  await page.getByLabel('Find runner by exact email').fill(email);
-  await page.getByRole('button', { name: 'Find runner', exact: true }).click();
-  await expect(page.getByRole('status')).toHaveText('Loaded Browser Runner.');
+  await expect(page.getByText(/Search all registered runners by any part/)).toBeVisible();
+  await page.getByRole('textbox', { name: 'Search all runners by name or email' }).fill('RUNNER browser');
+  await expect(page.getByRole('status')).toHaveText('Showing 1–1 of 1 matching runners');
+  await expect(page.getByRole('cell', { name: email, exact: true })).toBeVisible();
+  await page.getByRole('textbox', { name: 'Search all runners by name or email' }).fill('browser-runner@');
+  await expect(page.getByRole('status')).toHaveText('Showing 1–1 of 1 matching runners');
+  await page.getByRole('textbox', { name: 'Search all runners by name or email' }).fill('nonexistent-profile');
+  await expect(page.getByRole('status')).toHaveText('No registered runners match your search.');
   const download = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Export CSV', exact: true }).click();
   const path = await (await download).path();

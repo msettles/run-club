@@ -1,3 +1,4 @@
+import { matchesStaffSearch, type StaffSearchResult } from '../../services/store/staffLoading';
 import React, { useEffect, useState } from 'react';
 import { 
   UserProfile, 
@@ -97,22 +98,40 @@ export const MembersTab: React.FC<AdminDashboardProps> = (props) => {
       setLegacyImportBusy(false);
     }
   };
-  const [lookupEmail, setLookupEmail] = useState('');
-  const [lookupMessage, setLookupMessage] = useState('');
-  const [lookupBusy, setLookupBusy] = useState(false);
+  const [exportMessage, setExportMessage] = useState('');
   const [exportBusy, setExportBusy] = useState(false);
   useEffect(() => {
     if (!props.staffRosterLoaded) void props.onLoadMoreStaffUsers?.().catch(() => {});
     // Operations use current render state; opening the roster starts one page.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser?.email, currentUser?.role, props.staffRosterLoaded]);
-  // Filtered members
-  const filteredUsers = users.filter(
-    (u) =>
-      (roleFilter === 'all' || effectiveRole(u) === roleFilter) &&
-      (u.displayName.toLowerCase().includes(memberSearch.toLowerCase()) ||
-        u.email.toLowerCase().includes(memberSearch.toLowerCase()))
-  );
+  const [searchResult, setSearchResult] = useState<StaffSearchResult>();
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchError, setSearchError] = useState('');
+  const [searchOffset, setSearchOffset] = useState(0);
+  const [searchAttempt, setSearchAttempt] = useState(0);
+  const searching = Boolean(memberSearch.trim());
+  useEffect(() => {
+    let active = true;
+    setSearchResult(undefined); setSearchError('');
+    if (!memberSearch.trim() || !props.onSearchStaffUsers) { setSearchLoading(false); return; }
+    setSearchLoading(true);
+    const timer = setTimeout(() => {
+      props.onSearchStaffUsers!(memberSearch, roleFilter, searchOffset).then((result) => {
+        if (active) {
+          if (searchOffset > 0 && !result.users.length) setSearchOffset(0);
+          else setSearchResult(result);
+        }
+      }).catch(() => { if (active) setSearchError('Runner search could not be completed. Please retry.'); })
+        .finally(() => { if (active) setSearchLoading(false); });
+    }, 300);
+    return () => { active = false; clearTimeout(timer); };
+    // The current operation is captured when a query, page or session changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [memberSearch, roleFilter, searchOffset, searchAttempt, currentUser?.email, currentUser?.role]);
+  const candidates = searching && props.onSearchStaffUsers ? searchResult?.users || [] : users;
+  const filteredUsers = candidates.map((candidate) => users.find((user) => user.email === candidate.email) || candidate)
+    .filter((user) => matchesStaffSearch(user, memberSearch, roleFilter));
 
   const roleCounts = users.reduce<Record<AssignableRole, number>>(
     (acc, u) => {
@@ -138,6 +157,7 @@ export const MembersTab: React.FC<AdminDashboardProps> = (props) => {
     setDeleteError(null);
     try {
       await onDeleteRunner(u.email);
+      setSearchOffset(0); setSearchAttempt((value) => value + 1);
     } catch (err: any) {
       console.error('Delete runner failed:', err);
       setDeleteError({ email: u.email, message: err?.message?.startsWith('You') ? err.message : 'Could not delete. Only admins can delete runners.' });
@@ -161,6 +181,7 @@ export const MembersTab: React.FC<AdminDashboardProps> = (props) => {
     setRoleError(null);
     try {
       await onSetUserRole(u.email, next);
+      setSearchOffset(0); setSearchAttempt((value) => value + 1);
     } catch (err) {
       console.error('Role change failed:', err);
       setRoleError({ email: u.email, message: 'Could not change role. Only admins can change roles, and not their own.' });
@@ -172,7 +193,7 @@ export const MembersTab: React.FC<AdminDashboardProps> = (props) => {
 
   const exportUsersCSV = async () => {
     if (exportBusy) return;
-    setExportBusy(true); setLookupMessage('');
+    setExportBusy(true); setExportMessage('');
     try {
     const profiles = props.onExportStaffUsers ? await props.onExportStaffUsers() : users;
     const headers = ['Email', 'Display Name', 'Shirt Size', 'Birthday', 'Age', 'Total Runs', 'Pre-2021 Runs', 'Logged Runs', 'Total Miles', 'Runs Count', 'Walks Count', 'First Run Date', 'Linked Legacy Names'];
@@ -192,21 +213,18 @@ export const MembersTab: React.FC<AdminDashboardProps> = (props) => {
       (u.linkedLegacyNames || []).join('; '),
     ]);
     downloadCSV(headers, rows, 'woodchuckers-users-profiles.csv');
-    } catch { setLookupMessage('Profile export failed. Please retry.'); } finally { setExportBusy(false); }
+    } catch { setExportMessage('Profile export failed. Please retry.'); } finally { setExportBusy(false); }
   };
 
   return (
     <div className="space-y-6">
-      {props.onFindStaffUser && <form className="flex flex-wrap items-end gap-2" onSubmit={async (event) => {
-        event.preventDefault(); if (lookupBusy) return;
-        setLookupBusy(true); setLookupMessage('');
-        try { const found = await props.onFindStaffUser!(lookupEmail); if (found) { setMemberSearch(found.email); setRoleFilter('all'); } setLookupMessage(found ? `Loaded ${found.displayName}.` : 'No profile found for that email.'); }
-        catch { setLookupMessage('Profile lookup failed. Please retry.'); } finally { setLookupBusy(false); }
-      }}><label className="text-sm">Find runner by exact email<input type="email" required value={lookupEmail} onChange={(event) => setLookupEmail(event.target.value)} className="ml-2 rounded border p-2" /></label><button type="submit" disabled={lookupBusy} className="rounded border bg-white p-2">{lookupBusy ? 'Looking up…' : 'Find runner'}</button></form>}
-      {lookupMessage && <p role="status" className="text-sm">{lookupMessage}</p>}
-      {props.onRefreshStaffUsers && <button type="button" disabled={props.staffRosterLoading} className="rounded border bg-white p-2 text-sm" onClick={() => { void props.onRefreshStaffUsers?.().catch(() => {}); }}>Refresh runner profiles</button>}
+      {exportMessage && <p role="status" className="text-sm">{exportMessage}</p>}
+      {props.onRefreshStaffUsers && <button type="button" disabled={props.staffRosterLoading} className="rounded border bg-white p-2 text-sm" onClick={() => { void props.onRefreshStaffUsers?.().then(() => { setSearchOffset(0); setSearchAttempt((value) => value + 1); }).catch(() => {}); }}>Refresh runner profiles</button>}
       {props.staffRosterError && <p role="alert" className="text-sm text-amber-900">{props.staffRosterError}</p>}
-      {props.hasMoreStaffUsers && <button type="button" disabled={props.staffRosterLoading} className="rounded border bg-white p-2 text-sm" onClick={() => { void props.onLoadMoreStaffUsers?.().catch(() => {}); }}>{props.staffRosterLoading ? 'Loading profiles…' : 'Load more runner profiles'}</button>}
+      {!searching && props.hasMoreStaffUsers && <button type="button" disabled={props.staffRosterLoading} className="rounded border bg-white p-2 text-sm" onClick={() => { void props.onLoadMoreStaffUsers?.().catch(() => {}); }}>{props.staffRosterLoading ? 'Loading profiles…' : 'Load more runner profiles'}</button>}
+      {searching && searchLoading && <p role="status">Searching all registered runners…</p>}
+      {searchError && <p role="alert">{searchError} <button type="button" onClick={() => setSearchAttempt((value) => value + 1)} className="underline">Retry search</button></p>}
+      {searching && !searchLoading && searchResult && <div className="flex flex-wrap items-center gap-3 text-sm"><p role="status">{searchResult.total ? `Showing ${searchOffset + 1}–${searchOffset + searchResult.users.length} of ${searchResult.total} matching runners` : 'No registered runners match your search.'}</p>{searchOffset > 0 && <button type="button" className="rounded border bg-white p-2" onClick={() => setSearchOffset((value) => Math.max(0, value - 50))}>Previous matches</button>}{searchResult.hasMore && <button type="button" className="rounded border bg-white p-2" onClick={() => setSearchOffset((value) => value + 50)}>Next matches</button>}</div>}
       {/* User Roster */}
       <div className="bg-white rounded-2xl p-6 shadow-sm border border-stone-200 space-y-4">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-stone-100 pb-3">
@@ -215,29 +233,30 @@ export const MembersTab: React.FC<AdminDashboardProps> = (props) => {
               Active User Profiles (Keyed on Email)
             </h3>
             <p className="text-xs text-stone-500">
-              Showing loaded profiles. Filters and role counts apply to these rows. Load more or look up an exact email to find another runner. CSV exports include all profiles.
+              Search all registered runners by any part of their name or email. Matching words can appear in any order. Without a search, the roster and role counts cover loaded profiles. CSV exports include all profiles.
             </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
             <select
               value={roleFilter}
-              onChange={(e) => setRoleFilter(e.target.value as 'all' | AssignableRole)}
+              onChange={(e) => { setRoleFilter(e.target.value as 'all' | AssignableRole); setSearchOffset(0); }}
               aria-label="Filter by role"
               className="px-2.5 py-1.5 text-xs border rounded-xl outline-none bg-white"
             >
-              <option value="all">All roles ({users.length})</option>
-              <option value="admin">Admins ({roleCounts.admin})</option>
-              <option value="organizer">Organizers ({roleCounts.organizer})</option>
-              <option value="member">Runners ({roleCounts.member})</option>
+              <option value="all">{searching ? 'All roles' : `All roles (${users.length})`}</option>
+              <option value="admin">{searching ? 'Admins' : `Admins (${roleCounts.admin})`}</option>
+              <option value="organizer">{searching ? 'Organizers' : `Organizers (${roleCounts.organizer})`}</option>
+              <option value="member">{searching ? 'Runners' : `Runners (${roleCounts.member})`}</option>
             </select>
             <div className="relative">
               <Search className="w-3.5 h-3.5 absolute left-2.5 top-2 text-stone-400" />
               <input
                 type="text"
                 value={memberSearch}
-                onChange={(e) => setMemberSearch(e.target.value)}
-                placeholder="Search loaded runner or email..."
+                onChange={(e) => { setMemberSearch(e.target.value); setSearchOffset(0); }}
+                aria-label="Search all runners by name or email"
+                placeholder="Search any name or email..."
                 className="pl-8 pr-3 py-1.5 text-xs border rounded-xl outline-none"
               />
             </div>

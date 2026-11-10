@@ -11,6 +11,7 @@ vi.mock('firebase/firestore', () => ({
 
 function context() {
   return {
+    staffSearchCache: { current: { expires: 0 } },
     staffRosterPage: { current: { pending: false, complete: false } }, gearHistoryPage: { current: { pending: false, complete: false } },
     setStaffRosterLoading: vi.fn(), setStaffRosterError: vi.fn(), setHasMoreStaffUsers: vi.fn(),
     setGearHistoryLoading: vi.fn(), setGearHistoryError: vi.fn(), setHasMoreGearHistory: vi.fn(),

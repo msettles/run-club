@@ -22,6 +22,7 @@ const owner = { email, displayName: 'Staff', role: 'admin' } as UserProfile;
 function state() {
   const rows = { users: [owner], alerts: [] as MilestoneAlert[], moreUsers: true, moreGear: true, rosterError: null as string | null };
   const context = {
+    staffSearchCache: { current: { expires: 0 } },
     currentUser: owner, users: rows.users, privateSyncEpoch: { current: 1 },
     staffRosterPage: { current: newStaffPage() }, gearHistoryPage: { current: newStaffPage() },
     setUsers: (update: UserProfile[] | ((previous: UserProfile[]) => UserProfile[])) => { rows.users = typeof update === 'function' ? update(rows.users) : update; },
@@ -95,4 +96,43 @@ it.skipIf(!enabled)('retains the cursor on permission failure and permits retry 
   backend.current = env.authenticatedContext('nonstaff', { email: 'not-staff@example.test', email_verified: true }).firestore() as unknown as Firestore;
   await expect(ops.refreshStaffUsers()).rejects.toHaveProperty('code', 'permission-denied');
   expect(rows.users).not.toContain(retained); // Revoked access clears other runners' private rows.
+});
+
+it.skipIf(!enabled)('searches names and partial emails beyond the first roster page and pages all matches using a shared cache', async () => {
+  await env.withSecurityRulesDisabled(async (context) => {
+    const db = context.firestore() as unknown as Firestore;
+    await Promise.all(Array.from({ length: 125 }, (_, n) => {
+      const address = `runner-${String(n).padStart(3, '0')}@example.test`;
+      return setDoc(doc(db, 'users', address), { email: address, displayName: n === 124 ? 'Jánë Smith Runner' : `Runner ${n}`, role: n === 124 ? 'organizer' : 'member' });
+    }));
+  });
+  const { context, rows, ops } = state();
+  await ops.loadMoreStaffUsers();
+  expect(rows.users.some((user) => user.email === 'runner-124@example.test')).toBe(false);
+  const first = ops.searchStaffUsers('SMITH jane');
+  const pending = context.staffSearchCache.current.pending;
+  const second = ops.searchStaffUsers('124@example');
+  expect(context.staffSearchCache.current.pending).toBe(pending);
+  const [byName, byEmail] = await Promise.all([first, second]);
+  expect(byName.users.map((user) => user.email)).toEqual(['runner-124@example.test']);
+  expect(byEmail.users.map((user) => user.email)).toEqual(['runner-124@example.test']);
+  expect(context.staffSearchCache.current.rows).toHaveLength(126);
+  const cache = context.staffSearchCache.current.rows;
+  const pages = await Promise.all([ops.searchStaffUsers('runner', 'all', 0), ops.searchStaffUsers('runner', 'all', 50), ops.searchStaffUsers('runner', 'all', 100)]);
+  expect(pages.map((page) => page.users.length)).toEqual([50, 50, 25]);
+  expect(new Set(pages.flatMap((page) => page.users.map((user) => user.email))).size).toBe(125);
+  expect(pages[2].hasMore).toBe(false);
+  expect((await ops.searchStaffUsers('runner', 'organizer')).total).toBe(1);
+  expect(context.staffSearchCache.current.rows).toBe(cache);
+  context.staffSearchCache.current.expires = 0;
+  await ops.searchStaffUsers('Smith');
+  expect(context.staffSearchCache.current.rows).not.toBe(cache);
+});
+it.skipIf(!enabled)('discards a search scan and its private cache after session cleanup', async () => {
+  const { context, ops, rows } = state();
+  const searching = ops.searchStaffUsers('Staff');
+  context.privateSyncEpoch.current++; resetStaffPages(context); rows.users = [];
+  await expect(searching).rejects.toThrow('session changed');
+  expect(context.staffSearchCache.current.rows).toBeUndefined();
+  expect(rows.users).toEqual([]);
 });

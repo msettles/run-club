@@ -83,7 +83,7 @@ export function App() {
     adminSetLegacyClaim,
     importLegacyData,
     users,
-    staffRosterLoaded, refreshStaffUsers, refreshGearHistory, loadMoreStaffUsers, findStaffUser, exportStaffUsers, staffRosterLoading, staffRosterError, hasMoreStaffUsers,
+    staffRosterLoaded, refreshStaffUsers, refreshGearHistory, loadMoreStaffUsers, searchStaffUsers, findStaffUser, exportStaffUsers, staffRosterLoading, staffRosterError, hasMoreStaffUsers,
     loadMoreGearHistory, gearHistoryLoading, gearHistoryError, hasMoreGearHistory,
     setUsers,
     meetupEvents,
@@ -840,7 +840,7 @@ export function App() {
               checkins={checkins}
               users={users}
               staffRosterLoaded={staffRosterLoaded} onRefreshStaffUsers={refreshStaffUsers} onRefreshGearHistory={refreshGearHistory}
-              onLoadMoreStaffUsers={loadMoreStaffUsers} onFindStaffUser={findStaffUser} onExportStaffUsers={exportStaffUsers}
+              onSearchStaffUsers={searchStaffUsers} onLoadMoreStaffUsers={loadMoreStaffUsers} onFindStaffUser={findStaffUser} onExportStaffUsers={exportStaffUsers}
               staffRosterLoading={staffRosterLoading} staffRosterError={staffRosterError} hasMoreStaffUsers={hasMoreStaffUsers}
               onLoadMoreGearHistory={loadMoreGearHistory} gearHistoryLoading={gearHistoryLoading} gearHistoryError={gearHistoryError} hasMoreGearHistory={hasMoreGearHistory}
               legacyMembers={legacyMembers}

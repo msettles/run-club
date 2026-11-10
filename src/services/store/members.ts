@@ -107,6 +107,7 @@ export function createMemberOps(ctx: StoreState & ReturnType<typeof createLegacy
       return newUser;
     }) : newUser;
     assertSession();
+    if (ctx.staffSearchCache) ctx.staffSearchCache.current = { expires: 0 };
     setUsers((prev) => [registered, ...prev.filter((u) => u.email.toLowerCase() !== cleanEmail)]);
     setMembers((prev) => [memberFromUser(registered, memberKey, isFirebaseConfigured), ...prev.filter((m) => m.id !== memberKey)]);
     setCurrentUserEmail(cleanEmail);
@@ -199,6 +200,7 @@ export function createMemberOps(ctx: StoreState & ReturnType<typeof createLegacy
       }
     }
 
+    if (ctx.staffSearchCache) ctx.staffSearchCache.current = { expires: 0 };
     setUsers((prev) => prev.filter((u) => u.email.toLowerCase() !== cleanEmail));
     setMembers((prev) => prev.filter((m) => m.id !== key));
     setCheckins((prev) => prev.filter((c) => c.userEmail.toLowerCase() !== cleanEmail));
@@ -218,6 +220,7 @@ export function createMemberOps(ctx: StoreState & ReturnType<typeof createLegacy
     if (isFirebaseConfigured && db) {
       await updateDoc(doc(db, 'users', cleanEmail), { role });
     }
+    if (ctx.staffSearchCache) ctx.staffSearchCache.current = { expires: 0 };
     setUsers((prev) => prev.map((u) => (u.email.toLowerCase() === cleanEmail ? { ...u, role } : u)));
   };
 
