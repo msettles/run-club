@@ -26,6 +26,7 @@ export function calculateHaversineMiles(
  * Parse raw GPX XML string into structured GPXRoute data
  */
 export function parseGPX(xmlString: string, filename: string): Partial<GPXRoute> {
+  if (new TextEncoder().encode(xmlString).length > 5 * 1024 * 1024) throw new Error('GPX files must be smaller than 5 MB.');
   const parser = new DOMParser();
   const xmlDoc = parser.parseFromString(xmlString, 'text/xml');
 
@@ -52,6 +53,7 @@ export function parseGPX(xmlString: string, filename: string): Partial<GPXRoute>
     throw new Error('No track points (<trkpt> or <rtept>) found in GPX file.');
   }
 
+  if (pointNodes.length > 5000) throw new Error('GPX tracks may contain at most 5,000 points. Simplify the track before uploading.');
   const points: GPXPoint[] = [];
   let totalDistanceMiles = 0;
   let totalElevationGainMeters = 0;
@@ -62,14 +64,16 @@ export function parseGPX(xmlString: string, filename: string): Partial<GPXRoute>
     const latStr = node.getAttribute('lat');
     const lonStr = node.getAttribute('lon');
 
-    if (!latStr || !lonStr) continue;
+    if (!latStr || !lonStr) throw new Error('Every GPX point must have latitude and longitude.');
 
-    const lat = parseFloat(latStr);
-    const lon = parseFloat(lonStr);
+    const lat = Number(latStr);
+    const lon = Number(lonStr);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) throw new Error('GPX coordinates must be finite and within latitude/longitude bounds.');
 
     const eleNode = node.querySelector('ele');
     const ele = eleNode && eleNode.textContent ? parseFloat(eleNode.textContent) : undefined;
 
+    if (ele !== undefined && !Number.isFinite(ele)) throw new Error('GPX elevation must be a finite number.');
     const timeNode = node.querySelector('time');
     const time = timeNode?.textContent || undefined;
 

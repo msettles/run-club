@@ -44,6 +44,7 @@ export interface RouteExternalLinks {
 }
 
 export interface GPXRoute {
+  referenced?: boolean;
   id: string;
   name: string;
   description: string;
@@ -80,6 +81,7 @@ export interface RunRouteChoice {
 }
 
 export interface RunEvent {
+  deleting?: boolean;
   id: string;
   title: string;
   date: string; // YYYY-MM-DD
@@ -188,6 +190,7 @@ export interface RouteOption {
 }
 
 export interface MeetupEvent {
+  deleting?: boolean;
   id: string;          // The run's ID (one check-in event per run)
   runId?: string;      // Same as id; stored explicitly on Firestore docs
   date: string;        // "2026-11-11"
@@ -209,6 +212,8 @@ export interface CheckInRecord {
   date: string;              // YYYY-MM-DD
   time: string;              // HH:MM:SS
   userEmail: string;         // Foreign key to UserProfile.email
+  eventTitle?: string;      // Attendance-time reward classification
+  eventSpecial?: string;
   runnerName?: string;       // Display cache
   activity: ActivityType;    // 'running' | 'walking'
   distanceChoice: DistanceTier; // 1 | 3 | 5 or route key
@@ -223,6 +228,12 @@ export interface CheckInRecord {
 }
 
 export interface UserProfile {
+  lastCheckInUpdatedAt?: string;
+  rewardEpoch?: number;
+  rewardChanges?: string[];
+  streakProofWeek?: number;
+  longestStreakProofWeek?: number;
+  deleting?: boolean;
   email: string;             // Primary Key (lowercase)
   firstName: string;
   lastName: string;
@@ -307,10 +318,4 @@ export interface MilestoneAlert {
   fulfilled: boolean; // Has organizer handed them their shirt/hat/mug/bottle?
   fulfilledAt?: string;
   fulfilledBy?: string;
-}
-
-export interface CheckInPayload {
-  runId: string;
-  memberId: string;
-  memberName: string;
 }

@@ -6,11 +6,27 @@
  */
 import type { MeetupEvent, RunEvent } from '../types';
 
+export const CLUB_TIME_ZONE = 'America/Los_Angeles';
+
+/** Convert club wall time to an instant without using the device time zone. */
+export function clubDateTime(date: string, hour: number, minute = 0, second = 0): Date {
+  const [year, month, day] = date.split('-').map(Number);
+  const wall = Date.UTC(year, month - 1, day, hour, minute, second);
+  let instant = wall;
+  const formatter = new Intl.DateTimeFormat('en-US', { timeZone: CLUB_TIME_ZONE,
+    year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' });
+  for (let i = 0; i < 3; i++) {
+    const parts = Object.fromEntries(formatter.formatToParts(new Date(instant)).map((p) => [p.type, p.value]));
+    const rendered = Date.UTC(+parts.year, +parts.month - 1, +parts.day, +parts.hour, +parts.minute, +parts.second);
+    instant += wall - rendered;
+  }
+  return new Date(instant);
+}
+
 export const OPENS_BEFORE_START_MS = 2 * 60 * 60 * 1000;
 
 /** Start of an event in local time from "YYYY-MM-DD" and "06:00 PM" / "18:00". */
 export function eventStart(date: string, time?: string): Date {
-  const [y, m, d] = date.split('-').map(Number);
   let hour = 18;
   let minute = 0;
   const match = (time || '').match(/(\d+):(\d+)\s*(AM|PM)?/i);
@@ -21,14 +37,14 @@ export function eventStart(date: string, time?: string): Date {
     if (ampm === 'PM' && hour < 12) hour += 12;
     if (ampm === 'AM' && hour === 12) hour = 0;
   }
-  return new Date(y, m - 1, d, hour, minute);
+  return clubDateTime(date, hour, minute);
 }
 
 export function computeCheckInWindow(date: string, time?: string): { opensAt: Date; closesAt: Date } {
   const start = eventStart(date, time);
   return {
     opensAt: new Date(start.getTime() - OPENS_BEFORE_START_MS),
-    closesAt: new Date(start.getFullYear(), start.getMonth(), start.getDate(), 23, 59, 59),
+    closesAt: clubDateTime(date, 23, 59, 59),
   };
 }
 
@@ -76,8 +92,8 @@ export function nextCheckInEvent(events: MeetupEvent[], now = new Date()): Meetu
 
 /** "Wed, Nov 11 at 4:00 PM" */
 export function formatOpening(d: Date): string {
-  const day = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-  const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  const day = d.toLocaleDateString('en-US', { timeZone: CLUB_TIME_ZONE, weekday: 'short', month: 'short', day: 'numeric' });
+  const time = d.toLocaleTimeString('en-US', { timeZone: CLUB_TIME_ZONE, hour: 'numeric', minute: '2-digit', timeZoneName: 'short' });
   return `${day} at ${time}`;
 }
 
@@ -93,4 +109,15 @@ export function priorRuns(runs: RunEvent[], now = new Date()): RunEvent[] {
   return runs
     .filter((r) => computeCheckInWindow(r.date, r.time).closesAt < now)
     .sort((a, b) => eventStart(b.date, b.time).getTime() - eventStart(a.date, a.time).getTime());
+}
+
+/** Next Wednesday whose club evening start has not passed. */
+export function nextClubRunDate(now = new Date()): string {
+  const parts = new Intl.DateTimeFormat('en-CA', { timeZone: CLUB_TIME_ZONE, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(now);
+  const value = Object.fromEntries(parts.map((p) => [p.type, p.value]));
+  const day = new Date(Date.UTC(+value.year, +value.month - 1, +value.day));
+  day.setUTCDate(day.getUTCDate() + (3 - day.getUTCDay() + 7) % 7);
+  let date = day.toISOString().slice(0, 10);
+  if (eventStart(date, '18:00') <= now) { day.setUTCDate(day.getUTCDate() + 7); date = day.toISOString().slice(0, 10); }
+  return date;
 }

@@ -1,24 +1,26 @@
 /** Club store operations: badges. */
-import { 
-  Badge, 
+import {
+  Badge,
   SpecialEventDefinition,
   BadgeCategory,
   BadgeTriggerConfig
 } from '../../types';
 import { isFirebaseConfigured, db } from '../firebase';
-import {
-  setDoc,
-  deleteDoc,
-  doc,
-} from 'firebase/firestore';
+import { doc, writeBatch } from 'firebase/firestore';
+import { cleanFirestoreData } from './helpers';
 import type { StoreState } from './state';
-import type { createLegacyOps } from './legacy';
-import type { createPrivateSyncOps } from './privateSync';
-import type { createMemberOps } from './members';
-import type { createCheckInOps } from './checkIn';
-import type { createEventOps } from './events';
 
-export function createBadgeOps(ctx: StoreState & ReturnType<typeof createLegacyOps> & ReturnType<typeof createPrivateSyncOps> & ReturnType<typeof createMemberOps> & ReturnType<typeof createCheckInOps> & ReturnType<typeof createEventOps>) {
+const slugify = (name: string): string =>
+  name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || `custom_${Date.now()}`;
+
+/** `base`, or `base_1`, `base_2`… whichever isn't taken yet. */
+function uniqueId(base: string, taken: (id: string) => boolean): string {
+  let id = base;
+  for (let n = 1; taken(id); n++) id = `${base}_${n}`;
+  return id;
+}
+
+export function createBadgeOps(ctx: StoreState) {
   const {
     badges,
     setBadges,
@@ -27,7 +29,9 @@ export function createBadgeOps(ctx: StoreState & ReturnType<typeof createLegacyO
   } = ctx;
 
   /**
-   * Create a new badge (Admin) - supports Milestones, Activity (Walk/Run), Distance (1/3/5), Special Events, Streaks
+   * Create a new badge (Admin). A special-event badge also gets a special event
+   * option (so it shows in the run forms); both are saved together, before the
+   * screen shows them. Throws if the server refuses.
    */
   const createBadge = async (badgeData: {
     name: string;
@@ -42,16 +46,12 @@ export function createBadgeOps(ctx: StoreState & ReturnType<typeof createLegacyO
   }): Promise<Badge> => {
     const cleanName = badgeData.name.trim();
     const cleanEmoji = badgeData.emoji.trim() || '🏅';
-    const baseSlug = cleanName.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || `custom_${Date.now()}`;
-    
-    let uniqueId = `badge_${baseSlug}`;
-    let counter = 1;
-    while (badges.some((b) => b.id === uniqueId)) {
-      uniqueId = `badge_${baseSlug}_${counter++}`;
-    }
+    const slug = slugify(cleanName);
+    const badgeId = uniqueId(`badge_${slug}`, (id) => badges.some((b) => b.id === id));
+    const now = new Date().toISOString();
 
     const newBadge: Badge = {
-      id: uniqueId,
+      id: badgeId,
       name: cleanName,
       emoji: cleanEmoji,
       description: badgeData.description.trim(),
@@ -59,146 +59,58 @@ export function createBadgeOps(ctx: StoreState & ReturnType<typeof createLegacyO
       category: badgeData.category,
       isIncremental: badgeData.isIncremental ?? false,
       maxMultiplier: badgeData.maxMultiplier,
-      triggerConfig: badgeData.triggerConfig,
+      triggerConfig: { ...badgeData.triggerConfig },
       isDefault: false,
-      createdAt: new Date().toISOString(),
+      createdAt: now,
     };
 
-    // If it's a special event badge, also add a SpecialEventDefinition so it shows in event creator dropdowns
+    let newSE: SpecialEventDefinition | undefined;
     if (badgeData.category === 'special_event' || badgeData.createSpecialEventOption) {
-      let seId = badgeData.triggerConfig.specialEventId || baseSlug;
-      if (specialEvents.some((se) => se.id === seId)) {
-        seId = `${baseSlug}_${counter}`;
-      }
-      const newSE: SpecialEventDefinition = {
+      const seId = uniqueId(badgeData.triggerConfig.specialEventId || slug, (id) => specialEvents.some((se) => se.id === id));
+      newBadge.triggerConfig = { ...newBadge.triggerConfig!, specialEventId: seId };
+      newSE = {
         id: seId,
         name: cleanName,
         emoji: cleanEmoji,
-        badgeId: uniqueId,
+        badgeId,
         badgeDescription: newBadge.description,
         badgeRequirement: newBadge.requirement,
         isDefault: false,
-        createdAt: new Date().toISOString(),
+        createdAt: now,
       };
-      if (newBadge.triggerConfig) {
-        newBadge.triggerConfig.specialEventId = seId;
-      }
-      setSpecialEvents((prev) => [...prev, newSE]);
-      if (isFirebaseConfigured && db) {
-        try {
-          await setDoc(doc(db, 'special_events', seId), newSE);
-        } catch (e) {
-          console.warn('Firebase SE save error:', e);
-        }
-      }
+    }
+
+    if (isFirebaseConfigured && db) {
+      const batch = writeBatch(db);
+      batch.set(doc(db, 'badges', badgeId), cleanFirestoreData(newBadge));
+      if (newSE) batch.set(doc(db, 'special_events', newSE.id), cleanFirestoreData(newSE));
+      await batch.commit();
     }
 
     setBadges((prev) => [...prev, newBadge]);
-
-    if (isFirebaseConfigured && db) {
-      try {
-        await setDoc(doc(db, 'badges', uniqueId), newBadge);
-      } catch (e) {
-        console.warn('Firebase badge save error:', e);
-      }
+    if (newSE) {
+      const se = newSE;
+      setSpecialEvents((prev) => [...prev, se]);
     }
-
     return newBadge;
   };
 
-  /**
-   * Delete a custom badge (Admin)
-   */
+  /** Delete a custom badge and its special event option, if any (Admin). Throws if the server refuses. */
   const deleteBadge = async (badgeId: string): Promise<void> => {
     const b = badges.find((x) => x.id === badgeId);
-    if (!b) return;
-    if (b.isDefault) {
-      console.warn('Cannot delete default club badge');
-      return;
+    if (!b || b.isDefault) return;
+    const seIds = specialEvents
+      .filter((se) => !se.isDefault && (se.badgeId === badgeId || se.id === b.triggerConfig?.specialEventId))
+      .map((se) => se.id);
+    if (isFirebaseConfigured && db) {
+      const batch = writeBatch(db);
+      batch.delete(doc(db, 'badges', badgeId));
+      seIds.forEach((id) => batch.delete(doc(db!, 'special_events', id)));
+      await batch.commit();
     }
     setBadges((prev) => prev.filter((x) => x.id !== badgeId));
-    if (b.triggerConfig?.specialEventId) {
-      setSpecialEvents((prev) => prev.filter((se) => se.id !== b.triggerConfig?.specialEventId && se.badgeId !== badgeId));
-    }
-    if (isFirebaseConfigured && db) {
-      try {
-        await deleteDoc(doc(db, 'badges', badgeId));
-        if (b.triggerConfig?.specialEventId) {
-          await deleteDoc(doc(db, 'special_events', b.triggerConfig.specialEventId));
-        }
-      } catch (e) {
-        console.warn('Firebase badge delete error:', e);
-      }
-    }
+    setSpecialEvents((prev) => prev.filter((se) => !seIds.includes(se.id)));
   };
 
-  /**
-   * Create a special event directly (Admin)
-   */
-  const createSpecialEvent = async (name: string, emoji: string, description?: string): Promise<SpecialEventDefinition> => {
-    const cleanName = name.trim();
-    const cleanEmoji = emoji.trim() || '🏅';
-    const baseSlug = cleanName.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || `custom_${Date.now()}`;
-    let uniqueId = baseSlug;
-    let counter = 1;
-    while (specialEvents.some((se) => se.id === uniqueId)) {
-      uniqueId = `${baseSlug}_${counter++}`;
-    }
-
-    const badgeId = `special-${uniqueId}`;
-    const badge = await createBadge({
-      name: `${cleanName} Veteran`,
-      emoji: cleanEmoji,
-      description: description?.trim() || `Ran the annual ${cleanName} with the Woodchuckers!`,
-      requirement: `Attended ${cleanName}`,
-      category: 'special_event',
-      isIncremental: true,
-      triggerConfig: {
-        type: 'special_event',
-        specialEventId: uniqueId,
-        isIncremental: true,
-        step: 1,
-      },
-      createSpecialEventOption: false,
-    });
-
-    const newSE: SpecialEventDefinition = {
-      id: uniqueId,
-      name: cleanName,
-      emoji: cleanEmoji,
-      badgeId,
-      badgeDescription: badge.description,
-      badgeRequirement: badge.requirement,
-      isDefault: false,
-      createdAt: new Date().toISOString(),
-    };
-
-    setSpecialEvents((prev) => {
-      if (prev.some((se) => se.id === uniqueId)) return prev;
-      return [...prev, newSE];
-    });
-
-    return newSE;
-  };
-
-  /**
-   * Delete a custom special event (Admin)
-   */
-  const deleteSpecialEvent = async (eventId: string): Promise<void> => {
-    const se = specialEvents.find((x) => x.id === eventId);
-    if (!se || se.isDefault) return;
-    setSpecialEvents((prev) => prev.filter((x) => x.id !== eventId));
-    setBadges((prev) => prev.filter((b) => b.id !== se.badgeId));
-    if (isFirebaseConfigured && db) {
-      try {
-        await deleteDoc(doc(db, 'special_events', eventId));
-        await deleteDoc(doc(db, 'badges', se.badgeId));
-      } catch (e) {
-        console.warn('Firebase SE delete error:', e);
-      }
-    }
-  };
-
-
-  return { createBadge, deleteBadge, createSpecialEvent, deleteSpecialEvent };
+  return { createBadge, deleteBadge };
 }

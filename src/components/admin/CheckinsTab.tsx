@@ -18,22 +18,22 @@ export const CheckinsTab: React.FC<AdminDashboardProps> = (props) => {
   });
 
   const exportCheckinsCSV = () => {
-    const headers = ['Date', 'Time', 'User Email', 'Runner Name', 'Activity', 'With Pet', 'Loops', 'Distance Choice', 'Actual GPS Miles', 'Route Name', 'Source'];
+    const headers = ['Date', 'Time', 'User Email', 'Runner Name', 'Activity', 'With Pet', 'Loops', 'Route Choice', 'Actual GPS Miles', 'Route Name', 'Source'];
     const rows = checkins.map((c) => [
       c.date,
       c.time,
       c.userEmail,
-      `"${c.runnerName || ''}"`,
+      c.runnerName || '',
       c.activity,
       c.withPet ? 'Yes' : 'No',
       c.loops || 1,
-      `${c.distanceChoice} mi`,
+      // A route ID for current check-ins; a 1/3/5 mile choice for older ones.
+      typeof c.distanceChoice === 'number' || /^\d+(\.\d+)?$/.test(String(c.distanceChoice)) ? `${c.distanceChoice} mi` : c.distanceChoice,
       c.actualMiles,
-      `"${c.routeName || ''}"`,
+      c.routeName || '',
       c.source,
     ]);
-    const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
-    downloadCSV(csvContent, 'woodchuckers-checkins-log.csv');
+    downloadCSV(headers, rows, 'woodchuckers-checkins-log.csv');
   };
 
   return (

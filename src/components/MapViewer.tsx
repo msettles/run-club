@@ -3,14 +3,8 @@ import L from 'leaflet';
 import { GPXRoute } from '../types';
 import { Download, Mountain, Navigation, Layers, Compass, Locate, Edit3 } from 'lucide-react';
 import { downloadGPXFile } from '../utils/gpxParser';
-import { offsetPolylineCoords } from '../utils/routeEngine/geometry';
-import {
-  CARTO_VOYAGER_NOLABELS_URL,
-  CARTO_VOYAGER_LABELS_URL,
-  OSM_URL,
-  TOPO_URL,
-  MAP_ATTRIBUTION,
-} from '../utils/mapConfig';
+import { addBaseLayers, drawRoute, drawTurnPins } from '../utils/mapLayers';
+import { CARTO_VOYAGER_NOLABELS_URL, OSM_URL, TOPO_URL } from '../utils/mapConfig';
 
 interface MapViewerProps {
   route: GPXRoute;
@@ -33,8 +27,6 @@ export const MapViewer: React.FC<MapViewerProps> = ({
 }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
-  const polylineRef = useRef<L.Polyline | null>(null);
-  const hoverMarkerRef = useRef<L.CircleMarker | null>(null);
   const turnMarkersGroupRef = useRef<L.LayerGroup | null>(null);
   const userLocationMarkerRef = useRef<L.CircleMarker | null>(null);
   const userAccuracyCircleRef = useRef<L.Circle | null>(null);
@@ -47,15 +39,27 @@ export const MapViewer: React.FC<MapViewerProps> = ({
   const [locationError, setLocationError] = useState<string | null>(null);
   const watchIdRef = useRef<number | null>(null);
 
-  // Initialize or update Leaflet map
+  const baseLayerRef = useRef<L.TileLayer | null>(null);
+  const basemapUrl = activeTileLayer === 'voyager' ? CARTO_VOYAGER_NOLABELS_URL : activeTileLayer === 'topo' ? TOPO_URL : OSM_URL;
+  const basemapUrlRef = useRef(basemapUrl);
+  basemapUrlRef.current = basemapUrl;
+
+  const stopLocationTracking = () => {
+    if (watchIdRef.current !== null) {
+      navigator.geolocation.clearWatch(watchIdRef.current);
+      watchIdRef.current = null;
+    }
+    userLocationMarkerRef.current?.remove();
+    userLocationMarkerRef.current = null;
+    userAccuracyCircleRef.current?.remove();
+    userAccuracyCircleRef.current = null;
+    setIsTrackingLocation(false);
+  };
+
+  // Build the map once per route. Tile style and the selected turn are updated
+  // in place below, so tapping a turn keeps its zoom and GPS tracking keeps running.
   useEffect(() => {
     if (!mapContainerRef.current) return;
-
-    if (mapInstanceRef.current) {
-      mapInstanceRef.current.remove();
-      mapInstanceRef.current = null;
-    }
-
     const firstPt = route.points[0] || { lat: 38.6781, lon: -121.7712 };
     const map = L.map(mapContainerRef.current, {
       center: [firstPt.lat, firstPt.lon],
@@ -63,180 +67,48 @@ export const MapViewer: React.FC<MapViewerProps> = ({
       scrollWheelZoom: false,
       attributionControl: false,
     });
-
     mapInstanceRef.current = map;
-
-    // Basemap tile layers
-    const basemapUrl =
-      activeTileLayer === 'voyager'
-        ? CARTO_VOYAGER_NOLABELS_URL
-        : activeTileLayer === 'topo'
-        ? TOPO_URL
-        : OSM_URL;
-
-    L.tileLayer(basemapUrl, {
-      maxZoom: 19,
-      attribution: MAP_ATTRIBUTION,
-    }).addTo(map);
-
-    // Dedicated high-contrast label pane rendered above the polyline
-    // so street names are never obscured by the route path
-    map.createPane('streetLabelsPane');
-    const labelsPane = map.getPane('streetLabelsPane');
-    if (labelsPane) {
-      labelsPane.style.zIndex = '450';
-      labelsPane.style.pointerEvents = 'none';
-    }
-
-    L.tileLayer(CARTO_VOYAGER_LABELS_URL, {
-      pane: 'streetLabelsPane',
-      maxZoom: 19,
-    }).addTo(map);
-
+    baseLayerRef.current = addBaseLayers(map, basemapUrlRef.current);
+    const line = drawRoute(L.layerGroup().addTo(map), route.points);
     turnMarkersGroupRef.current = L.layerGroup().addTo(map);
+    setSelectedTurnIndex(null);
 
-    // If route has points, plot polyline and markers
-    if (route.points && route.points.length > 0) {
-      const latLngs: [number, number][] = route.points.map((p) => [p.lat, p.lon]);
-
-      // Offset polyline by 3.5m to the right onto sidewalk/shoulder so centerline street names stay visible
-      const offsetLatLngs = offsetPolylineCoords(latLngs, 3.5);
-
-      // Route Polyline
-      const polyline = L.polyline(offsetLatLngs, {
-        color: '#1a607c',
-        weight: 4,
-        opacity: 0.85,
-        lineCap: 'round',
-        lineJoin: 'round',
-      }).addTo(map);
-
-      polylineRef.current = polyline;
-
-      const startPt = latLngs[0];
-      const endPt = latLngs[latLngs.length - 1];
-
-      // Check if start and finish are the same location (e.g. within 60 meters, typical of loop / Blue Note runs)
-      const isStartFinishSame = Math.hypot(startPt[0] - endPt[0], startPt[1] - endPt[1]) < 0.0006;
-
-      if (isStartFinishSame) {
-        // Unified Blue Note (Start/End) Pin
-        const combinedIcon = L.divIcon({
-          className: 'custom-start-finish-pin',
-          html: `<div style="background:linear-gradient(135deg, #1a607c 0%, #13495d 100%);color:white;padding:3.5px 8px;border-radius:12px;font-size:10px;font-weight:900;border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.4);display:flex;align-items:center;gap:4px;white-space:nowrap;">
-            <span>🍺</span> Blue Note (Start/End) <span>🏁</span>
-          </div>`,
-          iconSize: [160, 24],
-          iconAnchor: [80, 12],
-        });
-        L.marker(startPt, { icon: combinedIcon, zIndexOffset: 500 }).addTo(map);
-      } else {
-        // Separate Start Marker at Blue Note Brewing
-        const startIcon = L.divIcon({
-          className: 'custom-start-pin',
-          html: `<div style="background-color:#1a607c;color:white;padding:3px 7px;border-radius:12px;font-size:10px;font-weight:900;border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.35);display:flex;align-items:center;gap:3px;white-space:nowrap;">
-            <span>🍺</span> Blue Note (Start)
-          </div>`,
-          iconSize: [110, 24],
-          iconAnchor: [55, 12],
-        });
-        L.marker(startPt, { icon: startIcon, zIndexOffset: 500 }).addTo(map);
-
-        // Separate Finish Marker
-        const finishIcon = L.divIcon({
-          className: 'custom-end-pin',
-          html: `<div style="background-color:#de9c1e;color:#0d1113;padding:3px 7px;border-radius:12px;font-size:10px;font-weight:900;border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.35);display:flex;align-items:center;gap:3px;white-space:nowrap;">
-            <span>🏁</span> FINISH
-          </div>`,
-          iconSize: [64, 24],
-          iconAnchor: [32, 12],
-        });
-        L.marker(endPt, { icon: finishIcon, zIndexOffset: 500 }).addTo(map);
-      }
-
-      // Numbered Turn Pins (if route has directions)
-      if (route.directions && route.directions.length > 0) {
-        route.directions.forEach((step, idx) => {
-          if (!step.point) return;
-          const [lon, lat] = step.point;
-          const isSelected = selectedTurnIndex === idx;
-
-          const turnIcon = L.divIcon({
-            className: 'custom-turn-pin',
-            html: `<div style="background-color:${isSelected ? '#de9c1e' : '#1a607c'};color:${isSelected ? '#000' : '#fff'};width:${isSelected ? '24px' : '18px'};height:${isSelected ? '24px' : '18px'};border-radius:50%;font-size:${isSelected ? '11px' : '9px'};font-weight:900;display:flex;align-items:center;justify-content:center;border:2px solid white;box-shadow:0 1px 4px rgba(0,0,0,0.35);cursor:pointer;transition:all 0.2s;">
-              ${step.step}
-            </div>`,
-            iconSize: [24, 24],
-            iconAnchor: [12, 12],
-          });
-
-          const marker = L.marker([lat, lon], { icon: turnIcon });
-          marker.on('click', () => {
-            setSelectedTurnIndex(idx);
-          });
-          marker.bindTooltip(`<b>#${step.step}</b> ${step.instruction_concise}`, { direction: 'top', offset: [0, -10] });
-          turnMarkersGroupRef.current?.addLayer(marker);
-        });
-      }
-
-      // Fit bounds
-      map.fitBounds(polyline.getBounds(), { padding: [35, 35] });
-
-      // Invalidate size shortly after mount to ensure crisp display when inside modals
-      const resizeTimer = setTimeout(() => {
-        if (mapInstanceRef.current) {
-          mapInstanceRef.current.invalidateSize();
-          if (polylineRef.current) {
-            mapInstanceRef.current.fitBounds(polylineRef.current.getBounds(), { padding: [35, 35] });
-          }
-        }
+    let resizeTimer: ReturnType<typeof setTimeout> | undefined;
+    if (line) {
+      map.fitBounds(line.getBounds(), { padding: [35, 35] });
+      // Re-measure shortly after mount so the map is crisp inside modals.
+      resizeTimer = setTimeout(() => {
+        map.invalidateSize();
+        map.fitBounds(line.getBounds(), { padding: [35, 35] });
       }, 150);
-
-      // Hover marker for elevation profile scrub
-      const hoverMarker = L.circleMarker(startPt, {
-        radius: 7,
-        color: '#ffffff',
-        weight: 2,
-        fillColor: '#ea580c',
-        fillOpacity: 1,
-      });
-      hoverMarkerRef.current = hoverMarker;
-
-      return () => {
-        clearTimeout(resizeTimer);
-        if (watchIdRef.current !== null) {
-          navigator.geolocation.clearWatch(watchIdRef.current);
-        }
-        map.remove();
-        mapInstanceRef.current = null;
-      };
     }
 
     return () => {
-      if (watchIdRef.current !== null) {
-        navigator.geolocation.clearWatch(watchIdRef.current);
-      }
+      clearTimeout(resizeTimer);
+      stopLocationTracking();
       map.remove();
       mapInstanceRef.current = null;
+      baseLayerRef.current = null;
+      turnMarkersGroupRef.current = null;
     };
-  }, [route, activeTileLayer, selectedTurnIndex]);
+  }, [route]);
+
+  // Switch the base map style without rebuilding the map.
+  useEffect(() => {
+    baseLayerRef.current?.setUrl(basemapUrl);
+  }, [basemapUrl]);
+
+  // Numbered turn pins; only these redraw when a turn is selected.
+  useEffect(() => {
+    if (turnMarkersGroupRef.current) {
+      drawTurnPins(turnMarkersGroupRef.current, route.directions, selectedTurnIndex, setSelectedTurnIndex);
+    }
+  }, [route, selectedTurnIndex]);
 
   // Handle GPS "Show My Location" toggle
   const toggleLocationTracking = () => {
     if (isTrackingLocation) {
-      if (watchIdRef.current !== null) {
-        navigator.geolocation.clearWatch(watchIdRef.current);
-        watchIdRef.current = null;
-      }
-      if (userLocationMarkerRef.current) {
-        userLocationMarkerRef.current.remove();
-        userLocationMarkerRef.current = null;
-      }
-      if (userAccuracyCircleRef.current) {
-        userAccuracyCircleRef.current.remove();
-        userAccuracyCircleRef.current = null;
-      }
-      setIsTrackingLocation(false);
+      stopLocationTracking();
       return;
     }
 
@@ -280,8 +152,8 @@ export const MapViewer: React.FC<MapViewerProps> = ({
       },
       (err) => {
         console.warn('Geolocation error:', err);
+        stopLocationTracking();
         setLocationError('Unable to retrieve GPS location.');
-        setIsTrackingLocation(false);
       },
       { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
     );
@@ -398,7 +270,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
               Apps:
             </span>
 
-            {route.externalLinks?.stravaUrl && (
+            {route.externalLinks?.stravaUrl?.trim() && (
               <a
                 href={route.externalLinks.stravaUrl}
                 target="_blank"
@@ -409,7 +281,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
               </a>
             )}
 
-            {route.externalLinks?.garminUrl && (
+            {route.externalLinks?.garminUrl?.trim() && (
               <a
                 href={route.externalLinks.garminUrl}
                 target="_blank"
@@ -420,7 +292,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
               </a>
             )}
 
-            {route.externalLinks?.rungoUrl && (
+            {route.externalLinks?.rungoUrl?.trim() && (
               <a
                 href={route.externalLinks.rungoUrl}
                 target="_blank"

@@ -17,6 +17,7 @@ export const NotificationsTab: React.FC<AdminDashboardProps> = (props) => {
   const [notifTitle, setNotifTitle] = useState<string>('🦫 Run Tonight: Wednesday Code Word!');
   const [notifBody, setNotifBody] = useState<string>('Meet at 6:00 PM on Blue Note Brewing patio. Check-in is live!');
   const [broadcastSent, setBroadcastSent] = useState<boolean>(false);
+  const [pushCountError, setPushCountError] = useState(false);
   const [pushDeviceCount, setPushDeviceCount] = useState<number | null>(null);
   useEffect(() => {
     if (!onCountPushDevices) return;
@@ -24,7 +25,7 @@ export const NotificationsTab: React.FC<AdminDashboardProps> = (props) => {
       .then(setPushDeviceCount)
       .catch((err) => {
         console.warn('Counting push devices failed:', err);
-        setPushDeviceCount(0);
+        setPushCountError(true);
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -55,7 +56,7 @@ export const NotificationsTab: React.FC<AdminDashboardProps> = (props) => {
           <span>Phone notifications</span>
         </h4>
         <p>
-          <strong>{pushDeviceCount === null ? '…' : pushDeviceCount}</strong> device{pushDeviceCount === 1 ? ' has' : 's have'} notifications turned on
+          {pushCountError ? 'Notification device registrations could not be loaded.' : <><strong>{pushDeviceCount === null ? '…' : pushDeviceCount}</strong> registered notification device{pushDeviceCount === 1 ? '' : 's'}</>}
           (signed-in runners only). Being signed in isn&apos;t enough: each runner turns them on per device with{' '}
           <strong>Enable Alerts</strong> in the top banner, or in their profile menu under <strong>Notifications on this device</strong>.
           iPhones must add the app to their Home Screen first.

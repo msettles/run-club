@@ -9,9 +9,9 @@
  * /push/) → FCM token. Signed-in runners' devices are recorded in
  * push_devices/{sha256(token)} so admins can see how many are signed up.
  */
-import { getMessaging, getToken, deleteToken, isSupported } from 'firebase/messaging';
+import { sha256Hex } from '../utils/hash';
 import { doc, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
-import { app, db, isFirebaseConfigured } from './firebase';
+import { app, db, auth, isFirebaseConfigured } from './firebase';
 
 const VAPID_KEY = import.meta.env.VITE_FIREBASE_VAPID_KEY || '';
 const ENABLED_KEY = 'woodchuckers_push_device_v1'; // this device signed up (token saved)
@@ -22,22 +22,23 @@ const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent);
 const isStandalone = () =>
   window.matchMedia('(display-mode: standalone)').matches || Boolean((navigator as any).standalone);
 
-async function sha256Hex(text: string): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
-  return Array.from(new Uint8Array(digest))
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
-}
-
 /** Where this device stands. iPhones only support web push from the Home Screen app. */
 export async function getPushStatus(): Promise<PushStatus> {
   if (typeof window === 'undefined' || !('Notification' in window) || !('serviceWorker' in navigator)) {
-    return isIOS() && !isStandalone() ? 'needs-install' : 'unsupported';
+    return typeof window !== 'undefined' && typeof navigator !== 'undefined' && isIOS() && !isStandalone() ? 'needs-install' : 'unsupported';
   }
   if (!isFirebaseConfigured || !app || !VAPID_KEY) return 'not-configured';
-  if (!(await isSupported().catch(() => false))) return isIOS() && !isStandalone() ? 'needs-install' : 'unsupported';
+  // Status is queried at startup: use browser capabilities here, and load the
+  // Messaging SDK only when the runner enables or disables notifications.
+  if (!('PushManager' in window) || !('indexedDB' in window)) {
+    return isIOS() && !isStandalone() ? 'needs-install' : 'unsupported';
+  }
   if (Notification.permission === 'denied') return 'blocked';
-  return Notification.permission === 'granted' && localStorage.getItem(ENABLED_KEY) ? 'on' : 'off';
+  if (Notification.permission !== 'granted' || !localStorage.getItem(ENABLED_KEY)) return 'off';
+  const registration = await navigator.serviceWorker.getRegistration('/push/');
+  if (await registration?.pushManager.getSubscription()) return 'on';
+  localStorage.removeItem(ENABLED_KEY);
+  return 'off';
 }
 
 async function pushRegistration(): Promise<ServiceWorkerRegistration> {
@@ -48,14 +49,16 @@ async function pushRegistration(): Promise<ServiceWorkerRegistration> {
  * Sign this device up for club notifications. Must be called from a tap
  * (browsers only show the permission prompt in response to a user gesture).
  */
-export async function enablePushOnThisDevice(account?: { email?: string; memberKey?: string }): Promise<PushStatus> {
+async function enablePushImpl(account?: { email?: string; memberKey?: string }): Promise<PushStatus> {
   const status = await getPushStatus();
   if (status === 'unsupported' || status === 'needs-install' || status === 'not-configured' || status === 'blocked') {
     return status;
   }
-  const permission = await Notification.requestPermission();
+  const permission = Notification.permission === 'granted' ? 'granted' : await Notification.requestPermission();
   if (permission !== 'granted') return permission === 'denied' ? 'blocked' : 'off';
 
+  const { getMessaging, getToken, isSupported } = await import('firebase/messaging');
+  if (!(await isSupported())) return isIOS() && !isStandalone() ? 'needs-install' : 'unsupported';
   const registration = await pushRegistration();
   const token = await getToken(getMessaging(app!), { vapidKey: VAPID_KEY, serviceWorkerRegistration: registration });
   if (!token) throw new Error('Could not get a notification token for this device.');
@@ -71,6 +74,7 @@ export async function enablePushOnThisDevice(account?: { email?: string; memberK
   }
   try {
     localStorage.setItem(ENABLED_KEY, '1');
+    localStorage.setItem(`${ENABLED_KEY}_account`, (account?.email || '').toLowerCase());
   } catch {
     // ignore
   }
@@ -78,23 +82,36 @@ export async function enablePushOnThisDevice(account?: { email?: string; memberK
 }
 
 /** Turn notifications off on this device. */
-export async function disablePushOnThisDevice(): Promise<void> {
+async function disablePushImpl(): Promise<void> {
   if (!app) return;
-  try {
-    const registration = await pushRegistration();
-    const messaging = getMessaging(app);
-    const token = await getToken(messaging, { vapidKey: VAPID_KEY, serviceWorkerRegistration: registration }).catch(() => null);
-    if (token && db) {
-      await deleteDoc(doc(db, 'push_devices', await sha256Hex(token))).catch(() => {});
-    }
-    await deleteToken(messaging).catch(() => {});
-  } finally {
-    try {
-      localStorage.removeItem(ENABLED_KEY);
-    } catch {
-      // ignore
-    }
+  const { getMessaging, getToken, deleteToken } = await import('firebase/messaging');
+  const registration = await pushRegistration();
+  const messaging = getMessaging(app);
+  const token = await getToken(messaging, { vapidKey: VAPID_KEY, serviceWorkerRegistration: registration });
+  const owner = localStorage.getItem(`${ENABLED_KEY}_account`);
+  if (token && db && owner && auth?.currentUser?.email?.toLowerCase() === owner) {
+    await deleteDoc(doc(db, 'push_devices', await sha256Hex(token)));
   }
+  if (!(await deleteToken(messaging))) throw new Error('The notification subscription could not be removed.');
+  const subscription = await registration.pushManager.getSubscription();
+  if (subscription) throw new Error('This device still has an active notification subscription. Please retry.');
+  localStorage.removeItem(ENABLED_KEY);
+  localStorage.removeItem(`${ENABLED_KEY}_account`);
+}
+
+// Account reconciliation and user taps share one queue, so an old sign-in
+// cannot re-enable a subscription after the runner turns it off.
+let mutationQueue: Promise<unknown> = Promise.resolve();
+function serializePush<T>(operation: () => Promise<T>): Promise<T> {
+  const pending = mutationQueue.then(operation, operation);
+  mutationQueue = pending.catch(() => {});
+  return pending;
+}
+export function enablePushOnThisDevice(account?: { email?: string; memberKey?: string }): Promise<PushStatus> {
+  return serializePush(() => enablePushImpl(account));
+}
+export function disablePushOnThisDevice(): Promise<void> {
+  return serializePush(disablePushImpl);
 }
 
 // ---- Received pushes (saved by public/push-sw.js) for the bell feed ----
@@ -138,4 +155,11 @@ export function onPushReceived(cb: (msg: ReceivedPush) => void): () => void {
   };
   navigator.serviceWorker.addEventListener('message', handler);
   return () => navigator.serviceWorker.removeEventListener('message', handler);
+}
+
+/** Bind an already enabled browser subscription after account restoration. */
+export async function reconcilePushAccount(email: string): Promise<void> {
+  await serializePush(async () => {
+    if (await getPushStatus() === 'on') await enablePushImpl({ email });
+  });
 }

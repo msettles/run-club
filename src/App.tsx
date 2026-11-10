@@ -1,16 +1,17 @@
+import { routeVersionLabel } from './utils/runChoices';
 import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { useClubStore } from './services/storage';
 import { RunEvent, GPXRoute, UserProfile } from './types';
-import { buildMeetupFromRun, deleteRunConfirmMessage, getRunChoices, resolveChoices } from './utils/runChoices';
+import { deleteRunConfirmMessage, getRunChoices, resolveChoices } from './utils/runChoices';
 import { Navbar } from './components/Navbar';
 import { RunCard } from './components/RunCard';
-import { MapViewer } from './components/MapViewer';
 import { Leaderboard } from './components/Leaderboard';
 import { InstallPwaBanner } from './components/InstallPwaBanner';
 import { InstallAppLink } from './components/InstallAppLink';
 import { MobileBottomNav } from './components/MobileBottomNav';
 import { MilestonesPage } from './components/MilestonesPage';
 import { FULL_VERSION } from './utils/version';
+import { reconcilePushAccount, disablePushOnThisDevice, getPushStatus } from './services/push';
 import { onAuthChange, logoutUser, checkAndCompleteEmailLinkSignIn } from './services/authService';
 import { User as FirebaseUser } from 'firebase/auth';
 import { db } from './services/firebase';
@@ -20,6 +21,7 @@ import { isAdminProfile, isStaffProfile } from './utils/roles';
 import { formatOpening, nextCheckInEvent, openCheckInEvents, checkInWindow, upcomingRuns, priorRuns, isRunLive } from './utils/checkInWindow';
 
 // Lazy-loaded heavy components & modals (saves >60% initial mobile bundle size)
+const MapViewer = lazy(() => import('./components/MapViewer').then((m) => ({ default: m.MapViewer })));
 const AdminDashboard = lazy(() => import('./components/AdminDashboard').then((m) => ({ default: m.AdminDashboard })));
 const RouteStudioModal = lazy(() => import('./components/RouteStudioModal').then((m) => ({ default: m.RouteStudioModal })));
 const CheckInModal = lazy(() => import('./components/CheckInModal').then((m) => ({ default: m.CheckInModal })));
@@ -81,12 +83,14 @@ export function App() {
     currentUser,
     registerUser,
     checkInRunner,
-    saveMeetupEvent,
+    refreshDerivedStats,
     resolveRunByCodeWord,
     countPushDevices,
     countRunCheckIns,
     scheduleLoaded,
-    searchLegacyMatches,
+    syncError,
+    syncRevision,
+    retrySync,
     switchCurrentUser,
     milestoneAlerts,
     markMilestoneFulfilled,
@@ -141,15 +145,12 @@ export function App() {
   const toggleBell = () => setShowNotificationsDrawer((open) => !open);
 
   // Selected route for viewing
-  const [selectedRoute, setSelectedRoute] = useState<GPXRoute>(routes[0]);
+  const [selectedRoute, setSelectedRoute] = useState<GPXRoute | undefined>(routes[0]);
 
   // Keep selectedRoute valid and in sync when routes load or change
   useEffect(() => {
-    if (routes.length > 0) {
-      if (!selectedRoute || !routes.some((r) => r.id === selectedRoute.id)) {
-        setSelectedRoute(routes[0]);
-      }
-    }
+    const latest = routes.find((r) => r.id === selectedRoute?.id) || routes[0];
+    if (latest !== selectedRoute) setSelectedRoute(latest);
   }, [routes, selectedRoute]);
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   // False until Firebase has restored the sign-in (and loaded the profile), so the
@@ -186,14 +187,18 @@ export function App() {
   const pendingCheckInRunRef = useRef(pendingCheckInRun);
   pendingCheckInRunRef.current = pendingCheckInRun;
 
+  const authEpoch = useRef(0);
+  const authenticatedEmail = useRef('');
+
   // Handle post-auth check: if user has a profile, switch to them; if new, launch onboarding
-  const handleUserAuthenticated = async (email: string, displayName?: string | null) => {
+  const handleUserAuthenticated = async (email: string, displayName?: string | null, epoch = authEpoch.current) => {
     const cleanEmail = email.trim().toLowerCase();
     
     let existingProfile = usersRef.current.find((u) => u.email.toLowerCase() === cleanEmail);
     if (isFirebaseConfigured && db) {
       try {
         const snap = await getDoc(doc(db, 'users', cleanEmail));
+        if (epoch !== authEpoch.current) return;
         if (snap.exists()) {
           existingProfile = snap.data() as UserProfile;
           setUsers((prev) => [existingProfile!, ...prev.filter((u) => u.email.toLowerCase() !== cleanEmail)]);
@@ -204,12 +209,16 @@ export function App() {
         }
       } catch (err) {
         console.warn('Firestore user check error:', err);
+        if (epoch === authEpoch.current) setCheckInNotice('Your sign-in succeeded, but your club profile could not be loaded. Please reload the app and try again.');
+        return;
       }
     }
 
+    if (epoch !== authEpoch.current) return;
+    setIsAuthModalOpen(false);
     if (existingProfile) {
       switchCurrentUser(cleanEmail);
-      syncPrivateData(cleanEmail, isStaffProfile(existingProfile), isAdminProfile(existingProfile));
+      reconcilePushAccount(cleanEmail).catch((err) => console.warn('Notification account registration failed:', err));
       const pending = pendingCheckInRunRef.current;
       if (pending) {
         setSelectedRunForCheckIn(pending);
@@ -230,27 +239,52 @@ export function App() {
   // getDoc -> setUsers -> re-subscribe loop.
   useEffect(() => {
     // Completing the link signs the user in; onAuthChange below then handles them.
-    checkAndCompleteEmailLinkSignIn().catch((err) => console.error('Email sign in check error:', err));
+    checkAndCompleteEmailLinkSignIn().catch((err) => {
+      console.error('Email sign in check error:', err);
+      setCheckInNotice('The sign-in link could not be completed. Request a fresh link and try again.');
+      setIsAuthModalOpen(true);
+    });
 
+    const sessionEpoch = authEpoch;
     const unsubscribe = onAuthChange((user) => {
+      const epoch = ++authEpoch.current;
+      if (isFirebaseConfigured) { setAuthReady(false); clearPrivateData(); }
+      setSelectedRunForCheckIn(null);
+      setIsOnboardingOpen(false);
+      authenticatedEmail.current = user?.email?.toLowerCase() || '';
       setFirebaseUser(user);
       if (user && user.email) {
-        handleUserAuthenticated(user.email, user.displayName).finally(() => setAuthReady(true));
+        handleUserAuthenticated(user.email, user.displayName, epoch).finally(() => {
+          if (epoch === authEpoch.current) setAuthReady(true);
+        });
       } else {
-        switchCurrentUser('');
-        clearPrivateData();
+        // Local mode has no accounts: the browser's saved runner stays selected.
+        if (isFirebaseConfigured) {
+          switchCurrentUser('');
+          clearPrivateData();
+        }
         setAuthReady(true);
       }
     });
 
-    return () => unsubscribe();
+    return () => { sessionEpoch.current++; unsubscribe(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Role changes must replace subscriptions as well as update navigation.
+  useEffect(() => {
+    if (!isFirebaseConfigured || !authReady || !currentUser.email || currentUser.role === 'guest') return;
+    void syncPrivateData(currentUser.email, isStaffProfile(currentUser), isAdminProfile(currentUser)).then(() => {
+      void refreshDerivedStats(currentUser).catch((err) => console.warn('Reward refresh needs a retry:', err));
+    });
+    // The operation closures change each render; only identity/role changes restart listeners.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authReady, currentUser.email, currentUser.role, syncRevision]);
+
   const openCheckInFor = (target: CheckInTarget) => {
-    if (!isUserLoggedIn) {
+    if (!isUserLoggedIn || currentUser.role === 'guest') {
       setPendingCheckInRun(target);
-      setIsAuthModalOpen(true);
+      handleOpenRegister();
     } else {
       setSelectedRunForCheckIn(target);
     }
@@ -258,7 +292,11 @@ export function App() {
   const handleOpenCheckIn = (run: Pick<RunEvent, 'id'>) => openCheckInFor({ runId: run.id });
 
   const handleOpenRegister = () => {
-    if (isUserLoggedIn) {
+    if (firebaseUser?.email && currentUser.role === 'guest') {
+      setOnboardingEmail(firebaseUser.email);
+      setOnboardingDisplayName(firebaseUser.displayName || '');
+      setIsOnboardingOpen(true);
+    } else if (isUserLoggedIn) {
       alert(`You are already a registered Woodchucker (${currentUser.displayName})!`);
     } else {
       setIsAuthModalOpen(true);
@@ -286,14 +324,14 @@ export function App() {
   // once the events have loaded.
   const qrHandledRef = useRef(false);
   useEffect(() => {
-    if (qrHandledRef.current || !scheduleLoaded) return;
+    if (qrHandledRef.current || !scheduleLoaded || !authReady) return;
     const params = new URLSearchParams(window.location.search);
     if (params.get('checkin') === 'true' || window.location.hash === '#checkin') {
       qrHandledRef.current = true;
       handleQuickCheckIn();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scheduleLoaded, meetupEvents]);
+  }, [scheduleLoaded, meetupEvents, authReady]);
 
   // Scheduling or editing a run also updates that night's check-in event,
   // so runners pick from the run's distance options when they check in.
@@ -348,9 +386,7 @@ export function App() {
 
   const handleUpdateRun = async (run: RunEvent, codeWord: string) => {
     try {
-      await updateRun(run);
-      const existing = meetupEvents.find((e) => e.id === run.id);
-      await saveMeetupEvent(buildMeetupFromRun(run, routes, codeWord, existing));
+      await updateRun(run, codeWord);
     } catch (err) {
       console.error('Saving run failed:', err);
       throw friendlyRunError(err);
@@ -367,12 +403,17 @@ export function App() {
       alert('Only organizers and club administrators can create or edit routes.');
       return;
     }
-    if (existingId) {
-      const updated = await updateRoute(existingId, routeData);
-      setSelectedRoute(updated);
-    } else {
-      const saved = await addRoute(routeData);
-      setSelectedRoute(saved);
+    // Errors are shown inside the Route Studio, which stays open.
+    try {
+      setSelectedRoute(existingId ? await updateRoute(existingId, routeData) : await addRoute(routeData));
+    } catch (err) {
+      console.error('Saving route failed:', err);
+      const { code, message } = (err || {}) as { code?: string; message?: string };
+      throw new Error(
+        code === 'route-too-large' && message
+          ? message
+          : `Route not saved${code ? ` (${code})` : ''}. Please check your connection and try again.`
+      );
     }
     setIsRouteStudioOpen(false);
     setEditingRoute(null);
@@ -391,7 +432,7 @@ export function App() {
       alert("The route couldn't be deleted. Please check your connection and try again.");
       return;
     }
-    if (selectedRoute.id === routeId && routes.length > 1) {
+    if (selectedRoute?.id === routeId && routes.length > 1) {
       setSelectedRoute(routes.find((r) => r.id !== routeId) || routes[0]);
     }
     setIsRouteStudioOpen(false);
@@ -423,12 +464,18 @@ export function App() {
         onOpenRegister={handleOpenRegister}
         onOpenVersionModal={() => setIsVersionModalOpen(true)}
         onLogout={async () => {
+          try { if (await getPushStatus() === 'on') await disablePushOnThisDevice(); }
+          catch (err) { console.warn('Notification cleanup failed during sign-out:', err); }
+          setSelectedRunForCheckIn(null);
+          setPendingCheckInRun(null);
           await logoutUser();
           setFirebaseUser(null);
           switchCurrentUser('');
           clearPrivateData();
         }}
       />
+
+      {syncError && <div role="alert" className="mx-auto mt-4 w-full max-w-7xl rounded-xl bg-amber-100 p-3 text-sm text-amber-950">{syncError} <button type="button" onClick={retrySync} className="font-bold underline">Retry loading</button></div>}
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -444,7 +491,7 @@ export function App() {
                 <div className="max-w-2xl">
                   <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-woodland-500/20 text-woodland-200 border border-woodland-400/30 text-xs font-semibold mb-3">
                     <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-                    <span>Spring 2026 Season • Blue Note Brewing Co.</span>
+                    <span>Wednesday Night Runs • Blue Note Brewing Co.</span>
                   </div>
                   <h1 className="text-3xl sm:text-5xl font-display font-extrabold tracking-wide uppercase leading-tight">
                     Woodland Woodchuckers
@@ -616,14 +663,14 @@ export function App() {
                   key={r.id}
                   onClick={() => setSelectedRoute(r)}
                   className={`px-4 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap flex items-center gap-2 ${
-                    selectedRoute.id === r.id
+                    selectedRoute?.id === r.id
                       ? 'bg-woodland-800 text-white shadow-sm'
                       : 'bg-white text-stone-700 border border-stone-200 hover:bg-stone-50'
                   }`}
                 >
-                  <span>{r.name}</span>
+                  <span>{r.name}{r.updatedAt && <span className="block text-[10px] font-normal">{routeVersionLabel(r)}</span>}</span>
                   <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-semibold ${
-                    selectedRoute.id === r.id ? 'bg-woodland-950 text-woodland-200' : 'bg-stone-100 text-stone-600'
+                    selectedRoute?.id === r.id ? 'bg-woodland-950 text-woodland-200' : 'bg-stone-100 text-stone-600'
                   }`}>
                     {r.distanceMiles} mi
                   </span>
@@ -633,16 +680,20 @@ export function App() {
 
             {/* Selected Route Map Viewer */}
             {selectedRoute && (
-              <MapViewer
-                route={selectedRoute}
-                height="480px"
-                showElevationProfile={true}
-                canEdit={isOrganizerOrAdmin}
-                onEditRoute={(r) => {
-                  setEditingRoute(r);
-                  setIsRouteStudioOpen(true);
-                }}
-              />
+              <Suspense
+                fallback={<div className="h-[480px] rounded-2xl bg-white border border-stone-200 animate-pulse" aria-label="Loading map" />}
+              >
+                <MapViewer
+                  route={selectedRoute}
+                  height="480px"
+                  showElevationProfile={true}
+                  canEdit={isOrganizerOrAdmin}
+                  onEditRoute={(r) => {
+                    setEditingRoute(r);
+                    setIsRouteStudioOpen(true);
+                  }}
+                />
+              </Suspense>
             )}
 
             {/* Route Cards Carousel / Grid */}
@@ -652,13 +703,14 @@ export function App() {
                   key={r.id}
                   onClick={() => setSelectedRoute(r)}
                   className={`p-4 rounded-xl border bg-white cursor-pointer transition ${
-                    selectedRoute.id === r.id
+                    selectedRoute?.id === r.id
                       ? 'border-woodland-600 ring-2 ring-woodland-500/20 shadow-sm'
                       : 'border-stone-200 hover:border-woodland-300'
                   }`}
                 >
                   <div className="flex items-start justify-between gap-2 mb-2">
                     <h4 className="text-sm font-bold text-stone-900 leading-snug">{r.name}</h4>
+                    {r.updatedAt && <p className="text-[10px] text-stone-500">{routeVersionLabel(r)}</p>}
                     <span className="text-[10px] bg-stone-100 text-stone-700 px-2 py-0.5 rounded-full font-semibold shrink-0">
                       {r.surface}
                     </span>
@@ -954,9 +1006,7 @@ export function App() {
             routes={routes}
             checkins={checkins}
             onCheckInRunner={checkInRunner}
-            onRegisterUser={registerUser}
-            onSearchLegacy={searchLegacyMatches}
-            onOpenAuthModal={() => setIsAuthModalOpen(true)}
+            onOpenAuthModal={() => { setPendingCheckInRun(selectedRunForCheckIn); handleOpenRegister(); }}
           />
         )}
 
@@ -1005,31 +1055,28 @@ export function App() {
           />
         )}
 
-        <FirebaseSetupGuide
-          isOpen={isSetupGuideOpen}
-          onClose={() => setIsSetupGuideOpen(false)}
-          isConfigured={isFirebaseConfigured}
-        />
+        {/* Rendered only while open, so their code downloads on first use, not at startup. */}
+        {isSetupGuideOpen && (
+          <FirebaseSetupGuide
+            isOpen
+            onClose={() => setIsSetupGuideOpen(false)}
+            isConfigured={isFirebaseConfigured}
+          />
+        )}
 
-        <BrandAssetsModal
-          isOpen={isBrandAssetsOpen}
-          onClose={() => setIsBrandAssetsOpen(false)}
-        />
+        {isBrandAssetsOpen && <BrandAssetsModal isOpen onClose={() => setIsBrandAssetsOpen(false)} />}
 
-        <VersionModal
-          isOpen={isVersionModalOpen}
-          onClose={() => setIsVersionModalOpen(false)}
-        />
+        {isVersionModalOpen && <VersionModal isOpen onClose={() => setIsVersionModalOpen(false)} />}
 
-        {/* Passwordless & Google Auth Modal */}
-        <AuthModal
-          isOpen={isAuthModalOpen}
-          onClose={() => setIsAuthModalOpen(false)}
-          onAuthSuccess={(email, displayName) => {
-            setIsAuthModalOpen(false);
-            handleUserAuthenticated(email, displayName);
-          }}
-        />
+        {/* Passwordless & Google Auth Modal. The auth listener above loads the
+            profile after any sign-in, so success here only closes the modal. */}
+        {isAuthModalOpen && (
+          <AuthModal
+            isOpen
+            onClose={() => setIsAuthModalOpen(false)}
+            onAuthSuccess={() => setIsAuthModalOpen(false)}
+          />
+        )}
 
         {/* First-Time Runner Profile Creation & Historical Merge */}
         {isOnboardingOpen && (
@@ -1044,6 +1091,7 @@ export function App() {
             legacyMembers={legacyMembers}
             onRegisterUser={registerUser}
             onSuccess={(newUser) => {
+              if (isFirebaseConfigured && authenticatedEmail.current !== newUser.email.toLowerCase()) return;
               switchCurrentUser(newUser.email);
               setIsOnboardingOpen(false);
               if (pendingCheckInRun) {

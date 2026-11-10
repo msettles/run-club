@@ -43,6 +43,8 @@ export const isAppInstalled = (): boolean =>
 export async function promptInstall(): Promise<'accepted' | 'dismissed' | 'unavailable'> {
   if (!deferredPrompt) return 'unavailable';
   const prompt = deferredPrompt;
+  deferredPrompt = null;
+  notify();
   await prompt.prompt();
   const { outcome } = await prompt.userChoice;
   if (outcome === 'accepted') {

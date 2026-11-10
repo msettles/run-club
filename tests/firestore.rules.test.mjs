@@ -1,3 +1,4 @@
+import assert from 'node:assert/strict';
 // Firestore security rules tests. Run with: npm run test:rules
 import { test, before, after, beforeEach } from 'node:test';
 import { readFileSync } from 'node:fs';
@@ -8,7 +9,7 @@ import {
   assertSucceeds,
 } from '@firebase/rules-unit-testing';
 import {
-  doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, collection, query, where, writeBatch, Timestamp,
+  doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, collection, query, where, writeBatch, Timestamp, arrayUnion,
 } from 'firebase/firestore';
 
 const memberKeyFor = (email) =>
@@ -52,10 +53,13 @@ const memberFromUser = (u) => ({
   totalMiles: u.totalMiles,
   runCount: u.runCount,
   walkCount: u.walkCount,
-  streak: 1,
+  streak: u.currentStreakWeeks || 0,
   favoritePace: 'Any',
   unlockedBadgeIds: u.unlockedBadgeIds,
+  ...(u.badgeCounts ? { badgeCounts: u.badgeCounts } : {}),
+  ...(u.petRunCount ? { petRunCount: u.petRunCount } : {}),
   joinedDate: '2026-01-01',
+  ...(u.lastCheckInDate ? { lastCheckInDate: u.lastCheckInDate } : {}),
 });
 
 const checkIn = (email, extra = {}) => ({
@@ -98,7 +102,7 @@ async function seed({ windowOpen = true } = {}) {
     const db = c.firestore();
     const now = Date.now();
     await setDoc(doc(db, 'meetup_events', RUN), {
-      id: RUN, runId: RUN, date: DATE, title: 'Wed', activeDistances: [], routes: {},
+      id: RUN, runId: RUN, date: DATE, title: 'Wed', activeDistances: ['route-3'], routes: { 'route-3': { actualMiles: 3.1, isLoop: false } },
       checkInOpensAt: Timestamp.fromMillis(windowOpen ? now - 3600e3 : now + 3600e3),
       checkInClosesAt: Timestamp.fromMillis(now + 7200e3),
     });
@@ -111,7 +115,7 @@ async function seed({ windowOpen = true } = {}) {
   });
 }
 
-function checkInBatch(db, email, { codeWord = 'ACORN', bump = 1, milestone = false } = {}) {
+function checkInBatch(db, email, { codeWord = 'ACORN', bump = 1, milestone = false, rsvp = false } = {}) {
   const user = baseUser(email);
   const updated = {
     ...user,
@@ -119,6 +123,8 @@ function checkInBatch(db, email, { codeWord = 'ACORN', bump = 1, milestone = fal
     loggedRuns: user.loggedRuns + bump,
     runCount: user.runCount + bump,
     totalMiles: user.totalMiles + 3.1,
+    distanceCounts: { '3': 1, '3.1': 1, '3.1 mi': 1 },
+    lastCheckInUpdatedAt: '2026-11-11T18:05:00.000Z',
     lastCheckInDate: DATE,
     lastCheckInRunId: RUN,
   };
@@ -126,6 +132,12 @@ function checkInBatch(db, email, { codeWord = 'ACORN', bump = 1, milestone = fal
   batch.set(doc(db, 'checkins', `${RUN}_${email}`), checkIn(email, { codeWord }));
   batch.set(doc(db, 'users', email), updated);
   batch.set(doc(db, 'members', memberKeyFor(email)), memberFromUser(updated));
+  if (rsvp) {
+    batch.update(doc(db, 'runs', RUN), { attendees: arrayUnion({
+      memberId: memberKeyFor(email), name: user.displayName,
+      checkedIn: false, rsvpDate: '2026-11-11T18:05:00.000Z',
+    }) });
+  }
   if (milestone) {
     batch.set(doc(db, 'milestone_alerts', `m${updated.totalRuns}_${email}`), {
       id: `m${updated.totalRuns}_${email}`, userEmail: email, runnerName: updated.displayName,
@@ -198,6 +210,29 @@ test('check-in with the right code word inside the window succeeds', async () =>
   await assertSucceeds(checkInBatch(ctx(ALICE), ALICE));
 });
 
+test('check-in and automatic RSVP save together and preserve other attendees', async () => {
+  const bob = { memberId: memberKeyFor(BOB), name: 'Bob', checkedIn: false, rsvpDate: '2026-11-10' };
+  await env.withSecurityRulesDisabled(async (c) => {
+    await updateDoc(doc(c.firestore(), 'runs', RUN), { attendees: [bob] });
+  });
+  const alice = ctx(ALICE);
+  await assertSucceeds(checkInBatch(alice, ALICE, { rsvp: true }));
+  const saved = (await getDoc(doc(alice, 'runs', RUN))).data();
+  assert.equal(saved.attendees.length, 2);
+  assert.deepEqual(saved.attendees[0], bob);
+  assert.equal(saved.attendees[1].memberId, memberKeyFor(ALICE));
+  assert.equal((await getDoc(doc(alice, 'checkins', `${RUN}_${ALICE}`))).exists(), true);
+});
+
+test('a rejected check-in does not leave an automatic RSVP behind', async () => {
+  const alice = ctx(ALICE);
+  await assertFails(checkInBatch(alice, ALICE, { codeWord: 'WRONG', rsvp: true }));
+  assert.deepEqual((await getDoc(doc(alice, 'runs', RUN))).data().attendees, []);
+  await env.withSecurityRulesDisabled(async (c) => {
+    assert.equal((await getDoc(doc(c.firestore(), 'checkins', `${RUN}_${ALICE}`))).exists(), false);
+  });
+});
+
 test('check-in with the wrong code word fails', async () => {
   await assertFails(checkInBatch(ctx(ALICE), ALICE, { codeWord: 'WRONG' }));
 });
@@ -223,6 +258,15 @@ test('leaderboard row must mirror the user doc', async () => {
   await assertFails(setDoc(doc(alice, 'members', memberKeyFor(ALICE)), fake));
   await assertSucceeds(setDoc(doc(alice, 'members', memberKeyFor(ALICE)), memberFromUser(baseUser(ALICE))));
   await assertFails(setDoc(doc(alice, 'members', memberKeyFor(BOB)), memberFromUser(baseUser(BOB))));
+});
+
+test('leaderboard row may carry the last check-in date (for lapsed streaks), and only as a short string', async () => {
+  const alice = ctx(ALICE);
+  const row = memberFromUser(baseUser(ALICE));
+  await assertFails(setDoc(doc(alice, 'members', memberKeyFor(ALICE)), { ...row, lastCheckInDate: DATE }));
+  await assertSucceeds(setDoc(doc(alice, 'members', memberKeyFor(ALICE)), row));
+  await assertFails(setDoc(doc(alice, 'members', memberKeyFor(ALICE)), { ...row, lastCheckInDate: 20261111 }));
+  await assertFails(setDoc(doc(alice, 'members', memberKeyFor(ALICE)), { ...row, lastCheckInDate: 'x'.repeat(31) }));
 });
 
 test('milestone alert only alongside the qualifying check-in, once', async () => {
@@ -253,13 +297,19 @@ test('staff cannot put the code word on the public meetup doc', async () => {
 });
 
 test('same-night edit keeps run count and needs the code word', async () => {
+  await env.withSecurityRulesDisabled(async (c) => {
+    await updateDoc(doc(c.firestore(), 'meetup_events', RUN), {
+      activeDistances: ['route-3', 'route-5'],
+      'routes.route-5': { actualMiles: 5.2, isLoop: false },
+    });
+  });
   const alice = ctx(ALICE);
   await assertSucceeds(checkInBatch(alice, ALICE));
-  const after1 = { ...baseUser(ALICE), totalRuns: 5, loggedRuns: 5, runCount: 5, totalMiles: 15.1, lastCheckInDate: DATE, lastCheckInRunId: RUN };
+  const after1 = { ...baseUser(ALICE), totalRuns: 5, loggedRuns: 5, runCount: 5, totalMiles: 15.1, distanceCounts: { '3': 1, '3.1': 1, '3.1 mi': 1 }, lastCheckInDate: DATE, lastCheckInRunId: RUN };
   const edit = (codeWord, totalRuns) => {
     const b = writeBatch(alice);
-    b.set(doc(alice, 'checkins', `${RUN}_${ALICE}`), checkIn(ALICE, { codeWord, actualMiles: 5.2, updatedAt: '2026-11-11T18:30:00.000Z' }));
-    const u = { ...after1, totalRuns, loggedRuns: totalRuns, runCount: totalRuns, totalMiles: 17.2 };
+    b.set(doc(alice, 'checkins', `${RUN}_${ALICE}`), checkIn(ALICE, { codeWord, distanceChoice: 'route-5', actualMiles: 5.2, updatedAt: '2026-11-11T18:30:00.000Z' }));
+    const u = { ...after1, lastCheckInUpdatedAt: '2026-11-11T18:30:00.000Z', totalRuns, loggedRuns: totalRuns, runCount: totalRuns, totalMiles: 17.2, distanceCounts: { '3': 0, '3.1': 0, '3.1 mi': 0, '5': 1, '5.2': 1, '5.2 mi': 1 } };
     b.set(doc(alice, 'users', ALICE), u);
     b.set(doc(alice, 'members', memberKeyFor(ALICE)), memberFromUser(u));
     return b.commit();
@@ -452,8 +502,8 @@ test('self sign-up must start with no runs, badges or legacy claims', async () =
   await assertSucceeds(setDoc(doc(ctx(carol), 'users', carol), freshUser(carol)));
 });
 
-test('runner can refresh badges and streaks but not touch totals that way', async () => {
-  await assertSucceeds(updateDoc(doc(ctx(ALICE), 'users', ALICE), { unlockedBadgeIds: ['first-chuck'], badgeCounts: { 'first-chuck': 1 }, longestStreakWeeks: 3, currentStreakWeeks: 1 }));
+test('runner cannot award badges or streaks without attendance evidence', async () => {
+  await assertFails(updateDoc(doc(ctx(ALICE), 'users', ALICE), { unlockedBadgeIds: ['first-chuck'], badgeCounts: { 'first-chuck': 1 }, longestStreakWeeks: 3, currentStreakWeeks: 1 }));
   await assertFails(updateDoc(doc(ctx(ALICE), 'users', ALICE), { unlockedBadgeIds: [], totalRuns: 99 }));
   await assertFails(updateDoc(doc(ctx(ALICE), 'users', ALICE), { legacyEventRuns: 99 }));
 });
@@ -485,7 +535,7 @@ test('code word can change before check-in opens, and is locked after', async ()
   await env.withSecurityRulesDisabled(async (c) => {
     const db = c.firestore();
     await setDoc(doc(db, 'meetup_events', FUTURE), {
-      id: FUTURE, date: FUTURE, title: 'Later', activeDistances: [], routes: {},
+      id: FUTURE, date: FUTURE, title: 'Later', activeDistances: ['route-3'], routes: { 'route-3': { actualMiles: 3.1, isLoop: false } },
       checkInOpensAt: Timestamp.fromMillis(Date.now() + 86400e3),
       checkInClosesAt: Timestamp.fromMillis(Date.now() + 2 * 86400e3),
     });
@@ -510,7 +560,7 @@ async function seedSecondRun(word = 'PINECONE') {
     const now = Date.now();
     await setDoc(doc(db, 'runs', 'run-2'), { ...run, id: 'run-2', time: '07:00 AM' });
     await setDoc(doc(db, 'meetup_events', 'run-2'), {
-      id: 'run-2', runId: 'run-2', date: DATE, title: 'Morning', activeDistances: [], routes: {},
+      id: 'run-2', runId: 'run-2', date: DATE, title: 'Morning', activeDistances: ['route-3'], routes: { 'route-3': { actualMiles: 3.1, isLoop: false } },
       checkInOpensAt: Timestamp.fromMillis(now - 3600e3),
       checkInClosesAt: Timestamp.fromMillis(now + 7200e3),
     });
@@ -520,9 +570,9 @@ async function seedSecondRun(word = 'PINECONE') {
 }
 
 function checkInToRun(db, email, runId, codeWord, prev = baseUser(email)) {
-  const updated = { ...prev, totalRuns: prev.totalRuns + 1, loggedRuns: prev.loggedRuns + 1, runCount: prev.runCount + 1, totalMiles: prev.totalMiles + 3.1, lastCheckInDate: DATE, lastCheckInRunId: runId };
+  const updated = { ...prev, totalRuns: prev.totalRuns + 1, loggedRuns: prev.loggedRuns + 1, runCount: prev.runCount + 1, totalMiles: prev.totalMiles + 3.1, distanceCounts: Object.fromEntries(['3', '3.1', '3.1 mi'].map((k) => [k, (prev.distanceCounts?.[k] || 0) + 1])), lastCheckInDate: DATE, lastCheckInRunId: runId, lastCheckInUpdatedAt: `${runId}-updated` };
   const b = writeBatch(db);
-  b.set(doc(db, 'checkins', `${runId}_${email}`), checkIn(email, { id: `${runId}_${email}`, runId, codeWord }));
+  b.set(doc(db, 'checkins', `${runId}_${email}`), checkIn(email, { id: `${runId}_${email}`, runId, codeWord, updatedAt: `${runId}-updated` }));
   b.set(doc(db, 'users', email), updated);
   b.set(doc(db, 'members', memberKeyFor(email)), memberFromUser(updated));
   return { batch: b, updated };
@@ -551,7 +601,7 @@ test('a code word can only be used once per day', async () => {
   // A fresh word for a run that hasn't opened yet is fine
   await env.withSecurityRulesDisabled(async (c) => {
     await setDoc(doc(c.firestore(), 'meetup_events', 'run-3'), {
-      id: 'run-3', runId: 'run-3', date: '2099-01-07', title: 'Later', activeDistances: [], routes: {},
+      id: 'run-3', runId: 'run-3', date: '2099-01-07', title: 'Later', activeDistances: ['route-3'], routes: { 'route-3': { actualMiles: 3.1, isLoop: false } },
       checkInOpensAt: Timestamp.fromMillis(Date.now() + 86400e3), checkInClosesAt: Timestamp.fromMillis(Date.now() + 2 * 86400e3),
     });
   });
@@ -601,7 +651,7 @@ test('creating a run with a code word already used that day saves nothing', asyn
   const create = (id, word) => {
     const b = writeBatch(org);
     b.set(doc(org, 'runs', id), { ...run, id, attendees: [] });
-    b.set(doc(org, 'meetup_events', id), { id, runId: id, date: DATE, title: 'X', activeDistances: [], routes: {}, codeWordSet: true, checkInOpensAt: later.opens, checkInClosesAt: later.closes });
+    b.set(doc(org, 'meetup_events', id), { id, runId: id, date: DATE, title: 'X', activeDistances: ['route-3'], routes: { 'route-3': { actualMiles: 3.1, isLoop: false } }, codeWordSet: true, checkInOpensAt: later.opens, checkInClosesAt: later.closes });
     b.set(doc(org, 'meetup_secrets', id), { codeWord: word });
     b.set(doc(org, 'meetup_codes', codeKey(DATE, word)), { runId: id, date: DATE });
     return b.commit();
@@ -615,10 +665,13 @@ test('creating a run with a code word already used that day saves nothing', asyn
 });
 
 test('a run that is not live has no open check-in and no code word lock', async () => {
+  await env.withSecurityRulesDisabled(async (c) => {
+    await setDoc(doc(c.firestore(), 'runs', 'run-draft'), { ...run, id: 'run-draft' });
+  });
   const org = ctx(ORGANIZER);
   await env.withSecurityRulesDisabled(async (c) => {
     await setDoc(doc(c.firestore(), 'meetup_events', 'run-draft'), {
-      id: 'run-draft', runId: 'run-draft', date: DATE, title: 'Draft', activeDistances: [], routes: {}, codeWordSet: false,
+      id: 'run-draft', runId: 'run-draft', date: DATE, title: 'Draft', activeDistances: ['route-3'], routes: { 'route-3': { actualMiles: 3.1, isLoop: false } }, codeWordSet: false,
       checkInOpensAt: Timestamp.fromMillis(Date.now() - 3600e3), checkInClosesAt: Timestamp.fromMillis(Date.now() + 7200e3),
     });
   });
@@ -640,7 +693,7 @@ test('past runs can\'t be edited; RSVP clean-up and admin delete still work', as
     const db = c.firestore();
     await setDoc(doc(db, 'runs', 'run-past'), { ...run, id: 'run-past', attendees: [{ memberId: memberKeyFor(ALICE), name: 'Alice', checkedIn: false, rsvpDate: 'x' }] });
     await setDoc(doc(db, 'meetup_events', 'run-past'), {
-      id: 'run-past', runId: 'run-past', date: '2026-01-07', title: 'Past', activeDistances: [], routes: {},
+      id: 'run-past', runId: 'run-past', date: '2026-01-07', title: 'Past', activeDistances: ['route-3'], routes: { 'route-3': { actualMiles: 3.1, isLoop: false } },
       checkInOpensAt: Timestamp.fromMillis(Date.now() - 3 * 86400e3), checkInClosesAt: Timestamp.fromMillis(Date.now() - 2 * 86400e3),
     });
   });
@@ -689,4 +742,81 @@ test('announcements: public read, admins post and delete, no edits', async () =>
   await assertFails(updateDoc(doc(ctx(BOOTSTRAP), 'announcements', a.id), { title: 'Edited' }));
   await assertFails(deleteDoc(doc(ctx(ALICE), 'announcements', a.id)));
   await assertSucceeds(deleteDoc(doc(ctx(BOOTSTRAP), 'announcements', a.id)));
+});
+
+test('a locked code-word change rolls back the entire run edit', async () => {
+  const db = ctx(ORGANIZER);
+  const batch = writeBatch(db);
+  batch.update(doc(db, 'runs', RUN), { title: 'Should not save' });
+  batch.update(doc(db, 'meetup_events', RUN), { title: 'Should not save' });
+  batch.set(doc(db, 'meetup_secrets', RUN), { codeWord: 'CHANGED' });
+  await assertFails(batch.commit());
+  assert.equal((await getDoc(doc(db, 'runs', RUN))).data().title, run.title);
+  assert.equal((await getDoc(doc(db, 'meetup_secrets', RUN))).data().codeWord, 'ACORN');
+});
+
+test('a pre-window run edit saves its code word atomically and preserves RSVPs', async () => {
+  await env.clearFirestore();
+  await seed({ windowOpen: false });
+  const attendee = { memberId: memberKeyFor(BOB), name: 'Bob', checkedIn: false, rsvpDate: 'original' };
+  await env.withSecurityRulesDisabled(async (c) => {
+    await updateDoc(doc(c.firestore(), 'runs', RUN), { attendees: [attendee] });
+  });
+  const db = ctx(ORGANIZER);
+  const batch = writeBatch(db);
+  batch.update(doc(db, 'runs', RUN), { title: 'New title' });
+  batch.update(doc(db, 'meetup_events', RUN), { title: 'New title', codeWordSet: true });
+  batch.set(doc(db, 'meetup_secrets', RUN), { codeWord: 'LEAF' });
+  batch.set(doc(db, 'meetup_codes', codeKey(DATE, 'LEAF')), { runId: RUN, date: DATE });
+  batch.delete(doc(db, 'meetup_codes', codeKey(DATE, 'ACORN')));
+  await assertSucceeds(batch.commit());
+  const saved = (await getDoc(doc(db, 'runs', RUN))).data();
+  assert.equal(saved.title, 'New title');
+  assert.deepEqual(saved.attendees, [attendee]);
+  assert.equal((await getDoc(doc(db, 'meetup_secrets', RUN))).data().codeWord, 'LEAF');
+  assert.equal((await getDoc(doc(db, 'meetup_codes', codeKey(DATE, 'ACORN')))).exists(), false);
+});
+
+
+test('mileage must match an active route and edits apply only the mileage delta', async () => {
+  const alice = ctx(ALICE);
+  await assertFails(setDoc(doc(alice, 'checkins', `${RUN}_${ALICE}`), checkIn(ALICE, { distanceChoice: 'unknown', actualMiles: 50 })));
+  await assertFails(setDoc(doc(alice, 'checkins', `${RUN}_${ALICE}`), checkIn(ALICE, { actualMiles: 50 })));
+  await assertSucceeds(checkInBatch(alice, ALICE));
+  const batch = writeBatch(alice);
+  batch.update(doc(alice, 'checkins', `${RUN}_${ALICE}`), { updatedAt: '2026-11-11T18:45:00.000Z' });
+  batch.update(doc(alice, 'users', ALICE), { totalMiles: 18.2 });
+  await assertFails(batch.commit());
+});
+
+test('deletion fences reject new check-ins', async () => {
+  await env.withSecurityRulesDisabled(async (c) => {
+    await updateDoc(doc(c.firestore(), 'runs', RUN), { deleting: true });
+  });
+  await assertFails(checkInBatch(ctx(ALICE), ALICE));
+});
+
+test('an opened event cannot be rescheduled to unlock its code word', async () => {
+  await assertFails(updateDoc(doc(ctx(ORGANIZER), 'meetup_events', RUN), {
+    checkInOpensAt: Timestamp.fromMillis(Date.now() + 3600000),
+  }));
+});
+
+test('a loop route can credit 20 laps, but fractional-cent mileage cannot accumulate', async () => {
+  await env.withSecurityRulesDisabled(async (c) => {
+    await updateDoc(doc(c.firestore(), 'meetup_events', RUN), { 'routes.route-3.isLoop': true });
+  });
+  const alice = ctx(ALICE);
+  const c = checkIn(ALICE, { actualMiles: 62, loops: 20 });
+  const u = { ...baseUser(ALICE), totalRuns: 5, loggedRuns: 5, runCount: 5, totalMiles: 74,
+    lastCheckInDate: DATE, lastCheckInRunId: RUN, lastCheckInUpdatedAt: c.updatedAt,
+    distanceCounts: { '5': 1, '62.0': 1, '62.0 mi': 1 } };
+  const batch = writeBatch(alice);
+  batch.set(doc(alice, 'checkins', c.id), c);
+  batch.set(doc(alice, 'users', ALICE), u);
+  await assertSucceeds(batch.commit());
+  const edit = writeBatch(alice);
+  edit.update(doc(alice, 'checkins', c.id), { actualMiles: 62.004, updatedAt: '2026-11-11T19:00:00Z' });
+  edit.update(doc(alice, 'users', ALICE), { totalMiles: 74.004, lastCheckInUpdatedAt: '2026-11-11T19:00:00Z' });
+  await assertFails(edit.commit());
 });

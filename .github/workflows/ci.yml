@@ -11,7 +11,7 @@ concurrency:
 
 jobs:
   check:
-    name: Type-check, lint, build, rules tests
+    name: Type-check, lint, unit tests, build, rules tests
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -19,7 +19,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
 
       # The Firestore emulator (rules tests) needs Java.
@@ -36,15 +36,30 @@ jobs:
 
       - run: npm ci
 
+      - name: Dependency audit
+        run: npm run audit:dependencies
+
       - name: Type-check
         run: npm run typecheck
 
       - name: Lint
         run: npm run lint
 
+      - name: Unit tests
+        run: npm test
+
+      - name: Local resolver fork compatibility
+        run: npm run test:resolver
+
       # Builds in local mode (no Firebase env vars in CI); catches bundling errors.
       - name: Build
         run: npm run build
+
+      - name: Lazy bundle boundaries
+        run: npm run check:bundle
+
+      - name: Store transaction integration
+        run: npm run test:integration
 
       - name: Firestore rules tests
         run: npm run test:rules

@@ -13,9 +13,10 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { GPXRoute, SurfaceType, DifficultyType, RouteTurnStep, RouteExternalLinks } from '../types';
-import { generateRouteDirectionsFromGpx, offsetPolylineCoords } from '../utils/routeEngine';
-import { parseGPX } from '../utils/gpxParser';
-import { CARTO_VOYAGER_LABELS_URL, CARTO_VOYAGER_NOLABELS_URL, MAP_ATTRIBUTION } from '../utils/mapConfig';
+import { generateRouteDirectionsFromGpx } from '../utils/routeEngine';
+import { exportToGPXString, parseGPX } from '../utils/gpxParser';
+import { CARTO_VOYAGER_NOLABELS_URL } from '../utils/mapConfig';
+import { addBaseLayers, drawRoute, drawTurnPins } from '../utils/mapLayers';
 
 interface RouteStudioModalProps {
   isOpen: boolean;
@@ -32,6 +33,11 @@ export const RouteStudioModal: React.FC<RouteStudioModalProps> = ({
   onSaveRoute,
   onDeleteRoute,
 }) => {
+  const generation = useRef<AbortController | null>(null);
+  useEffect(() => {
+    if (!isOpen) generation.current?.abort();
+    return () => { generation.current?.abort(); };
+  }, [isOpen, existingRoute]);
   // Form fields
   const [name, setName] = useState<string>('');
   const [description, setDescription] = useState<string>('');
@@ -68,8 +74,9 @@ export const RouteStudioModal: React.FC<RouteStudioModalProps> = ({
   // Map references
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
-  const polylineRef = useRef<L.Polyline | null>(null);
+  const routeLayerRef = useRef<L.LayerGroup | null>(null);
   const markersGroupRef = useRef<L.LayerGroup | null>(null);
+  const [mapReady, setMapReady] = useState<boolean>(false);
 
   // Initialize from existing route or reset
   useEffect(() => {
@@ -82,29 +89,14 @@ export const RouteStudioModal: React.FC<RouteStudioModalProps> = ({
       setMeasuredMiles(existingRoute.distanceMiles || 0);
       setElevationGainFt(existingRoute.elevationGainFt || 0);
       setPoints(existingRoute.points || []);
-      setGpxXml(existingRoute.gpxXml || '');
-      
-      let initDirs = existingRoute.directions || [];
-      if (typeof initDirs === 'string') {
-        try {
-          initDirs = JSON.parse(initDirs);
-        } catch (e) {
-          initDirs = [];
-        }
-      }
-      setDirections(Array.isArray(initDirs) ? initDirs : []);
-
-      let initGeoJson = existingRoute.geoJson || null;
-      if (typeof initGeoJson === 'string') {
-        try {
-          initGeoJson = JSON.parse(initGeoJson);
-        } catch (e) {
-          initGeoJson = null;
-        }
-      }
-      setGeoJson(initGeoJson);
+      // Saved routes don't keep the raw GPX file; rebuild it from the points so
+      // "Regenerate directions" still works.
+      setGpxXml(existingRoute.gpxXml || (existingRoute.points?.length ? exportToGPXString(existingRoute) : ''));
+      // Routes reach here already hydrated (hydrateRouteFromFirestore parses directions/geoJson).
+      setDirections(Array.isArray(existingRoute.directions) ? existingRoute.directions : []);
+      setGeoJson(existingRoute.geoJson || null);
       setCustomDistanceLabel(existingRoute.customDistanceLabel || (existingRoute as any).targetDistanceTier || '');
-      setIsLoop(Boolean(existingRoute.isLoop));
+      setIsLoop(existingRoute.isLoop === true);
       setMaxLoops(existingRoute.maxLoops || 4);
 
       setStravaUrl(existingRoute.externalLinks?.stravaUrl || '');
@@ -132,138 +124,49 @@ export const RouteStudioModal: React.FC<RouteStudioModalProps> = ({
       setGeoJson(null);
     }
     setErrorMsg(null);
+    setIsProcessing(false);
+    setProcessingStatus('');
     setSelectedStepIndex(null);
   }, [existingRoute, isOpen]);
 
-  // Leaflet map setup & updates
+  // Leaflet map: created once while the studio is open, removed when it closes.
   useEffect(() => {
     if (!isOpen || !mapContainerRef.current) return;
+    const map = L.map(mapContainerRef.current, {
+      center: [38.6781, -121.7712], // Blue Note Brewing patio coordinates
+      zoom: 14,
+      scrollWheelZoom: false,
+    });
+    addBaseLayers(map, CARTO_VOYAGER_NOLABELS_URL);
+    mapInstanceRef.current = map;
+    routeLayerRef.current = L.layerGroup().addTo(map);
+    markersGroupRef.current = L.layerGroup().addTo(map);
+    setMapReady(true);
+    return () => {
+      map.remove();
+      mapInstanceRef.current = null;
+      routeLayerRef.current = null;
+      markersGroupRef.current = null;
+      setMapReady(false);
+    };
+  }, [isOpen]);
 
-    if (!mapInstanceRef.current) {
-      const map = L.map(mapContainerRef.current, {
-        center: [38.6781, -121.7712], // Blue Note Brewing patio coordinates
-        zoom: 14,
-        scrollWheelZoom: false,
-      });
-
-      L.tileLayer(CARTO_VOYAGER_NOLABELS_URL, {
-        maxZoom: 19,
-        attribution: MAP_ATTRIBUTION,
-      }).addTo(map);
-
-      // Dedicated label pane on top of route line
-      map.createPane('streetLabelsPane');
-      const labelsPane = map.getPane('streetLabelsPane');
-      if (labelsPane) {
-        labelsPane.style.zIndex = '450';
-        labelsPane.style.pointerEvents = 'none';
-      }
-
-      L.tileLayer(CARTO_VOYAGER_LABELS_URL, {
-        pane: 'streetLabelsPane',
-        maxZoom: 19,
-      }).addTo(map);
-
-      mapInstanceRef.current = map;
-      markersGroupRef.current = L.layerGroup().addTo(map);
-    }
-
+  // Route line + start/finish pins; fit the map to a newly loaded track.
+  useEffect(() => {
     const map = mapInstanceRef.current;
-    if (!map) return;
+    const layer = routeLayerRef.current;
+    if (!mapReady || !map || !layer) return;
+    layer.clearLayers();
+    const line = drawRoute(layer, points);
+    if (line) map.fitBounds(line.getBounds(), { padding: [30, 30] });
+  }, [mapReady, points]);
 
-    // Clear previous vector layers
-    if (polylineRef.current) {
-      polylineRef.current.remove();
-      polylineRef.current = null;
+  // Numbered turn pins; only these redraw when a step is selected.
+  useEffect(() => {
+    if (mapReady && markersGroupRef.current) {
+      drawTurnPins(markersGroupRef.current, directions, selectedStepIndex, setSelectedStepIndex, { normal: 20, selected: 26 });
     }
-    if (markersGroupRef.current) {
-      markersGroupRef.current.clearLayers();
-    }
-
-    // Plot polyline
-    if (points && points.length > 0) {
-      const latLngs: [number, number][] = points.map((p) => [p.lat, p.lon]);
-      // Offset polyline by 3.5m to right sidewalk so centerline street names stay visible
-      const offsetLatLngs = offsetPolylineCoords(latLngs, 3.5);
-
-      const poly = L.polyline(offsetLatLngs, {
-        color: '#1a607c',
-        weight: 4,
-        opacity: 0.85,
-        lineCap: 'round',
-        lineJoin: 'round',
-      }).addTo(map);
-
-      polylineRef.current = poly;
-      map.fitBounds(poly.getBounds(), { padding: [30, 30] });
-
-      const startPt = latLngs[0];
-      const endPt = latLngs[latLngs.length - 1];
-
-      // Check if start and finish are at the same location (e.g. within 60m)
-      const isStartFinishSame = Math.hypot(startPt[0] - endPt[0], startPt[1] - endPt[1]) < 0.0006;
-
-      if (isStartFinishSame) {
-        // Unified Blue Note (Start/End) Pin
-        const combinedIcon = L.divIcon({
-          className: 'custom-start-finish-pin',
-          html: `<div style="background:linear-gradient(135deg, #1a607c 0%, #13495d 100%);color:white;padding:3.5px 8px;border-radius:12px;font-size:10px;font-weight:900;border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.4);display:flex;align-items:center;gap:4px;white-space:nowrap;">
-            <span>🍺</span> Blue Note (Start/End) <span>🏁</span>
-          </div>`,
-          iconSize: [160, 24],
-          iconAnchor: [80, 12],
-        });
-        L.marker(startPt, { icon: combinedIcon, zIndexOffset: 500 }).addTo(markersGroupRef.current!);
-      } else {
-        // Separate Start Marker at Blue Note
-        const startIcon = L.divIcon({
-          className: 'custom-start-pin',
-          html: `<div style="background-color:#1a607c;color:white;padding:3px 7px;border-radius:12px;font-size:10px;font-weight:900;border:2px solid white;box-shadow:0 2px 5px rgba(0,0,0,0.4);white-space:nowrap;display:flex;align-items:center;gap:3px;">
-            <span>🍺</span> Blue Note (Start)
-          </div>`,
-          iconSize: [120, 24],
-          iconAnchor: [60, 12],
-        });
-        L.marker(startPt, { icon: startIcon, zIndexOffset: 500 }).addTo(markersGroupRef.current!);
-
-        // Separate Finish Marker
-        const finishIcon = L.divIcon({
-          className: 'custom-end-pin',
-          html: `<div style="background-color:#de9c1e;color:#0d1113;padding:3px 7px;border-radius:12px;font-size:10px;font-weight:900;border:2px solid white;box-shadow:0 2px 5px rgba(0,0,0,0.4);white-space:nowrap;display:flex;align-items:center;gap:3px;">
-            <span>🏁</span> FINISH
-          </div>`,
-          iconSize: [64, 24],
-          iconAnchor: [32, 12],
-        });
-        L.marker(endPt, { icon: finishIcon, zIndexOffset: 500 }).addTo(markersGroupRef.current!);
-      }
-
-      // Add Numbered Turn Pins if directions exist
-      if (directions && directions.length > 0) {
-        directions.forEach((step, idx) => {
-          if (!step.point) return;
-          const [lon, lat] = step.point;
-          const isSelected = selectedStepIndex === idx;
-
-          const turnIcon = L.divIcon({
-            className: 'custom-turn-pin',
-            html: `<div style="background-color:${isSelected ? '#de9c1e' : '#1a607c'};color:${isSelected ? '#000' : '#fff'};width:${isSelected ? '26px' : '20px'};height:${isSelected ? '26px' : '20px'};border-radius:50%;font-size:${isSelected ? '12px' : '10px'};font-weight:900;display:flex;align-items:center;justify-content:center;border:2px solid white;box-shadow:0 1px 4px rgba(0,0,0,0.35);transition:all 0.2s;">
-              ${step.step}
-            </div>`,
-            iconSize: [26, 26],
-            iconAnchor: [13, 13],
-          });
-
-          const marker = L.marker([lat, lon], { icon: turnIcon });
-          marker.on('click', () => {
-            setSelectedStepIndex(idx);
-          });
-          marker.bindTooltip(`<b>#${step.step}</b> ${step.instruction_concise}`, { direction: 'top', offset: [0, -10] });
-          markersGroupRef.current?.addLayer(marker);
-        });
-      }
-    }
-  }, [isOpen, points, directions, selectedStepIndex]);
+  }, [mapReady, directions, selectedStepIndex]);
 
   // When selectedStepIndex changes, pan the map to that turn pin
   useEffect(() => {
@@ -282,40 +185,41 @@ export const RouteStudioModal: React.FC<RouteStudioModalProps> = ({
       return;
     }
 
+    generation.current?.abort();
+    const job = new AbortController();
+    generation.current = job;
     try {
       setErrorMsg(null);
       setIsProcessing(true);
-      setGpxFileName(file.name);
       setProcessingStatus('Reading GPX track file...');
 
       const text = await file.text();
-      setGpxXml(text);
+      if (job.signal.aborted) return;
 
       const parsed = parseGPX(text, file.name);
       if (!parsed.points || parsed.points.length < 2) {
         throw new Error('GPX file does not contain enough track points.');
       }
 
-      setPoints(parsed.points);
-      const mMiles = parsed.distanceMiles || 0;
-      setMeasuredMiles(mMiles);
-      setElevationGainFt(parsed.elevationGainFt || 0);
-
-      // Default Name from GPX if not already filled
-      if (!name) {
-        setName(parsed.name || file.name.replace(/\.gpx$/i, ''));
-      }
-
       // Run In-Browser Directions Engine!
       const result = await generateRouteDirectionsFromGpx(text, file.name, {
+        parsed, signal: job.signal,
         onProgress: (status) => setProcessingStatus(status),
       });
 
+      if (job.signal.aborted) return;
+      setGpxXml(text);
+      setGpxFileName(file.name);
+      setPoints(parsed.points!);
+      setMeasuredMiles(parsed.distanceMiles || 0);
+      setElevationGainFt(parsed.elevationGainFt || 0);
+      if (!name) setName(parsed.name || file.name.replace(/\.gpx$/i, ''));
       setDirections(result.directions);
       setGeoJson(result.geoJson);
       setIsProcessing(false);
       setProcessingStatus('');
     } catch (err: any) {
+      if (job.signal.aborted) return;
       console.error('GPX Processing Error:', err);
       setErrorMsg(err.message || 'Error processing GPX file.');
       setIsProcessing(false);
@@ -326,17 +230,22 @@ export const RouteStudioModal: React.FC<RouteStudioModalProps> = ({
   // Re-run Engine on current GPX
   const handleRegenerateDirections = async () => {
     if (!gpxXml) return;
+    generation.current?.abort();
+    const job = new AbortController();
+    generation.current = job;
     try {
       setErrorMsg(null);
       setIsProcessing(true);
       const result = await generateRouteDirectionsFromGpx(gpxXml, gpxFileName || 'route.gpx', {
-        name,
+        name, signal: job.signal,
         onProgress: (status) => setProcessingStatus(status),
       });
+      if (job.signal.aborted) return;
       setDirections(result.directions);
       setGeoJson(result.geoJson);
       setIsProcessing(false);
     } catch (err: any) {
+      if (job.signal.aborted) return;
       setErrorMsg(err.message || 'Error generating directions.');
       setIsProcessing(false);
     }
@@ -468,7 +377,7 @@ export const RouteStudioModal: React.FC<RouteStudioModalProps> = ({
             </div>
             <div>
               <h3 className="font-extrabold text-base sm:text-lg font-display tracking-wide uppercase">
-                {existingRoute ? 'Edit Route Studio' : 'Create & Upload Club Route'}
+                {existingRoute ? 'Save New Route Version' : 'Create & Upload Club Route'}
               </h3>
               <p className="text-xs text-woodland-200 font-sans">
                 Turn-by-turn cue generator • GeoJSON compiler • Strava &amp; Garmin links
@@ -961,7 +870,7 @@ export const RouteStudioModal: React.FC<RouteStudioModalProps> = ({
                 ) : (
                   <>
                     <Save className="w-4 h-4 text-amber-300" />
-                    <span>{existingRoute ? 'Save Route Changes' : 'Save Route to Library'}</span>
+                    <span>{existingRoute ? 'Save New Route Version' : 'Save Route to Library'}</span>
                   </>
                 )}
               </button>

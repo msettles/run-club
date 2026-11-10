@@ -58,10 +58,11 @@ out tags geom;`;
   let lastError: any = null;
 
   for (const url of OVERPASS_URLS) {
+    const controller = new AbortController();
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
     try {
-      const controller = new AbortController();
       // 10-second timeout per mirror
-      const timeoutId = setTimeout(() => controller.abort(new Error(`Timeout connecting to ${url}`)), 10000);
+      timeoutId = setTimeout(() => controller.abort(new Error(`Timeout connecting to ${url}`)), 10000);
 
       const response = await fetch(url, {
         method: 'POST',
@@ -72,7 +73,6 @@ out tags geom;`;
         signal: controller.signal,
       });
 
-      clearTimeout(timeoutId);
 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status} ${response.statusText}`);
@@ -85,7 +85,7 @@ out tags geom;`;
     } catch (err: any) {
       lastError = err;
       console.warn(`Overpass mirror ${url} failed:`, err?.message || err);
-    }
+    } finally { clearTimeout(timeoutId); }
   }
 
   // Non-fatal fallback: When public Overpass servers are down, rate limited, or slow,

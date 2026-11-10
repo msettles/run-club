@@ -1,3 +1,4 @@
+import { formatMiles, roundMiles } from '../utils/miles';
 import React from 'react';
 import { RunEvent, Member, GPXRoute } from '../types';
 import { ResolvedChoice } from '../utils/runChoices';
@@ -41,8 +42,8 @@ export const RunCard: React.FC<RunCardProps> = ({
     ? [
         {
           id: route.id,
-          label: `${(Math.round(route.distanceMiles * 10) / 10).toFixed(1)} mi • ${route.name}`,
-          miles: Math.round(route.distanceMiles * 10) / 10,
+          label: `${formatMiles(route.distanceMiles)} mi • ${route.name}`,
+          miles: roundMiles(route.distanceMiles),
           actualMiles: route.distanceMiles,
           route,
         },
@@ -58,7 +59,7 @@ export const RunCard: React.FC<RunCardProps> = ({
   const handleAddToCalendar = () => {
     const distanceText = choices.length
       ? choices.map((c) => `${c.miles.toFixed(1)} mi (${c.route.name})`).join(', ')
-      : `${(Math.round(run.distanceMiles * 10) / 10).toFixed(1)} miles`;
+      : `${formatMiles(run.distanceMiles)} miles`;
     const icsContent = buildRunIcs(run, distanceText);
 
     const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
@@ -120,7 +121,7 @@ export const RunCard: React.FC<RunCardProps> = ({
               ))
             ) : (
               <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-stone-100 text-stone-700">
-                {(Math.round(run.distanceMiles * 10) / 10).toFixed(1)} mi
+                {formatMiles(run.distanceMiles)} mi
               </span>
             )}
             {run.elevationGainFt > 0 && (
@@ -212,7 +213,7 @@ export const RunCard: React.FC<RunCardProps> = ({
                     <span>Map &amp; Turns {choice.route.directions?.length ? `(${choice.route.directions.length})` : ''}</span>
                   </button>
 
-                  {choice.route.externalLinks?.stravaUrl && (
+                  {choice.route.externalLinks?.stravaUrl?.trim() && (
                     <a
                       href={choice.route.externalLinks.stravaUrl}
                       target="_blank"
@@ -223,7 +224,7 @@ export const RunCard: React.FC<RunCardProps> = ({
                       Strava
                     </a>
                   )}
-                  {choice.route.externalLinks?.garminUrl && (
+                  {choice.route.externalLinks?.garminUrl?.trim() && (
                     <a
                       href={choice.route.externalLinks.garminUrl}
                       target="_blank"
@@ -234,7 +235,7 @@ export const RunCard: React.FC<RunCardProps> = ({
                       Garmin
                     </a>
                   )}
-                  {choice.route.externalLinks?.rungoUrl && (
+                  {choice.route.externalLinks?.rungoUrl?.trim() && (
                     <a
                       href={choice.route.externalLinks.rungoUrl}
                       target="_blank"

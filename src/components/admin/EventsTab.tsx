@@ -1,5 +1,5 @@
 import React from 'react';
-import { INITIAL_SPECIAL_EVENTS } from '../../data/initialData';
+import { INITIAL_SPECIAL_EVENTS } from '../../data/catalog';
 import { 
   Calendar, 
   Plus,
@@ -60,7 +60,7 @@ export const EventsTab: React.FC<AdminDashboardProps> = (props) => {
         <div className="space-y-2.5 max-h-[500px] overflow-y-auto">
           {meetupEvents.map((evt) => (
             <div
-              key={evt.date}
+              key={evt.id}
               className="p-3.5 bg-stone-50 rounded-xl border border-stone-200 text-xs space-y-2"
             >
               <div className="flex items-center justify-between">

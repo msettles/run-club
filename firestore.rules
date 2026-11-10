@@ -152,14 +152,33 @@ service cloud.firestore {
       return exists(ev) && get(ev).data.get('codeWordSet', true) != false;
     }
 
+    function participationAllowed(runId, email) {
+      let run = /databases/$(database)/documents/runs/$(runId);
+      return legacyClaimsOpen() && exists(run) && !get(run).data.get('deleting', false) &&
+        exists(userPath(email)) && !get(userPath(email)).data.get('deleting', false);
+    }
+
+    function checkInMetadataMatches(c) {
+      let ev = get(eventPath(c.runId)).data;
+      return (!('eventTitle' in c) || c.eventTitle == ev.get('title', '')) &&
+        (!('eventSpecial' in c) || c.eventSpecial == ev.get('specialEvent', 'none'));
+    }
+    function validRouteCredit(c) {
+      let ev = get(eventPath(c.runId)).data;
+      let key = c.distanceChoice is string ? c.distanceChoice : string(c.distanceChoice);
+      let route = ev.routes.get(key, null);
+      let loops = c.get('loops', 1);
+      return route is map && key in ev.activeDistances && loops is int && loops >= 1 && loops <= 20 &&
+        (route.get('isLoop', false) || loops == 1) &&
+        math.abs(c.actualMiles * 100 - math.round(c.actualMiles * 100)) < 0.000001 &&
+        math.round(c.actualMiles * 100) == math.round((loops > 1 ? route.get('baseMiles', route.actualMiles) : route.actualMiles) * loops * 100);
+    }
+
     function isInsideCheckInWindow(runId, date) {
-      let ev = eventPath(runId);
-      return isRunLive(runId) &&
-        get(ev).data.get('date', '') == date &&
-        get(ev).data.get('checkInOpensAt', null) is timestamp &&
-        get(ev).data.get('checkInClosesAt', null) is timestamp &&
-        request.time >= get(ev).data.checkInOpensAt &&
-        request.time <= get(ev).data.checkInClosesAt;
+      let ev = get(eventPath(runId)).data;
+      return ev.get('codeWordSet', true) != false && ev.date == date &&
+        ev.checkInOpensAt is timestamp && ev.checkInClosesAt is timestamp &&
+        request.time >= ev.checkInOpensAt && request.time <= ev.checkInClosesAt;
     }
 
     // The run is over: its check-in window has closed. Past runs can't be edited.
@@ -209,7 +228,7 @@ service cloud.firestore {
                'id', 'title', 'date', 'time', 'locationName', 'meetingCoordinates',
                'address', 'distanceMiles', 'surface', 'elevationGainFt', 'description',
                'routeId', 'routeChoices', 'paceGroups', 'attendees', 'organizerName',
-               'completed', 'specialEvent'
+               'completed', 'specialEvent', 'deleting'
              ]) &&
              data.keys().hasAll([
                'id', 'title', 'date', 'time', 'locationName', 'address',
@@ -233,31 +252,35 @@ service cloud.firestore {
              (!('routeChoices' in data) || (data.routeChoices is list && data.routeChoices.size() <= 20)) &&
              (!('completed' in data) || (data.completed is bool)) &&
              (!('specialEvent' in data) || (data.specialEvent is string && data.specialEvent.size() <= 50)) &&
+             (!('deleting' in data) || data.deleting is bool) &&
              (!('meetingCoordinates' in data) || isValidCoordinates(data.meetingCoordinates));
     }
 
     // A runner may only add or remove their own RSVP entry; nothing else on the run changes.
-    function isOwnRsvpToggle() {
+    function isOwnRsvpToggle(runId) {
       let before = resource.data.attendees;
       let after = request.resource.data.attendees;
       let added = after.removeAll(before);
       let removed = before.removeAll(after);
       let myKey = memberKeyFor(tokenEmail());
-      return hasVerifiedEmail() &&
+      return hasVerifiedEmail() && after is list && after.size() <= 500 && !resource.data.get('deleting', false) && !get(userPath(tokenEmail())).data.get('deleting', false) &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['attendees']) &&
         (
           (added.size() == 1 && removed.size() == 0 &&
            after.size() == before.size() + 1 &&
-           isValidAttendee(added[0]) && added[0].memberId == myKey && added[0].checkedIn == false) ||
+           isValidAttendee(added[0]) && added[0].memberId == myKey && (added[0].checkedIn == false || existsAfter(checkinPath(runId, tokenEmail())))) ||
           (removed.size() == 1 && added.size() == 0 &&
            after.size() == before.size() - 1 &&
-           removed[0].memberId == myKey)
+           removed[0].memberId == myKey && !existsAfter(checkinPath(runId, tokenEmail()))) ||
+          (added.size() == 1 && removed.size() == 1 && after.size() == before.size() &&
+           added[0].memberId == myKey && removed[0].memberId == myKey &&
+           isValidAttendee(added[0]) && added[0].checkedIn == true && existsAfter(checkinPath(runId, tokenEmail())))
         );
     }
 
     function isOwnLegacyClaim(id) {
       let me = tokenEmail();
-      return hasVerifiedEmail() &&
+      return hasVerifiedEmail() && legacyClaimsOpen() && !get(userPath(me)).data.get('deleting', false) &&
         resource.data.get('claimedBy', null) == null &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['claimedBy', 'claimedAt']) &&
         request.resource.data.claimedBy == memberKeyFor(me) &&
@@ -271,7 +294,7 @@ service cloud.firestore {
                'id', 'name', 'description', 'distanceMiles', 'elevationGainFt',
                'points', 'surface', 'difficulty', 'customDistanceLabel', 'isLoop',
                'maxLoops', 'directions', 'geoJson', 'externalLinks', 'notes',
-               'gpxXml', 'createdAt', 'updatedAt', 'thumbnailUrl'
+               'gpxXml', 'createdAt', 'updatedAt', 'thumbnailUrl', 'referenced'
              ]) &&
              data.keys().hasAll([
                'id', 'name', 'description', 'distanceMiles', 'elevationGainFt',
@@ -287,6 +310,7 @@ service cloud.firestore {
              data.difficulty is string && data.difficulty in ['Easy', 'Moderate', 'Challenging'] &&
              data.createdAt is string && data.createdAt.size() >= 8 && data.createdAt.size() <= 40 &&
              (!('customDistanceLabel' in data) || (data.customDistanceLabel is string && data.customDistanceLabel.size() <= 50)) &&
+             (!('referenced' in data) || data.referenced is bool) &&
              (!('isLoop' in data) || (data.isLoop is bool)) &&
              (!('maxLoops' in data) || (data.maxLoops is number && data.maxLoops >= 1 && data.maxLoops <= 20)) &&
              (!('directions' in data) || (data.directions is list && data.directions.size() <= 200) || (data.directions is string && data.directions.size() <= 400000)) &&
@@ -301,7 +325,7 @@ service cloud.firestore {
       return data.keys().hasOnly([
                'id', 'name', 'avatarUrl', 'totalRuns', 'totalMiles', 'runCount',
                'walkCount', 'petRunCount', 'streak', 'favoritePace',
-               'unlockedBadgeIds', 'badgeCounts', 'joinedDate'
+               'unlockedBadgeIds', 'badgeCounts', 'joinedDate', 'lastCheckInDate', 'streakProofWeek'
              ]) &&
              data.keys().hasAll([
                'id', 'name', 'totalRuns', 'totalMiles', 'streak',
@@ -318,8 +342,10 @@ service cloud.firestore {
              (!('runCount' in data) || data.runCount is number) &&
              (!('walkCount' in data) || data.walkCount is number) &&
              (!('petRunCount' in data) || data.petRunCount is number) &&
+             (!('streakProofWeek' in data) || data.streakProofWeek is int) &&
              (!('badgeCounts' in data) || data.badgeCounts is map) &&
-             (!('avatarUrl' in data) || (data.avatarUrl is string && data.avatarUrl.size() <= 1000));
+             (!('avatarUrl' in data) || (data.avatarUrl is string && data.avatarUrl.size() <= 1000)) &&
+             (!('lastCheckInDate' in data) || (data.lastCheckInDate is string && data.lastCheckInDate.size() <= 30));
     }
 
     // The leaderboard row must mirror the user doc as it stands after this batch.
@@ -328,14 +354,19 @@ service cloud.firestore {
       return data.name == u.displayName &&
         data.totalRuns == u.totalRuns &&
         data.totalMiles == u.totalMiles &&
-        data.unlockedBadgeIds == u.unlockedBadgeIds;
+        data.unlockedBadgeIds == u.unlockedBadgeIds &&
+        data.get('badgeCounts', {}) == u.get('badgeCounts', {}) &&
+        data.get('streak', 0) == u.get('currentStreakWeeks', 0) && data.get('streakProofWeek', 0) == u.get('streakProofWeek', 0) &&
+        data.get('runCount', 0) == u.runCount && data.get('walkCount', 0) == u.walkCount &&
+        data.get('petRunCount', 0) == u.get('petRunCount', 0) &&
+        data.get('lastCheckInDate', '') == u.get('lastCheckInDate', '');
     }
 
     function isValidCheckIn(data) {
       return data.keys().hasOnly([
                'id', 'runId', 'date', 'time', 'userEmail', 'activity', 'distanceChoice',
                'actualMiles', 'createdAt', 'updatedAt', 'runnerName', 'routeName',
-               'loops', 'withPet', 'source', 'codeWord'
+               'loops', 'withPet', 'source', 'codeWord', 'eventTitle', 'eventSpecial'
              ]) &&
              data.keys().hasAll([
                'id', 'runId', 'date', 'time', 'userEmail', 'activity', 'distanceChoice',
@@ -351,9 +382,11 @@ service cloud.firestore {
                (data.distanceChoice is string && data.distanceChoice.size() <= 100) ||
                (data.distanceChoice is number && data.distanceChoice >= 0 && data.distanceChoice <= 100)
              ) &&
-             data.actualMiles is number && data.actualMiles >= 0 && data.actualMiles <= 50 &&
+             data.actualMiles is number && data.actualMiles >= 0 && data.actualMiles <= 10000 &&
              data.createdAt is string && data.createdAt.size() >= 8 && data.createdAt.size() <= 40 &&
              data.updatedAt is string && data.updatedAt.size() >= 8 && data.updatedAt.size() <= 40 &&
+             (!('eventTitle' in data) || (data.eventTitle is string && data.eventTitle.size() <= 150)) &&
+             (!('eventSpecial' in data) || (data.eventSpecial is string && data.eventSpecial.size() <= 100)) &&
              (!('runnerName' in data) || (data.runnerName is string && data.runnerName.size() <= 100)) &&
              (!('routeName' in data) || (data.routeName is string && data.routeName.size() <= 150)) &&
              (!('loops' in data) || (data.loops is number && data.loops >= 0 && data.loops <= 20)) &&
@@ -370,7 +403,7 @@ service cloud.firestore {
                'createdAt', 'age', 'birthday', 'city', 'zipCode', 'preferredPace',
                'petRunCount', 'distanceCounts', 'firstRunDate', 'badgeCounts',
                'emergencyContact', 'lastCheckInDate', 'lastCheckInRunId', 'linkedLegacyIds',
-               'legacyEventRuns', 'currentStreakWeeks', 'longestStreakWeeks'
+               'lastCheckInUpdatedAt', 'legacyEventRuns', 'currentStreakWeeks', 'longestStreakWeeks', 'deleting', 'rewardEpoch', 'streakProofWeek', 'longestStreakProofWeek', 'rewardChanges'
              ]) &&
              data.keys().hasAll([
                'email', 'firstName', 'lastName', 'displayName', 'shirtSize',
@@ -408,13 +441,14 @@ service cloud.firestore {
              (!('longestStreakWeeks' in data) || (data.longestStreakWeeks is int && data.longestStreakWeeks >= 0)) &&
              (!('distanceCounts' in data) || (data.distanceCounts is map)) &&
              (!('badgeCounts' in data) || (data.badgeCounts is map)) &&
-             (!('emergencyContact' in data) || (data.emergencyContact is map));
+             (!('emergencyContact' in data) || (data.emergencyContact is map)) &&
+             (!('deleting' in data) || data.deleting is bool);
     }
 
     // Fields a runner can never change on their own profile after sign-up.
     function coreProfileFieldsUnchanged() {
       return !request.resource.data.diff(resource.data).affectedKeys().hasAny([
-        'email', 'role', 'createdAt'
+        'email', 'role', 'createdAt', 'deleting', 'rewardEpoch'
       ]);
     }
 
@@ -432,16 +466,22 @@ service cloud.firestore {
         d.linkedLegacyNames.size() == 0 && d.unlockedBadgeIds.size() == 0 &&
         d.get('linkedLegacyIds', []).size() == 0 &&
         d.get('legacyEventRuns', 0) == 0 &&
-        d.get('petRunCount', 0) == 0;
+        d.get('petRunCount', 0) == 0 && d.get('badgeCounts', {}) == {} && d.get('distanceCounts', {}) == {} &&
+        d.get('currentStreakWeeks', 0) == 0 && d.get('longestStreakWeeks', 0) == 0 && d.get('rewardEpoch', 0) == 0;
     }
 
     // Claiming one legacy name: the legacy doc goes from unclaimed to this runner
     // in the same batch, and the totals grow by exactly that name's counts.
+    function legacyClaimsOpen() {
+      let p = /databases/$(database)/documents/settings/legacy_import;
+      return !exists(p) || get(p).data.get('active', false) == false;
+    }
+
     function isLegacyClaimBacked(email) {
       let before = resource.data.get('linkedLegacyIds', []);
       let after = request.resource.data.get('linkedLegacyIds', []);
       let added = after.removeAll(before);
-      return added.size() == 1 &&
+      return legacyClaimsOpen() && !resource.data.get('deleting', false) && added.size() == 1 &&
         after.size() == before.size() + 1 &&
         before.removeAll(after).size() == 0 &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly([
@@ -464,10 +504,148 @@ service cloud.firestore {
 
     // Badges and streaks are recalculated on the client from the runner's dated
     // history (claimed legacy sign-ins + check-ins) after a claim; nothing else changes.
+    function rewardPath(email, epoch, kind, key) {
+      let textKey = key is string ? key : string(key);
+      return /databases/$(database)/documents/reward_proofs/$(email + '_' + string(epoch) + '_' + kind + '_' + textKey);
+    }
+    function dateWeek(date) {
+      let parts = date.split('-');
+      return int(math.floor((timestamp.date(int(parts[0]), int(parts[1]), int(parts[2])).toMillis() + 259200000) / 604800000.0));
+    }
+    function proofDate(s, email) {
+      return s.get('checkinId', null) is string ? get(/databases/$(database)/documents/checkins/$(s.checkinId)).data.date : s.event.d;
+    }
+    function proofWord(s, email) {
+      return s.get('checkinId', null) is string ? get(/databases/$(database)/documents/checkins/$(s.checkinId)).data.get('codeWord', '') : s.event.c;
+    }
+    function proofSourceId(s) {
+      return s.get('checkinId', null) is string ? 'checkin:' + s.checkinId :
+        'legacy:' + s.legacyId + ':' + s.event.d + ':' + s.event.t + ':' + s.event.c;
+    }
+    function checkinProofRunOpen(id) {
+      let c = get(/databases/$(database)/documents/checkins/$(id)).data;
+      let runId = c.get('runId', '');
+      return runId == '' || !get(/databases/$(database)/documents/runs/$(runId)).data.get('deleting', false);
+    }
+    function validRewardSource(s, email) {
+      return s is map && (
+        (s.keys().hasOnly(['checkinId']) && s.checkinId is string &&
+         get(/databases/$(database)/documents/checkins/$(s.checkinId)).data.userEmail == email && checkinProofRunOpen(s.checkinId)) ||
+        (s.keys().hasOnly(['legacyId', 'event']) &&
+         get(legacyPath(s.legacyId)).data.get('claimedBy', null) == memberKeyFor(email) &&
+         s.event in get(/databases/$(database)/documents/legacy_history/$(s.legacyId)).data.events)
+      );
+    }
+    function proofSpecial(s, email, specialId) {
+      let word = proofWord(s, email).upper();
+      let runId = s.get('checkinId', null) is string ? get(/databases/$(database)/documents/checkins/$(s.checkinId)).data.get('runId', '') : '';
+      let event = runId != '' ? get(eventPath(runId)).data : {};
+      let c = s.get('checkinId', null) is string ? get(/databases/$(database)/documents/checkins/$(s.checkinId)).data : {};
+      let title = c.get('eventTitle', event.get('title', '')).lower();
+      let special = c.get('eventSpecial', event.get('specialEvent', ''));
+      return (specialId != 'none' && special == specialId) ||
+        (specialId == 'turkey_trot' && (word.matches('.*TURKEY.*') || title.matches('.*turkey.*'))) ||
+        (specialId == 'halloween' && (word.matches('.*HALLOWEEN.*') || word.matches('.*SPOOKY.*') || title.matches('.*halloween.*'))) ||
+        (specialId == 'anniversary' && (word.matches('.*ANNIVERSARY.*') || title.matches('.*anniversary.*')));
+    }
+    function validWeekProof(d, id) {
+      let previous = rewardPath(d.userEmail, d.epoch, 'week', d.week - 1);
+      return d.keys().hasOnly(['userEmail', 'epoch', 'kind', 'week', 'count', 'source']) &&
+        d.week is int && d.week == dateWeek(proofDate(d.source, d.userEmail)) &&
+        id == d.userEmail + '_' + string(d.epoch) + '_week_' + string(d.week) &&
+        d.count is int && d.count > 0 && d.count <= 10000 &&
+        d.count == (exists(previous) ? get(previous).data.count + 1 : 1);
+    }
+    function validSpecialProof(d, id) {
+      let old = resource == null ? [] : resource.data.sources;
+      return d.keys().hasOnly(['userEmail', 'epoch', 'kind', 'specialId', 'count', 'sources', 'sourceId', 'source']) &&
+        d.specialId is string && d.specialId.size() <= 100 &&
+        id == d.userEmail + '_' + string(d.epoch) + '_special_' + d.specialId &&
+        d.sourceId == proofSourceId(d.source) && !(d.sourceId in old) &&
+        d.sources == old.concat([d.sourceId]) && d.sources.size() <= 5000 &&
+        d.count == d.sources.size() && proofSpecial(d.source, d.userEmail, d.specialId);
+    }
+    function derivedUnchanged(d, o) {
+      return d.get('badgeCounts', {}) == o.get('badgeCounts', {}) && d.unlockedBadgeIds == o.unlockedBadgeIds &&
+        d.get('currentStreakWeeks', 0) == o.get('currentStreakWeeks', 0) && d.get('longestStreakWeeks', 0) == o.get('longestStreakWeeks', 0) &&
+        d.get('streakProofWeek', 0) == o.get('streakProofWeek', 0) && d.get('longestStreakProofWeek', 0) == o.get('longestStreakProofWeek', 0);
+    }
+    function clubWeekNow() {
+      let year = request.time.year();
+      let march = timestamp.date(year, 3, 1);
+      let november = timestamp.date(year, 11, 1);
+      let starts = timestamp.date(year, 3, 8 + (7 - march.dayOfWeek()) % 7) + duration.value(10, 'h');
+      let ends = timestamp.date(year, 11, 1 + (7 - november.dayOfWeek()) % 7) + duration.value(9, 'h');
+      let offset = request.time >= starts && request.time < ends ? 25200000 : 28800000;
+      return int(math.floor((request.time.toMillis() - offset + 259200000) / 604800000.0));
+    }
+    function validStreaks(d, email) {
+      let epoch = d.get('rewardEpoch', 0);
+      let current = d.get('currentStreakWeeks', 0);
+      let longest = d.get('longestStreakWeeks', 0);
+      let week = d.get('streakProofWeek', 0);
+      let today = clubWeekNow();
+      return (longest == 0 || get(rewardPath(email, epoch, 'week', d.longestStreakProofWeek)).data.count == longest) &&
+        (current == 0 || (week >= today - 1 && week <= today && get(rewardPath(email, epoch, 'week', week)).data.count == current));
+    }
+    function builtinBadgeConfig(id) {
+      return id == "first-chuck" ? {"type":"attendance"} :
+        id == "milestone-5" ? {"type":"milestone","minTotalRuns":5,"isIncremental":true,"step":5} :
+        id == "milestone-50" ? {"type":"milestone","minTotalRuns":50,"isIncremental":true,"step":50} :
+        id == "milestone-100" ? {"type":"milestone","minTotalRuns":100,"isIncremental":true,"step":100} :
+        id == "milestone-200" ? {"type":"milestone","minTotalRuns":200,"isIncremental":true,"step":200} :
+        id == "power-walker" ? {"type":"activity","activityType":"walking","activityCount":10,"isIncremental":true,"step":10} :
+        id == "pet-runner" ? {"type":"pet","isIncremental":true,"step":1} :
+        id == "streak-4" ? {"type":"streak","streakWeeks":4,"isIncremental":true,"step":4} :
+        id == "streak-10" ? {"type":"streak","streakWeeks":10,"isIncremental":true,"step":10} :
+        id == "special-turkey" ? {"type":"special_event","specialEventId":"turkey_trot","isIncremental":true,"step":1} :
+        id == "special-halloween" ? {"type":"special_event","specialEventId":"halloween","isIncremental":true,"step":1} :
+        id == "special-anniversary" ? {"type":"special_event","specialEventId":"anniversary","isIncremental":true,"step":1} : {};
+    }
+    function badgeConfig(id) {
+      let p = /databases/$(database)/documents/badges/$(id);
+      return exists(p) ? get(p).data.get('triggerConfig', {}) : builtinBadgeConfig(id);
+    }
+    function positiveRewardLevel(n, step) {
+      let level = int(math.floor(n / step));
+      return level < 1 ? 1 : level;
+    }
+    function rewardSteps(n, threshold, cfg) {
+      return n < threshold ? 0 : (cfg.get('isIncremental', false) ? positiveRewardLevel(n, cfg.get('step', threshold)) : 1);
+    }
+    function badgeDistanceKey(cfg) {
+      let key = cfg.get('distanceChoice', cfg.get('distanceTier', '3.1'));
+      return key is string ? key : string(key);
+    }
+    function expectedBadgeCount(id, cfg, d, email) {
+      let type = cfg.get('type', '');
+      return type == 'attendance' ? (d.totalRuns >= 1 ? 1 : 0) :
+        type == 'milestone' ? rewardSteps(d.totalRuns, cfg.get('minTotalRuns', 1), cfg) :
+        type == 'activity' ? rewardSteps(cfg.get('activityType', 'running') == 'walking' ? d.walkCount : d.runCount, cfg.get('activityCount', 10), cfg) :
+        type == 'distance' ? rewardSteps(d.get('distanceCounts', {}).get(badgeDistanceKey(cfg), 0), cfg.get('distanceCount', 1), cfg) :
+        type == 'pet' ? d.get('petRunCount', 0) :
+        type == 'streak' ? rewardSteps(d.get('longestStreakWeeks', 0), cfg.get('streakWeeks', 4), {'isIncremental': cfg.get('isIncremental', false), 'step': cfg.get('streakWeeks', 4)}) :
+        type == 'special_event' ? get(rewardPath(email, d.get('rewardEpoch', 0), 'special', cfg.get('specialEventId', id.matches('^special-.*') ? id.split('special-')[1] : id))).data.count : -1;
+    }
+    function validBadgeKey(id, d, o, email) {
+      let count = d.get('badgeCounts', {}).get(id, 0);
+      return count == 0 || count == o.get('badgeCounts', {}).get(id, id in o.unlockedBadgeIds ? 1 : 0) ||
+        (count is int && count > 0 && count == expectedBadgeCount(id, badgeConfig(id), d, email));
+    }
+    function validDerivedRefresh(d, o, email) {
+      let changed = d.get('rewardChanges', []);
+      return d.unlockedBadgeIds.size() <= 100 && d.get('badgeCounts', {}).size() <= 100 &&
+        changed is list && changed.toSet() == d.get('badgeCounts', {}).diff(o.get('badgeCounts', {})).affectedKeys() &&
+        d.unlockedBadgeIds.toSet() == d.get('badgeCounts', {}).keys().toSet() &&
+        changed.size() <= 2 && validStreaks(d, email) &&
+        (changed.size() < 1 || validBadgeKey(changed[0], d, o, email)) &&
+        (changed.size() < 2 || validBadgeKey(changed[1], d, o, email));
+    }
+
     function isBadgeRefreshOnly() {
-      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-        'unlockedBadgeIds', 'badgeCounts', 'currentStreakWeeks', 'longestStreakWeeks'
-      ]);
+      return legacyClaimsOpen() && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+        'unlockedBadgeIds', 'badgeCounts', 'currentStreakWeeks', 'longestStreakWeeks', 'streakProofWeek', 'longestStreakProofWeek', 'rewardChanges'
+      ]) && validDerivedRefresh(request.resource.data, resource.data, tokenEmail());
     }
 
     function roleChanged() {
@@ -479,27 +657,64 @@ service cloud.firestore {
       return !request.resource.data.diff(resource.data).affectedKeys().hasAny([
         'totalRuns', 'loggedRuns', 'totalMiles', 'runCount', 'walkCount',
         'petRunCount', 'distanceCounts', 'unlockedBadgeIds', 'badgeCounts',
-        'lastCheckInDate', 'lastCheckInRunId', 'firstRunDate', 'currentStreakWeeks', 'longestStreakWeeks'
+        'lastCheckInUpdatedAt', 'lastCheckInDate', 'lastCheckInRunId', 'firstRunDate', 'currentStreakWeeks', 'longestStreakWeeks', 'streakProofWeek', 'longestStreakProofWeek', 'rewardChanges'
       ]);
+    }
+
+    function distanceKeys(miles) {
+      let tenths = int(math.round(miles * 10));
+      let label = string(int(tenths / 10)) + '.' + string(tenths % 10);
+      return [miles <= 2 ? '1' : miles <= 4 ? '3' : '5', label, label + ' mi'];
+    }
+    function distanceKeyMatches(key, after, before, added, removed) {
+      let expected = before.get(key, 0) + (key in added ? 1 : 0) - (key in removed ? 1 : 0);
+      return after.get(key, 0) == (expected < 0 ? 0 : expected);
+    }
+    function distanceCreditMatches(d, o, c, old, isNew) {
+      let after = d.get('distanceCounts', {});
+      let before = o.get('distanceCounts', {});
+      let added = distanceKeys(c.actualMiles);
+      let removed = isNew ? [] : distanceKeys(old.actualMiles);
+      return after.diff(before).affectedKeys().hasOnly(added.concat(removed)) &&
+        distanceKeyMatches(added[0], after, before, added, removed) &&
+        distanceKeyMatches(added[1], after, before, added, removed) &&
+        distanceKeyMatches(added[2], after, before, added, removed) &&
+        (isNew || (distanceKeyMatches(removed[0], after, before, added, removed) &&
+         distanceKeyMatches(removed[1], after, before, added, removed) && distanceKeyMatches(removed[2], after, before, added, removed)));
+    }
+    function checkInProfileCredit(c, id) {
+      let before = get(userPath(c.userEmail)).data;
+      let after = getAfter(userPath(c.userEmail)).data;
+      return after.get('lastCheckInRunId', '') == c.runId && after.get('lastCheckInUpdatedAt', '') == c.updatedAt &&
+        before.get('lastCheckInUpdatedAt', '') != c.updatedAt;
+    }
+    function checkInStatsOnly() {
+      let d = request.resource.data;
+      return d.diff(resource.data).affectedKeys().hasOnly([
+        'totalRuns', 'loggedRuns', 'totalMiles', 'runCount', 'walkCount', 'petRunCount', 'distanceCounts',
+        'lastCheckInUpdatedAt', 'lastCheckInDate', 'lastCheckInRunId'
+      ]) && d.totalRuns <= 100000 && d.loggedRuns <= 100000 && d.totalMiles <= 1000000 &&
+        d.totalMiles >= 0 && d.runCount >= 0 && d.walkCount >= 0 && d.get('petRunCount', 0) >= 0;
     }
 
     function isStatsChangeBackedByCheckIn(email) {
       let d = request.resource.data;
       let o = resource.data;
       let p = checkinPath(d.get('lastCheckInRunId', ''), email);
+      let c = getAfter(p).data;
+      let old = exists(p) ? get(p).data : {'actualMiles': 0, 'activity': '', 'withPet': false};
+      let added = !exists(p) ? 1 : 0;
       return d.get('lastCheckInRunId', null) is string &&
-        (
-          (isCheckInCreatedInBatch(p) &&
-           d.totalRuns == o.totalRuns + 1 &&
-           d.loggedRuns == o.loggedRuns + 1 &&
-           d.runCount + d.walkCount == o.runCount + o.walkCount + 1) ||
-          (isCheckInEditedInBatch(p) &&
-           d.totalRuns == o.totalRuns &&
-           d.loggedRuns == o.loggedRuns &&
-           d.runCount + d.walkCount == o.runCount + o.walkCount)
-        ) &&
-        d.get('petRunCount', 0) <= o.get('petRunCount', 0) + 1 &&
-        d.totalMiles <= o.totalMiles + getAfter(p).data.actualMiles + 0.01;
+        d.get('lastCheckInUpdatedAt', '') == c.updatedAt && d.lastCheckInDate == c.date &&
+        derivedUnchanged(d, o) && distanceCreditMatches(d, o, c, old, added == 1) && participationAllowed(c.runId, email) &&
+        (isCheckInCreatedInBatch(p) || isCheckInEditedInBatch(p)) &&
+        d.totalRuns == o.totalRuns + added && d.loggedRuns == o.loggedRuns + added &&
+        d.runCount == o.runCount + (c.activity == 'running' ? 1 : 0) - (old.activity == 'running' ? 1 : 0) &&
+        d.walkCount == o.walkCount + (c.activity == 'walking' ? 1 : 0) - (old.activity == 'walking' ? 1 : 0) &&
+        d.get('petRunCount', 0) == o.get('petRunCount', 0) + (c.get('withPet', false) ? 1 : 0) - (old.get('withPet', false) ? 1 : 0) &&
+        math.abs(d.totalMiles * 100 - math.round(d.totalMiles * 100)) < 0.000001 &&
+        math.round(d.totalMiles * 100) == math.round(o.totalMiles * 100) + math.round(c.actualMiles * 100) - math.round(old.actualMiles * 100);
+
     }
 
     // ===============================================================
@@ -515,13 +730,11 @@ service cloud.firestore {
                        request.resource.data.id == runId;
 
       // Past runs can't be edited (only their RSVP list, e.g. when a runner is deleted).
-      allow update: if isValidRun(request.resource.data) &&
-                       request.resource.data.id == resource.data.id &&
+      allow update: if request.resource.data.id == resource.data.id &&
                        request.resource.data.id == runId &&
-                       ((isStaff() &&
+                       (isOwnRsvpToggle(runId) || (isStaff() && isValidRun(request.resource.data) &&
                          (!runIsOver(runId) ||
-                          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['attendees']))) ||
-                        isOwnRsvpToggle());
+                          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['attendees', 'deleting']))));
 
       allow delete: if isStaff();
     }
@@ -538,9 +751,12 @@ service cloud.firestore {
                        isValidGPXRoute(request.resource.data) &&
                        request.resource.data.id == resource.data.id &&
                        request.resource.data.id == routeId &&
-                       request.resource.data.createdAt == resource.data.createdAt;
+                       request.resource.data.createdAt == resource.data.createdAt &&
+                       (!resource.data.get('referenced', false) ||
+                        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['referenced'])) &&
+                       (!resource.data.get('referenced', false) || request.resource.data.referenced == true);
 
-      allow delete: if isStaff();
+      allow delete: if isStaff() && !resource.data.get('referenced', false);
     }
 
     // 3. MEMBERS — public leaderboard projection keyed by memberKey (hashed email).
@@ -550,10 +766,9 @@ service cloud.firestore {
       allow create, update: if isValidMember(request.resource.data) &&
                                request.resource.data.id == memberKey &&
                                (
-                                 isAdmin() ||
                                  (hasVerifiedEmail() &&
                                   memberKey == memberKeyFor(tokenEmail()) &&
-                                  memberMirrorsUser(request.resource.data, tokenEmail()))
+                                  memberMirrorsUser(request.resource.data, tokenEmail())) || isAdmin()
                                );
 
       allow delete: if isAdmin();
@@ -561,29 +776,29 @@ service cloud.firestore {
 
     // 4. CHECKINS — private audit log. One per runner per run: doc ID is `${runId}_${email}`.
     match /checkins/{checkinId} {
+      // Transactions must be able to establish that a check-in does not exist.
+      allow get: if hasVerifiedEmail() && !exists(/databases/$(database)/documents/checkins/$(checkinId));
       allow read: if isStaff() ||
                      (hasVerifiedEmail() && resource.data.userEmail == tokenEmail());
 
-      allow create: if isValidCheckIn(request.resource.data) &&
+      allow create: if isValidCheckIn(request.resource.data) && validRouteCredit(request.resource.data) && checkInMetadataMatches(request.resource.data) &&
                        checkinId == request.resource.data.runId + '_' + request.resource.data.userEmail &&
                        request.resource.data.id == checkinId &&
                        (
-                         isStaff() ||
                          (isUserEmailOwner(request.resource.data.userEmail) &&
-                          request.resource.data.get('source', 'pwa') == 'pwa' &&
+                          request.resource.data.get('source', 'pwa') == 'pwa' && checkInProfileCredit(request.resource.data, checkinId) &&
                           codeWordMatches(request.resource.data.runId, request.resource.data.date, request.resource.data.get('codeWord', '')) &&
-                          isInsideCheckInWindow(request.resource.data.runId, request.resource.data.date))
+                          isInsideCheckInWindow(request.resource.data.runId, request.resource.data.date)) || (isStaff() && participationAllowed(request.resource.data.runId, request.resource.data.userEmail))
                        );
 
-      allow update: if isValidCheckIn(request.resource.data) &&
+      allow update: if isValidCheckIn(request.resource.data) && validRouteCredit(request.resource.data) &&
                        !request.resource.data.diff(resource.data).affectedKeys()
-                         .hasAny(['id', 'runId', 'date', 'userEmail', 'createdAt']) &&
+                         .hasAny(['id', 'runId', 'date', 'userEmail', 'createdAt', 'eventTitle', 'eventSpecial']) &&
                        (
-                         isStaff() ||
                          (isUserEmailOwner(resource.data.userEmail) &&
-                          request.resource.data.get('source', 'pwa') == 'pwa' &&
+                          request.resource.data.get('source', 'pwa') == 'pwa' && checkInProfileCredit(request.resource.data, checkinId) &&
                           codeWordMatches(request.resource.data.runId, request.resource.data.date, request.resource.data.get('codeWord', '')) &&
-                          isInsideCheckInWindow(request.resource.data.runId, request.resource.data.date))
+                          isInsideCheckInWindow(request.resource.data.runId, request.resource.data.date)) || (isStaff() && participationAllowed(request.resource.data.runId, request.resource.data.userEmail))
                        );
 
       allow delete: if isStaff();
@@ -606,17 +821,14 @@ service cloud.firestore {
                            (request.resource.data.role == 'admin' && isBootstrapAdminEmail())))
                        );
 
-      allow update: if isValidUserProfile(request.resource.data) &&
-                       (
-                         (isAdmin() && (!isUserEmailOwner(email) || !roleChanged())) ||
-                         (isUserEmailOwner(email) &&
-                          coreProfileFieldsUnchanged() &&
-                          (
-                            (legacyFieldsUnchanged() &&
-                             (statsUnchanged() || isStatsChangeBackedByCheckIn(email) || isBadgeRefreshOnly())) ||
-                            isLegacyClaimBacked(email)
-                          ))
-                       );
+      allow update: if
+        (isUserEmailOwner(email) && coreProfileFieldsUnchanged() &&
+          ((legacyFieldsUnchanged() && (
+            isBadgeRefreshOnly() ||
+            (checkInStatsOnly() && isStatsChangeBackedByCheckIn(email)) ||
+            (statsUnchanged() && isValidUserProfile(request.resource.data)))) ||
+           (isLegacyClaimBacked(email) && isValidUserProfile(request.resource.data)))) ||
+        (isAdmin() && (!isUserEmailOwner(email) || !roleChanged()) && isValidUserProfile(request.resource.data));
 
       allow delete: if isAdmin() && !isUserEmailOwner(email);
     }
@@ -636,6 +848,7 @@ service cloud.firestore {
     // Runners may create exactly one alert per milestone, only alongside the
     // check-in that brought their total to that milestone.
     match /milestone_alerts/{alertId} {
+      allow get: if hasVerifiedEmail() && !exists(/databases/$(database)/documents/milestone_alerts/$(alertId));
       allow read: if isStaff() ||
                      (hasVerifiedEmail() && resource.data.userEmail == tokenEmail());
 
@@ -667,8 +880,11 @@ service cloud.firestore {
                                // A live run with check-in open can't be switched to "not live"
                                // (that would unlock its code word).
                                (!checkInHasOpened(eventId) ||
-                                request.resource.data.get('codeWordSet', true) != false);
-      allow delete: if isStaff();
+                                (request.resource.data.get('codeWordSet', true) != false &&
+                                 request.resource.data.checkInOpensAt == resource.data.checkInOpensAt &&
+                                 request.resource.data.checkInClosesAt == resource.data.checkInClosesAt &&
+                                 request.resource.data.date == resource.data.date));
+      allow delete: if isAdmin() || (isStaff() && !checkInHasOpened(eventId));
     }
 
     // 9b. MEETUP SECRETS — the run's code word, staff only.
@@ -728,6 +944,19 @@ service cloud.firestore {
                      (hasVerifiedEmail() &&
                       get(legacyPath(id)).data.get('claimedBy', null) == memberKeyFor(tokenEmail()));
       allow write: if isAdmin();
+    }
+
+    // Reward evidence is private, and every source is checked against attendance.
+    match /reward_proofs/{proofId} {
+      allow get: if hasVerifiedEmail() && !exists(/databases/$(database)/documents/reward_proofs/$(proofId));
+      allow read: if (hasVerifiedEmail() && resource.data.userEmail == tokenEmail()) || isStaff();
+      allow create, update: if hasVerifiedEmail() && (request.resource.data.userEmail == tokenEmail() || isAdmin()) &&
+        !get(userPath(request.resource.data.userEmail)).data.get('deleting', false) && legacyClaimsOpen() &&
+        request.resource.data.epoch == get(userPath(request.resource.data.userEmail)).data.get('rewardEpoch', 0) &&
+        validRewardSource(request.resource.data.source, request.resource.data.userEmail) &&
+        (request.resource.data.kind == 'week' ? validWeekProof(request.resource.data, proofId) :
+          request.resource.data.kind == 'special' && validSpecialProof(request.resource.data, proofId));
+      allow delete: if isAdmin();
     }
 
     // 11b. ANNOUNCEMENTS — club announcement feed (the bell). Public read, admins post/delete.

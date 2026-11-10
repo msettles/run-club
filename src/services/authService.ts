@@ -13,12 +13,6 @@ import { auth, isFirebaseConfigured } from './firebase';
 
 const EMAIL_STORAGE_KEY = 'woodchuckers_email_for_sign_in';
 
-export interface AuthState {
-  user: FirebaseUser | null;
-  loading: boolean;
-  error: string | null;
-}
-
 /**
  * Sign in with Google (Popup with redirect fallback)
  */

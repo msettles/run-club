@@ -1,8 +1,9 @@
+import { nextClubRunDate } from '../utils/checkInWindow';
 import React, { useState } from 'react';
 import { RunEvent, GPXRoute, PaceGroup, SpecialEventType, SpecialEventDefinition, RunRouteChoice } from '../types';
 import { RouteChoicesEditor, defaultChoices } from './RouteChoicesEditor';
-import { resolveChoices, deriveRunStats } from '../utils/runChoices';
-import { INITIAL_SPECIAL_EVENTS } from '../data/initialData';
+import { resolveChoices, routeChoiceError, deriveRunStats } from '../utils/runChoices';
+import { INITIAL_SPECIAL_EVENTS } from '../data/catalog';
 import { X, Calendar, Clock, MapPin, Plus, Trash2, Sparkles, KeyRound } from 'lucide-react';
 
 interface NewRunModalProps {
@@ -24,12 +25,8 @@ export const NewRunModal: React.FC<NewRunModalProps> = ({
 }) => {
   const [title, setTitle] = useState('');
   const [specialEvent, setSpecialEvent] = useState<SpecialEventType>('none');
-  const [date, setDate] = useState(() => {
-    const d = new Date();
-    d.setDate(d.getDate() + 7);
-    return d.toISOString().split('T')[0];
-  });
-  const [time, setTime] = useState('08:00 AM');
+  const [date, setDate] = useState(() => nextClubRunDate());
+  const [time, setTime] = useState('06:00 PM');
   const [locationName, setLocationName] = useState('Blue Note Brewing Company');
   const [address, setAddress] = useState('Woodland, CA');
   const [routeChoices, setRouteChoices] = useState<RunRouteChoice[]>(() => defaultChoices(routes));
@@ -60,12 +57,11 @@ export const NewRunModal: React.FC<NewRunModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSaving) return;
     if (!title) return;
     const resolved = resolveChoices(routeChoices, routes);
-    if (resolved.length === 0) {
-      setFormError('Add at least one distance option with a route.');
-      return;
-    }
+    const routeError = routeChoiceError(resolved);
+    if (routeError) { setFormError(routeError); return; }
     if (!codeWord.trim()) {
       setFormError('Enter the check-in code word. It can be changed until check-in opens.');
       return;

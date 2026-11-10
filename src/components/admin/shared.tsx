@@ -1,7 +1,7 @@
 /** Shared admin-dashboard helpers: roles, runner picker, CSV download. */
 import React, { useState } from 'react';
 import type { UserProfile } from '../../types';
-import { ADMIN_EMAILS } from '../../utils/roles';
+import { isAdminProfile, isStaffProfile } from '../../utils/roles';
 
 export type AssignableRole = 'member' | 'organizer' | 'admin';
 
@@ -18,9 +18,9 @@ export const ROLE_BADGE: Record<AssignableRole, string> = {
 };
 
 export const effectiveRole = (u: UserProfile): AssignableRole =>
-  ADMIN_EMAILS.includes(u.email.toLowerCase()) || u.role === 'admin'
+  isAdminProfile(u)
     ? 'admin'
-    : u.role === 'organizer'
+    : isStaffProfile(u)
       ? 'organizer'
       : 'member';
 
@@ -106,8 +106,25 @@ export const RunnerPicker: React.FC<{
   );
 };
 
-export function downloadCSV(content: string, filename: string): void {
-  const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+type CsvCell = string | number | boolean | null | undefined;
+
+/**
+ * One CSV cell (RFC 4180): quoted when it holds a comma, quote or line break,
+ * with quotes doubled. Text starting with = + - @ (or a tab/CR) gets a leading
+ * apostrophe so spreadsheets show it instead of running it as a formula.
+ */
+export function csvCell(value: CsvCell): string {
+  if (value === null || value === undefined) return '';
+  let text = String(value);
+  if (typeof value === 'string' && /^[=+\-@\t\r]/.test(text)) text = `'${text}`;
+  return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+}
+
+/** Build a CSV file (header row + rows) and download it. */
+export function downloadCSV(headers: string[], rows: CsvCell[][], filename: string): void {
+  const content = [headers, ...rows].map((r) => r.map(csvCell).join(',')).join('\r\n');
+  // Leading BOM so Excel reads names with accents correctly.
+  const blob = new Blob(['\uFEFF' + content], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
@@ -115,4 +132,5 @@ export function downloadCSV(content: string, filename: string): void {
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
+  setTimeout(() => URL.revokeObjectURL(url), 0);
 }

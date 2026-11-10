@@ -1,9 +1,9 @@
+import { formatMiles } from '../utils/miles';
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import confetti from 'canvas-confetti';
-import { RunEvent, MeetupEvent, UserProfile, RouteOption, ActivityType, DistanceChoice, CheckInRecord, LegacyMember, Badge, GPXRoute } from '../types';
-import { CLUB_MILESTONES } from '../data/initialData';
-import { calculateAge } from '../utils/dateUtils';
-import { isStaffProfile } from '../utils/roles';
+import { celebrate } from '../utils/celebrate';
+import { milestoneProgress } from '../utils/milestones';
+import { RunEvent, MeetupEvent, UserProfile, RouteOption, ActivityType, DistanceChoice, CheckInRecord, Badge, GPXRoute } from '../types';
+import { CLUB_MILESTONES } from '../data/catalog';
 import { checkInStatus, checkInWindow, formatOpening } from '../utils/checkInWindow';
 import { MapViewer } from './MapViewer';
 import { downloadGPXFile } from '../utils/gpxParser';
@@ -18,9 +18,6 @@ import {
   ChevronRight,
   ShieldCheck,
   Compass,
-  Clock,
-  Lock,
-  Unlock,
   Download,
   ArrowLeft
 } from 'lucide-react';
@@ -36,7 +33,6 @@ interface CheckInModalProps {
   currentUser: UserProfile;
   routes?: GPXRoute[];
   checkins?: CheckInRecord[];
-  initialMode?: 'checkin' | 'register';
   onCheckInRunner: (params: {
     eventId: string;
     userEmail: string;
@@ -54,38 +50,7 @@ interface CheckInModalProps {
     newBadges?: Badge[];
     milestoneAlert?: any;
   }>;
-  onRegisterUser: (
-    profileData: {
-      email: string;
-      firstName: string;
-      lastName: string;
-      shirtSize: string;
-      birthday?: string;
-      age?: number;
-      city?: string;
-      zipCode?: string;
-    },
-    claimedLegacyNames?: string[]
-  ) => Promise<UserProfile>;
-  onSearchLegacy: (query: string) => LegacyMember[];
   onOpenAuthModal?: () => void;
-}
-
-function parseEventDateTime(dateStr: string, timeStr: string = '06:00 PM'): Date {
-  const [year, month, day] = dateStr.split('-').map(Number);
-  let hour = 18;
-  let minute = 0;
-  if (timeStr) {
-    const match = timeStr.match(/(\d+):(\d+)\s*(AM|PM)?/i);
-    if (match) {
-      hour = parseInt(match[1], 10);
-      minute = parseInt(match[2], 10);
-      const ampm = match[3]?.toUpperCase();
-      if (ampm === 'PM' && hour < 12) hour += 12;
-      if (ampm === 'AM' && hour === 12) hour = 0;
-    }
-  }
-  return new Date(year, month - 1, day, hour, minute);
 }
 
 export const CheckInModal: React.FC<CheckInModalProps> = ({
@@ -99,10 +64,7 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
   currentUser,
   routes,
   checkins,
-  initialMode = 'checkin',
   onCheckInRunner,
-  onRegisterUser,
-  onSearchLegacy,
   onOpenAuthModal,
 }) => {
   // The check-in event for exactly this run. Never fall back to another run:
@@ -115,18 +77,17 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
   const selectedEventId = resolvedEventId || eventId || (candidateEventIds?.length === 1 ? candidateEventIds[0] : undefined);
   const isChoosingRun = !selectedEventId && (candidateEventIds?.length || 0) > 1;
   const matchedEvent = selectedEventId ? meetupEvents.find((e) => e.id === selectedEventId) : undefined;
-  const activeEvent: MeetupEvent = matchedEvent || {
+  const activeEvent: MeetupEvent = useMemo(() => matchedEvent || {
     id: selectedEventId || '',
     date: '',
     title: 'Check-in',
     codeWord: '',
     activeDistances: [],
     routes: {},
-  };
+  }, [matchedEvent, selectedEventId]);
   const eventStatus = matchedEvent ? checkInStatus(matchedEvent) : null;
 
   const isGuest = currentUser.role === 'guest' || !currentUser.email;
-  const isOrganizerOrAdmin = isStaffProfile(currentUser);
 
   // Check if current user is already checked in for this event date
   const existingCheckIn = useMemo(() => {
@@ -142,33 +103,24 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
   const availableOptions = useMemo(() => {
     const list: { key: string; route: RouteOption }[] = [];
     if (activeEvent && activeEvent.routes) {
-      const keys = (activeEvent.activeDistances && activeEvent.activeDistances.length > 0)
+      const keys = activeEvent.activeDistances
         ? activeEvent.activeDistances
         : Object.keys(activeEvent.routes);
 
       const seen = new Set<string>();
       for (const k of keys) {
         const r = activeEvent.routes[k];
-        if (r && !seen.has(r.name + r.actualMiles)) {
-          seen.add(r.name + r.actualMiles);
+        const identity = r?.routeId || (activeEvent.activeDistances?.length ? k : r?.name + String(r?.actualMiles));
+        if (r && !seen.has(identity)) {
+          seen.add(identity);
           list.push({ key: k, route: r });
         }
       }
-    }
-    if (list.length === 0) {
-      list.push(
-        { key: '1', route: { name: '1-Mile Club Route', actualMiles: 1.15 } },
-        { key: '3', route: { name: '3-Mile Club Route', actualMiles: 3.22 } },
-        { key: '5', route: { name: '5-Mile Club Route', actualMiles: 5.12 } }
-      );
     }
     return list;
   }, [activeEvent]);
 
   // State
-  const [viewMode, setViewMode] = useState<'checkin' | 'register'>(
-    initialMode === 'register' || isGuest ? 'register' : 'checkin'
-  );
   const [codeWordInput, setCodeWordInput] = useState<string>('');
   const [selectedActivity, setSelectedActivity] = useState<ActivityType>(() => {
     return existingCheckIn?.activity || 'running';
@@ -182,7 +134,7 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
       );
       if (match) return match.key;
     }
-    return availableOptions[0]?.key || '3';
+    return availableOptions[0]?.key || '';
   });
   const [loopSelections, setLoopSelections] = useState<Record<string, number>>(() => {
     if (existingCheckIn && existingCheckIn.loops) {
@@ -204,8 +156,8 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
     return Boolean(existingCheckIn?.withPet);
   });
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const submittingRef = useRef(false);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
-  const [organizerBypass, setOrganizerBypass] = useState<boolean>(false);
 
   // Success state
   const [successResult, setSuccessResult] = useState<{
@@ -226,7 +178,11 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
     const activeRec = successResult?.checkIn || existingCheckIn;
     const optRoute = isEditingCheckIn
       ? selectedOption?.route
-      : (successResult?.route || (activeRec ? { name: activeRec.routeName || '', actualMiles: activeRec.actualMiles } : selectedOption?.route));
+      : (successResult?.route || (activeRec ? {
+          ...activeEvent.routes[String(activeRec.distanceChoice)],
+          routeId: activeEvent.routes[String(activeRec.distanceChoice)]?.routeId || String(activeRec.distanceChoice),
+          name: activeRec.routeName || '', actualMiles: activeRec.actualMiles,
+        } : selectedOption?.route));
     let found: GPXRoute | undefined;
     if (optRoute?.routeId && routes) {
       found = routes.find((r) => r.id === optRoute.routeId);
@@ -236,14 +192,7 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
         (r) => r.name.toLowerCase() === optRoute.name.toLowerCase()
       );
     }
-    if (!found && optRoute && routes) {
-      found = routes.find(
-        (r) => Math.abs(r.distanceMiles - optRoute.actualMiles) < 0.2
-      );
-    }
-    if (!found && routes && routes.length > 0) {
-      found = routes[0];
-    }
+
 
     const extLinks = {
       stravaUrl: found?.externalLinks?.stravaUrl || optRoute?.externalLinks?.stravaUrl || (optRoute?.routeUrl?.includes('strava') ? optRoute.routeUrl : undefined),
@@ -265,38 +214,23 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
     return {
       id: 'default-route',
       name: optRoute?.name || 'Woodland Woodchuckers Route',
-      description: optRoute?.directions || 'Start and finish at Blue Note Brewing Co.',
-      distanceMiles: optRoute?.actualMiles || creditedMiles || 3.1,
-      elevationGainFt: 25,
+      description: optRoute?.directions || 'Route details are not available for this check-in.',
+      distanceMiles: optRoute?.actualMiles || creditedMiles,
+      elevationGainFt: 0,
       surface: 'Pavement',
       difficulty: 'Easy',
-      points: [
-        { lat: 38.6781, lon: -121.7712 },
-        { lat: 38.6785, lon: -121.7680 },
-        { lat: 38.6820, lon: -121.7682 },
-        { lat: 38.6818, lon: -121.7715 },
-        { lat: 38.6781, lon: -121.7712 },
-      ],
+      // No library route matched: no map (never show another route's map).
+      points: [],
       externalLinks: extLinks,
       directions: optRoute?.directionsList,
       createdAt: new Date().toISOString(),
     };
-  }, [successResult, existingCheckIn, isEditingCheckIn, selectedOption, routes, creditedMiles]);
-
-  // New runner onboarding state
-  const [regEmail, setRegEmail] = useState<string>(currentUser.email || '');
-  const [regFirstName, setRegFirstName] = useState<string>(currentUser.firstName !== 'Guest' ? currentUser.firstName : '');
-  const [regLastName, setRegLastName] = useState<string>(currentUser.lastName !== 'Runner' ? currentUser.lastName : '');
-  const [regShirtSize, setRegShirtSize] = useState<string>(currentUser.shirtSize || 'L');
-  const [regBirthday, setRegBirthday] = useState<string>(currentUser.birthday || '');
-  const [regZip, setRegZip] = useState<string>('95695');
-  const [selectedLegacyClaims, setSelectedLegacyClaims] = useState<string[]>([]);
-  const autoCheckInAfterRegister = true;
+  }, [successResult, existingCheckIn, isEditingCheckIn, selectedOption, routes, creditedMiles, activeEvent.routes]);
 
   if (!isOpen) return null;
 
   // Several runs open right now: the code word decides which run this is.
-  if (viewMode === 'checkin' && isChoosingRun) {
+  if (isChoosingRun) {
     const candidates = (candidateEventIds || [])
       .map((id) => meetupEvents.find((e) => e.id === id))
       .filter((e): e is MeetupEvent => Boolean(e));
@@ -322,6 +256,8 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
           setChooserError("That code word doesn't match any run open right now. Double-check the word the organizer announced.");
           return;
         }
+        const resolvedEvent = candidates.find((c) => c.id === found)!;
+        setSelectedOptionKey(resolvedEvent.activeDistances?.[0] || Object.keys(resolvedEvent.routes)[0] || '');
         setCodeWordInput(word);
         setResolvedEventId(found);
       } catch (err) {
@@ -387,7 +323,7 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
   }
 
   // Check-in only while this run's window is open (2 hours before start until midnight).
-  if (viewMode === 'checkin' && eventStatus !== 'open') {
+  if (eventStatus !== 'open') {
     const message = !matchedEvent
       ? "Check-in isn't set up for this run yet."
       : eventStatus === 'not_open'
@@ -471,104 +407,22 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
     );
   }
 
-  // Real-time legacy matches based on first or last name
-  const legacyMatches = (regFirstName.length >= 2 || regLastName.length >= 2)
-    ? onSearchLegacy(`${regFirstName} ${regLastName}`.trim())
-    : [];
-
-  const handleToggleLegacyClaim = (legacyName: string) => {
-    setSelectedLegacyClaims((prev) =>
-      prev.includes(legacyName) ? prev.filter((n) => n !== legacyName) : [...prev, legacyName]
-    );
-  };
-
-  const eventStartTime = parseEventDateTime(activeEvent.date, activeEvent.time || '06:00 PM');
-  const windowOpenTime = new Date(eventStartTime.getTime() - 2 * 60 * 60 * 1000); // 2 hours before
-  const windowCloseTime = new Date(eventStartTime.getFullYear(), eventStartTime.getMonth(), eventStartTime.getDate(), 23, 59, 59);
-  const now = new Date();
-  const isDevOrTest = typeof window !== 'undefined' && (
-    new URLSearchParams(window.location.search).get('test') === 'true' ||
-    new URLSearchParams(window.location.search).get('preview') === 'true' ||
-    window.location.hostname === 'localhost' ||
-    window.location.hostname === '127.0.0.1'
-  );
-  const isTimeWindowOpen = (now >= windowOpenTime && now <= windowCloseTime) || isDevOrTest;
-  const isCheckInUnlocked = isTimeWindowOpen || (isOrganizerOrAdmin && organizerBypass);
-
-  const handleRegisterSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handlePerformCheckIn = async () => {
+    if (submittingRef.current) return;
     setErrorMsg(null);
-    if (!regEmail || !regFirstName || !regLastName) {
-      setErrorMsg('Please enter email, first name, and last name.');
+    if (!selectedOption) {
+      setErrorMsg('No routes are configured for this run. Please ask an organizer to add a route.');
       return;
     }
-
-    setIsSubmitting(true);
-    try {
-      const newUser = await onRegisterUser(
-        {
-          email: regEmail,
-          firstName: regFirstName,
-          lastName: regLastName,
-          shirtSize: regShirtSize,
-          birthday: regBirthday || undefined,
-          age: regBirthday ? calculateAge(regBirthday) : undefined,
-          zipCode: regZip,
-        },
-        selectedLegacyClaims
-      );
-
-      // If user provided code word during first-time signup at check-in time, complete check-in now!
-      if (autoCheckInAfterRegister && codeWordInput.trim() && isCheckInUnlocked) {
-        const res = await onCheckInRunner({
-          eventId: activeEvent.id,
-          userEmail: newUser.email,
-          codeWordEntered: codeWordInput,
-          activity: selectedActivity,
-          distanceChoice: selectedOptionKey,
-          loops: currentLoops,
-          withPet: runningWithPet,
-        });
-
-        if (!res.success) {
-          setErrorMsg(`Registered profile, but check-in note: ${res.message}`);
-          setViewMode('checkin');
-          setIsSubmitting(false);
-          return;
-        }
-
-        confetti({
-          particleCount: 90,
-          spread: 80,
-          origin: { y: 0.6 },
-          colors: ['#f59e0b', '#2a859e', '#13495d', '#10b981'],
-        });
-        setPostCheckInStep('run_info');
-        setSuccessResult(res);
-      } else {
-        setViewMode('checkin');
-      }
-    } catch (err: any) {
-      setErrorMsg(err.message || 'Error registering profile.');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handlePerformCheckIn = async () => {
-    setErrorMsg(null);
     const effectiveCodeWord = codeWordInput.trim() || (existingCheckIn ? (existingCheckIn.codeWord || activeEvent.codeWord) : '');
     if (!effectiveCodeWord) {
       setErrorMsg("Please enter today's code word!");
       return;
     }
 
-    if (isGuest) {
-      setErrorMsg("Please join the club or sign in before checking in.");
-      setViewMode('register');
-      return;
-    }
-
+    submittingRef.current = true;
+    setIsSubmitting(true);
+    try {
     // The code word identifies the run; catch a word that belongs to a different run.
     if (!existingCheckIn && onResolveCodeWord) {
       try {
@@ -587,14 +441,12 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
       }
     }
 
-    setIsSubmitting(true);
-    try {
       const res = await onCheckInRunner({
         eventId: activeEvent.id,
         userEmail: currentUser.email,
         codeWordEntered: effectiveCodeWord,
         activity: selectedActivity,
-        distanceChoice: selectedOptionKey,
+        distanceChoice: selectedOption.key,
         loops: currentLoops,
         withPet: runningWithPet,
       });
@@ -606,12 +458,7 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
       }
 
       // Trigger celebratory woodchuck confetti!
-      confetti({
-        particleCount: 90,
-        spread: 80,
-        origin: { y: 0.6 },
-        colors: ['#f59e0b', '#2a859e', '#13495d', '#10b981'],
-      });
+      celebrate('check-in');
 
       setPostCheckInStep('run_info');
       setIsEditingCheckIn(false);
@@ -619,20 +466,14 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
     } catch (err: any) {
       setErrorMsg(err.message || 'Error during check-in.');
     } finally {
+      submittingRef.current = false;
       setIsSubmitting(false);
     }
   };
 
   // Milestone helpers
   const activeUserRuns = successResult?.user?.totalRuns ?? currentUser.totalRuns;
-  const nextMilestone = CLUB_MILESTONES.find((m) => m.runsRequired > activeUserRuns) || null;
-  const previousMilestoneRuns = nextMilestone 
-    ? (CLUB_MILESTONES[CLUB_MILESTONES.indexOf(nextMilestone) - 1]?.runsRequired || 0)
-    : 200;
-  const span = nextMilestone ? nextMilestone.runsRequired - previousMilestoneRuns : 1;
-  const currentInSpan = nextMilestone ? Math.max(0, activeUserRuns - previousMilestoneRuns) : span;
-  const progressPct = Math.min(100, Math.round((currentInSpan / span) * 100));
-  const runsRemaining = nextMilestone ? nextMilestone.runsRequired - activeUserRuns : 0;
+  const { nextMilestone, runsRemaining, progressPercent: progressPct } = milestoneProgress(activeUserRuns);
   const justUnlockedMilestone = [5, 50, 100, 200].includes(activeUserRuns)
     ? CLUB_MILESTONES.find((m) => m.runsRequired === activeUserRuns)
     : null;
@@ -677,7 +518,7 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
           )}
 
           {/* VIEW 1: SUCCESS POST-CHECK-IN FLOW */}
-          {(successResult || (existingCheckIn && !isEditingCheckIn)) ? (
+          {((successResult || existingCheckIn) && !isEditingCheckIn) ? (
             postCheckInStep === 'run_info' ? (
               /* PAGE 1: RUN INFORMATION (APPS, MAP, TURN-BY-TURN) */
               <div className="text-left space-y-4 animate-in fade-in duration-200">
@@ -704,17 +545,34 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
                         Boom, {currentUser.firstName}! 🎉
                       </h3>
                       <p className="text-xs text-stone-600">
-                        Registered for <strong className="text-stone-900">{matchedGpxRoute.name}</strong> ({activeCheckIn?.actualMiles || creditedMiles} mi {activeCheckIn?.activity || selectedActivity}{(activeCheckIn?.loops || currentLoops) > 1 ? ` • ${activeCheckIn?.loops || currentLoops} loops` : ''}).
+                        Checked in for <strong className="text-stone-900">{matchedGpxRoute.name}</strong> ({activeCheckIn?.actualMiles || creditedMiles} mi {activeCheckIn?.activity || selectedActivity}{(activeCheckIn?.loops || currentLoops) > 1 ? ` • ${activeCheckIn?.loops || currentLoops} loops` : ''}).
                       </p>
                     </div>
                   </div>
                 </div>
+
+                <p className="text-xs text-stone-600">
+                  Your check-in is saved. Route information and milestones are optional; you can close this window now.
+                </p>
 
                 {/* Change Route or Distance Button */}
                 <button
                   type="button"
                   onClick={() => {
                     setErrorMsg(null);
+                    const saved = existingCheckIn || successResult?.checkIn;
+                    if (saved) {
+                      const oldOption = activeEvent.routes[String(saved.distanceChoice)];
+                      const option = availableOptions.find((o) => o.key === String(saved.distanceChoice)) ||
+                        availableOptions.find((o) => oldOption?.routeId && o.route.routeId === oldOption.routeId) ||
+                        availableOptions.find((o) => o.route.name === saved.routeName);
+                      const key = option?.key || availableOptions[0]?.key || '';
+                      setSelectedOptionKey(key);
+                      setSelectedActivity(saved.activity);
+                      setRunningWithPet(Boolean(saved.withPet));
+                      setLoopSelections((prev) => ({ ...prev, [key]: saved.loops || 1 }));
+                      setCodeWordInput(saved.codeWord || activeEvent.codeWord || '');
+                    }
                     setIsEditingCheckIn(true);
                   }}
                   className="w-full py-2.5 px-4 bg-stone-100 hover:bg-stone-200 text-stone-800 font-bold text-xs rounded-xl transition flex items-center justify-center gap-1.5 border border-stone-300 shadow-2xs cursor-pointer"
@@ -733,7 +591,7 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
 
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                     {/* Strava */}
-                    {matchedGpxRoute.externalLinks?.stravaUrl ? (
+                    {matchedGpxRoute.externalLinks?.stravaUrl?.trim() && (
                       <a
                         href={matchedGpxRoute.externalLinks.stravaUrl}
                         target="_blank"
@@ -746,16 +604,10 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
                           Open Route <ExternalLink className="w-2.5 h-2.5" />
                         </span>
                       </a>
-                    ) : (
-                      <div className="flex flex-col items-center justify-center p-2.5 rounded-xl bg-stone-100/60 border border-stone-200 text-stone-400 font-bold text-center opacity-60">
-                        <span className="text-lg">🟠</span>
-                        <span className="text-xs font-extrabold mt-0.5">Strava</span>
-                        <span className="text-[10px]">Not linked</span>
-                      </div>
                     )}
 
                     {/* Garmin */}
-                    {matchedGpxRoute.externalLinks?.garminUrl ? (
+                    {matchedGpxRoute.externalLinks?.garminUrl?.trim() && (
                       <a
                         href={matchedGpxRoute.externalLinks.garminUrl}
                         target="_blank"
@@ -768,16 +620,10 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
                           Send to Watch <ExternalLink className="w-2.5 h-2.5" />
                         </span>
                       </a>
-                    ) : (
-                      <div className="flex flex-col items-center justify-center p-2.5 rounded-xl bg-stone-100/60 border border-stone-200 text-stone-400 font-bold text-center opacity-60">
-                        <span className="text-lg">🔵</span>
-                        <span className="text-xs font-extrabold mt-0.5">Garmin</span>
-                        <span className="text-[10px]">Not linked</span>
-                      </div>
                     )}
 
                     {/* RunGo */}
-                    {matchedGpxRoute.externalLinks?.rungoUrl ? (
+                    {matchedGpxRoute.externalLinks?.rungoUrl?.trim() && (
                       <a
                         href={matchedGpxRoute.externalLinks.rungoUrl}
                         target="_blank"
@@ -790,15 +636,10 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
                           Voice Nav <ExternalLink className="w-2.5 h-2.5" />
                         </span>
                       </a>
-                    ) : (
-                      <div className="flex flex-col items-center justify-center p-2.5 rounded-xl bg-stone-100/60 border border-stone-200 text-stone-400 font-bold text-center opacity-60">
-                        <span className="text-lg">🟢</span>
-                        <span className="text-xs font-extrabold mt-0.5">RunGo</span>
-                        <span className="text-[10px]">Not linked</span>
-                      </div>
                     )}
 
                     {/* Download GPX */}
+                    {matchedGpxRoute.points.length > 0 && (
                     <button
                       type="button"
                       onClick={() => downloadGPXFile(matchedGpxRoute)}
@@ -810,10 +651,12 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
                         Download <Download className="w-2.5 h-2.5" />
                       </span>
                     </button>
+                    )}
                   </div>
                 </div>
 
                 {/* 2) Map of the run & 3) Turn by turn instructions */}
+                {matchedGpxRoute.points.length > 0 && (
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between text-xs font-bold text-stone-700 px-0.5">
                     <span className="flex items-center gap-1.5 uppercase tracking-wider text-[11px] text-stone-600">
@@ -830,18 +673,14 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
                     hideActionBar={true}
                   />
                 </div>
+                )}
 
                 {/* Next Page Navigation Button */}
                 <div className="pt-2">
                   <button
                     type="button"
                     onClick={() => {
-                      confetti({
-                        particleCount: 50,
-                        spread: 60,
-                        origin: { y: 0.7 },
-                        colors: ['#f59e0b', '#2a859e', '#13495d'],
-                      });
+                      celebrate('rewards');
                       setPostCheckInStep('rewards');
                     }}
                     className="w-full py-3.5 bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 hover:from-amber-600 hover:to-amber-500 text-stone-950 font-black text-sm rounded-xl transition shadow-md flex items-center justify-center gap-2 font-display uppercase tracking-wider cursor-pointer"
@@ -975,84 +814,9 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
                 </div>
               </div>
             )
-          ) : viewMode === 'checkin' ? (
-            /* VIEW 2: CHECK-IN OR TIME-GATE LOCKED */
-            !isCheckInUnlocked ? (
-              /* TIME-GATE LOCKED STATE (Only opens 2 hours before run) */
-              <div className="text-center py-4 space-y-4 animate-in fade-in">
-                <div className="w-16 h-16 bg-amber-100 text-amber-700 rounded-2xl flex items-center justify-center mx-auto shadow-inner border border-amber-200">
-                  <Clock className="w-8 h-8" />
-                </div>
-
-                <div>
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-stone-100 text-stone-700 text-xs font-bold uppercase tracking-wider mb-2 border border-stone-200">
-                    <Lock className="w-3.5 h-3.5 text-stone-500" />
-                    <span>Check-In Window Locked</span>
-                  </span>
-                  <h3 className="text-xl font-black text-stone-900 font-display">
-                    Check-In Opens 2 Hours Before Run
-                  </h3>
-                  <p className="text-xs text-stone-600 mt-2 max-w-sm mx-auto leading-relaxed">
-                    Event check-in unlocks Wednesday at <strong>4:00 PM</strong> (2 hours prior to the 6:00 PM run) on the patio at Blue Note Brewing Co.
-                  </p>
-                </div>
-
-                {/* Logged-In Runner Status Card */}
-                <div className="bg-stone-50 border border-stone-200 rounded-2xl p-4 text-left space-y-2.5">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-9 h-9 rounded-full bg-woodland-800 text-white flex items-center justify-center font-bold text-xs shadow-xs">
-                        {currentUser.firstName?.[0] || 'W'}
-                      </div>
-                      <div>
-                        <div className="text-xs font-bold text-stone-900 flex items-center gap-1.5">
-                          <span>{currentUser.displayName}</span>
-                          <span className="text-[10px] bg-amber-100 text-amber-900 font-bold px-2 py-0.5 rounded-full">
-                            {currentUser.totalRuns} Runs
-                          </span>
-                        </div>
-                        <div className="text-[11px] text-stone-500 font-mono truncate">{currentUser.email}</div>
-                      </div>
-                    </div>
-                    <span className="inline-flex items-center gap-1 text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2.5 py-1 rounded-full uppercase tracking-wider">
-                      ✓ Member Ready
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-stone-600 leading-snug pt-1 border-t border-stone-200/60">
-                    You&apos;re signed in and ready! Check-in unlocks 2 hours before the run (Wednesday at 4:00 PM). Meet us on the patio at Blue Note Brewing to get the code word and check in with 1 tap.
-                  </p>
-                </div>
-
-                {/* Organizer Early Bypass Option */}
-                {(isOrganizerOrAdmin || isDevOrTest) && (
-                  <div className="pt-2 border-t border-stone-100">
-                    <button
-                      onClick={() => setOrganizerBypass(true)}
-                      className="w-full py-2.5 bg-amber-50 hover:bg-amber-100 text-amber-950 font-bold text-xs rounded-xl border border-amber-300 transition flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
-                    >
-                      <Unlock className="w-3.5 h-3.5 text-amber-600" />
-                      <span>Organizer / Admin Early Test Bypass</span>
-                    </button>
-                  </div>
-                )}
-
-                <button
-                  onClick={onClose}
-                  className="w-full py-2.5 bg-stone-100 hover:bg-stone-200 text-stone-700 font-bold text-xs rounded-xl transition"
-                >
-                  Close Window
-                </button>
-              </div>
-            ) : (
-            /* NORMAL UNLOCKED CHECK-IN FORM */
+          ) : (
+            /* CHECK-IN FORM (the window is open: checked before this view renders) */
             <div className="space-y-5">
-              {organizerBypass && (
-                <div className="p-2 bg-amber-100 border border-amber-300 rounded-xl text-center text-xs font-bold text-amber-950 flex items-center justify-center gap-1.5">
-                  <Unlock className="w-3.5 h-3.5 text-amber-700" />
-                  <span>Organizer Preview Mode: Early Check-In Active</span>
-                </div>
-              )}
-
               {/* Runner ID Banner */}
               <div className="bg-stone-50 border border-stone-200 rounded-2xl p-3.5 flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -1070,25 +834,6 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  {onOpenAuthModal && (
-                    <>
-                      <button
-                        onClick={onOpenAuthModal}
-                        className="text-[11px] text-woodland-700 hover:text-woodland-900 font-bold hover:underline"
-                      >
-                        Sign In
-                      </button>
-                      <span className="text-stone-300">|</span>
-                    </>
-                  )}
-                  <button
-                    onClick={() => setViewMode('register')}
-                    className="text-[11px] text-amber-700 hover:text-amber-900 font-semibold hover:underline"
-                  >
-                    + New Runner
-                  </button>
-                </div>
               </div>
 
               {/* Updating Existing Check-in Banner */}
@@ -1192,13 +937,18 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  {availableOptions.length === 0 && (
+                    <p className="text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded-xl p-3">
+                      No routes are configured for this run. Please ask an organizer to add a route before checking in.
+                    </p>
+                  )}
                   {availableOptions.map((opt) => {
                     const isSelected = selectedOptionKey === opt.key;
                     const optLoops = opt.route.isLoop ? (loopSelections[opt.key] || 1) : 1;
                     const optBaseMiles = opt.route.baseMiles || opt.route.actualMiles;
                     const optTotalMiles = opt.route.isLoop ? (optBaseMiles * optLoops) : opt.route.actualMiles;
-                    const optFormattedMiles = (Math.round(optTotalMiles * 10) / 10).toFixed(1);
-                    const maxPresets = Math.max(opt.route.maxLoops || 4, 4);
+                    const optFormattedMiles = formatMiles(optTotalMiles);
+                    const maxPresets = Math.min(20, Math.max(opt.route.maxLoops || 4, 4));
 
                     return (
                       <div
@@ -1249,14 +999,14 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
                                 <span className="font-mono font-black text-woodland-900">{optLoops}x</span>
                               </span>
                               <span className="text-stone-500 font-medium text-[10px]">
-                                ~{(Math.round(optBaseMiles * 10) / 10).toFixed(1)} mi/loop
+                                ~{formatMiles(optBaseMiles)} mi/loop
                               </span>
                             </div>
 
                             {/* Quick presets (1, 2, 3, 4) + Stepper for 5, 6, etc. */}
                             <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
                               {Array.from({ length: maxPresets }, (_, i) => i + 1).map((n) => {
-                                const loopMiles = (Math.round(optBaseMiles * n * 10) / 10).toFixed(1);
+                                const loopMiles = formatMiles(optBaseMiles * n);
                                 const isActive = optLoops === n;
                                 return (
                                   <button
@@ -1299,11 +1049,12 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
                                 <button
                                   type="button"
                                   onClick={() => {
-                                    const next = Math.min(10, optLoops + 1);
+                                    const next = Math.min(20, optLoops + 1);
                                     setLoopSelections((prev) => ({ ...prev, [opt.key]: next }));
                                     setSelectedOptionKey(opt.key);
                                   }}
                                   className="px-2 py-0.5 text-xs font-bold text-stone-600 hover:bg-stone-100"
+                                  disabled={optLoops >= 20}
                                   title="More loops"
                                 >
                                   +
@@ -1362,7 +1113,7 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
                 <button
                   type="button"
                   onClick={handlePerformCheckIn}
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || !selectedOption}
                   className="w-full py-3.5 bg-amber-500 hover:bg-amber-600 active:scale-98 text-stone-950 font-black text-base rounded-2xl transition shadow-lg flex items-center justify-center gap-2 font-display uppercase tracking-wide cursor-pointer disabled:opacity-50"
                 >
                   <Sparkles className="w-5 h-5 text-stone-950" />
@@ -1391,233 +1142,7 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
                 )}
               </div>
             </div>
-            )
-          ) : viewMode === 'register' ? (
-            /* VIEW 3: FIRST-TIME RUNNER ONBOARDING & LEGACY CLAIMING */
-            <form onSubmit={handleRegisterSubmit} className="space-y-4">
-              <div className="border-b border-stone-200 pb-3 flex items-center justify-between">
-                <div>
-                  <h3 className="text-base font-extrabold text-stone-900 font-display">
-                    First-Time Runner Setup
-                  </h3>
-                  <p className="text-xs text-stone-500">
-                    Quick 30-second profile setup to start logging runs &amp; claim past counts!
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setViewMode('checkin')}
-                  className="text-xs font-semibold text-stone-500 hover:text-stone-800"
-                >
-                  Cancel
-                </button>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-stone-700 mb-1">First Name *</label>
-                  <input
-                    type="text"
-                    required
-                    value={regFirstName}
-                    onChange={(e) => setRegFirstName(e.target.value)}
-                    placeholder="e.g. Matt"
-                    className="w-full px-3 py-2 text-sm rounded-xl border border-stone-300 focus:ring-2 focus:ring-amber-500 outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-stone-700 mb-1">Last Name *</label>
-                  <input
-                    type="text"
-                    required
-                    value={regLastName}
-                    onChange={(e) => setRegLastName(e.target.value)}
-                    placeholder="e.g. Settles"
-                    className="w-full px-3 py-2 text-sm rounded-xl border border-stone-300 focus:ring-2 focus:ring-amber-500 outline-none"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-stone-700 mb-1">Email Address *</label>
-                <input
-                  type="email"
-                  required
-                  value={regEmail}
-                  onChange={(e) => setRegEmail(e.target.value)}
-                  placeholder="runner@example.com"
-                  className="w-full px-3 py-2 text-sm rounded-xl border border-stone-300 focus:ring-2 focus:ring-amber-500 outline-none"
-                />
-                <span className="text-[10px] text-stone-500">
-                  Keyed on email so your device automatically remembers you!
-                </span>
-              </div>
-
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-stone-700 mb-1">Shirt Size</label>
-                  <select
-                    value={regShirtSize}
-                    onChange={(e) => setRegShirtSize(e.target.value)}
-                    className="w-full px-3 py-2 text-sm rounded-xl border border-stone-300 focus:ring-2 focus:ring-amber-500 outline-none bg-white font-bold"
-                  >
-                    <option value="Youth">Youth</option>
-                    <option value="XS">XS</option>
-                    <option value="S">S</option>
-                    <option value="M">M</option>
-                    <option value="L">L</option>
-                    <option value="XL">XL</option>
-                    <option value="2XL">2XL</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-stone-700 mb-1">
-                    Birthday (Opt)
-                    {calculateAge(regBirthday) !== undefined && (
-                      <span className="ml-1 text-[10px] text-amber-700 font-bold font-mono">
-                        (Age: {calculateAge(regBirthday)})
-                      </span>
-                    )}
-                  </label>
-                  <input
-                    type="date"
-                    value={regBirthday}
-                    onChange={(e) => setRegBirthday(e.target.value)}
-                    max={new Date().toISOString().split('T')[0]}
-                    className="w-full px-2 py-2 text-xs rounded-xl border border-stone-300 focus:ring-2 focus:ring-amber-500 outline-none bg-white font-medium"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-stone-700 mb-1">Zip Code</label>
-                  <input
-                    type="text"
-                    value={regZip}
-                    onChange={(e) => setRegZip(e.target.value)}
-                    placeholder="95695"
-                    className="w-full px-3 py-2 text-sm rounded-xl border border-stone-300 focus:ring-2 focus:ring-amber-500 outline-none"
-                  />
-                </div>
-              </div>
-
-              {/* AUTOMATIC LEGACY MATCHES FINDER */}
-              {legacyMatches.length > 0 && (
-                <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3.5 space-y-2 animate-in fade-in">
-                  <div className="flex items-center gap-1.5 text-xs font-extrabold text-amber-900">
-                    <ShieldCheck className="w-4 h-4 text-amber-600" />
-                    <span>Historical Run Records Found!</span>
-                  </div>
-                  <p className="text-[11px] text-amber-800 leading-snug">
-                    We found past check-in records matching your name. Check the ones that are yours to link them to your profile:
-                  </p>
-                  <div className="space-y-1.5 pt-1">
-                    {legacyMatches.map((leg) => {
-                      const isChecked = selectedLegacyClaims.includes(leg.name);
-                      return (
-                        <label
-                          key={leg.id}
-                          className={`flex items-center justify-between p-2.5 rounded-xl border text-xs cursor-pointer transition ${
-                            isChecked
-                              ? 'bg-amber-100/90 border-amber-400 font-bold text-stone-900'
-                              : 'bg-white border-stone-200 text-stone-700 hover:bg-stone-50'
-                          }`}
-                        >
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="checkbox"
-                              checked={isChecked}
-                              onChange={() => handleToggleLegacyClaim(leg.name)}
-                              className="rounded text-amber-600 focus:ring-amber-500"
-                            />
-                            <span>{leg.name}</span>
-                          </div>
-                          <span className="font-mono text-xs bg-amber-200/80 px-2 py-0.5 rounded-full text-stone-900">
-                            {leg.totalRuns} past runs
-                          </span>
-                        </label>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* Check into tonight's run right now (if check-in is unlocked) */}
-              {isCheckInUnlocked && (
-                <div className="bg-amber-50 rounded-2xl p-3.5 border border-amber-200 space-y-3">
-                  <div className="flex items-center gap-1.5 text-xs font-bold text-amber-950">
-                    <Sparkles className="w-4 h-4 text-amber-600" />
-                    <span>Check into tonight's run now? (Optional)</span>
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-bold text-stone-700 uppercase tracking-wider mb-1">
-                      Today's Code Word
-                    </label>
-                    <input
-                      type="text"
-                      value={codeWordInput}
-                      onChange={(e) => setCodeWordInput(e.target.value)}
-                      placeholder="e.g. TURKEY (announced by organizer)"
-                      className="w-full uppercase font-mono tracking-wider text-sm font-bold px-3 py-2 rounded-xl border border-stone-300 outline-none bg-white"
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-2 text-xs">
-                    <div>
-                      <label className="block text-[10px] font-bold text-stone-600 mb-1">Activity Tonight</label>
-                      <select
-                        value={selectedActivity}
-                        onChange={(e) => setSelectedActivity(e.target.value as ActivityType)}
-                        className="w-full px-2 py-1.5 rounded-lg border border-stone-300 bg-white font-medium"
-                      >
-                        <option value="running">🏃 Running</option>
-                        <option value="walking">🚶 Walking</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-bold text-stone-600 mb-1">Route &amp; Distance</label>
-                      <select
-                        value={selectedOptionKey}
-                        onChange={(e) => setSelectedOptionKey(e.target.value)}
-                        className="w-full px-2 py-1.5 rounded-lg border border-stone-300 bg-white font-medium truncate"
-                      >
-                        {availableOptions.map((opt) => (
-                          <option key={opt.key} value={opt.key}>
-                            {(Math.round(opt.route.actualMiles * 10) / 10).toFixed(1)} mi — {opt.route.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 pt-2 border-t border-amber-200">
-                    <input
-                      type="checkbox"
-                      id="regPetCheckbox"
-                      checked={runningWithPet}
-                      onChange={(e) => setRunningWithPet(e.target.checked)}
-                      className="w-4 h-4 text-amber-600 rounded"
-                    />
-                    <label htmlFor="regPetCheckbox" className="text-xs font-semibold text-stone-700 cursor-pointer">
-                      Running or walking with a Pet tonight? 🐕
-                    </label>
-                  </div>
-                </div>
-              )}
-
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="w-full py-3 bg-woodland-900 hover:bg-woodland-950 text-white font-bold text-sm rounded-xl transition shadow-md flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-              >
-                <span>
-                  {isSubmitting
-                    ? 'Saving Profile...'
-                    : isCheckInUnlocked && codeWordInput.trim()
-                    ? 'Save Profile & Check In Tonight 🦫'
-                    : 'Save Profile & Join Club 🦫'}
-                </span>
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </form>
-          ) : null}
+          )}
         </div>
       </div>
     </div>

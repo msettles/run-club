@@ -1,6 +1,7 @@
+import { milestoneProgress } from '../utils/milestones';
 import React, { useState } from 'react';
 import { UserProfile, Badge } from '../types';
-import { CLUB_MILESTONES, INITIAL_BADGES } from '../data/initialData';
+import { CLUB_MILESTONES, INITIAL_BADGES } from '../data/catalog';
 import { CheckCircle, Gift, Sparkles, Beer, ArrowRight, Award, Lock } from 'lucide-react';
 
 interface MilestonesPageProps {
@@ -16,16 +17,7 @@ export const MilestonesPage: React.FC<MilestonesPageProps> = ({
 }) => {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
 
-  // Determine next milestone
-  const nextMilestone = CLUB_MILESTONES.find((m) => m.runsRequired > currentUser.totalRuns) || null;
-  const runsRemaining = nextMilestone ? nextMilestone.runsRequired - currentUser.totalRuns : 0;
-  const previousMilestoneRuns = nextMilestone 
-    ? (CLUB_MILESTONES[CLUB_MILESTONES.indexOf(nextMilestone) - 1]?.runsRequired || 0)
-    : 200;
-  
-  const span = nextMilestone ? nextMilestone.runsRequired - previousMilestoneRuns : 1;
-  const currentInSpan = nextMilestone ? Math.max(0, currentUser.totalRuns - previousMilestoneRuns) : span;
-  const progressPercent = Math.min(100, Math.round((currentInSpan / span) * 100));
+  const { nextMilestone, runsRemaining, progressPercent } = milestoneProgress(currentUser.totalRuns);
 
   const allBadges = badges && badges.length > 0 ? badges : INITIAL_BADGES;
 

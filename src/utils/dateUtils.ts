@@ -32,3 +32,14 @@ export function calculateAge(birthday?: string | null): number | undefined {
 
   return age >= 0 && age <= 130 ? age : undefined;
 }
+
+/** A date as "YYYY-MM-DD" in this device's local time (toISOString() would give UTC, i.e. tomorrow on a Wednesday evening in California). */
+export function localYmd(d: Date = new Date()): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/** Calendar date at the club, regardless of the runner's device time zone. */
+export function clubYmd(date = new Date()): string {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(date).map((part) => [part.type, part.value]));
+  return `${parts.year}-${parts.month}-${parts.day}`;
+}

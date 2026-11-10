@@ -1,7 +1,6 @@
 import { initializeApp, getApps, FirebaseApp } from 'firebase/app';
 import { getFirestore, Firestore } from 'firebase/firestore';
 import { getAuth, Auth } from 'firebase/auth';
-import { getAnalytics, isSupported } from 'firebase/analytics';
 
 // Vite environment variables for Firebase Spark plan configuration
 const firebaseConfig = {
@@ -31,11 +30,22 @@ if (isFirebaseConfigured) {
     db = getFirestore(app);
     auth = getAuth(app);
     if (typeof window !== 'undefined') {
-      isSupported().then((supported) => {
-        if (supported && app) {
-          getAnalytics(app);
+      // Analytics is optional: keep its SDK out of the initial download and
+      // initialize after the page has loaded, during idle time when available.
+      const initializeAnalytics = () => {
+        void import('firebase/analytics').then(async ({ isSupported, getAnalytics }) => {
+          if (app && await isSupported()) getAnalytics(app);
+        }).catch(() => {});
+      };
+      const scheduleAnalytics = () => {
+        if ('requestIdleCallback' in window) {
+          window.requestIdleCallback(initializeAnalytics);
+        } else {
+          globalThis.setTimeout(initializeAnalytics, 1000);
         }
-      }).catch(() => {});
+      };
+      if (document.readyState === 'complete') scheduleAnalytics();
+      else window.addEventListener('load', scheduleAnalytics, { once: true });
     }
     console.info('🌲 [Woodchuckers] Connected to Firebase Spark project:', firebaseConfig.projectId);
   } catch (error) {

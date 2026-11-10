@@ -10,23 +10,13 @@ import {
   storeNotification, 
 } from '../notifications';
 import type { StoreState } from './state';
-import type { createLegacyOps } from './legacy';
-import type { createPrivateSyncOps } from './privateSync';
-import type { createMemberOps } from './members';
-import type { createCheckInOps } from './checkIn';
-import type { createEventOps } from './events';
-import type { createBadgeOps } from './badges';
-import type { createRunOps } from './runs';
 
-export function createAnnouncementOps(ctx: StoreState & ReturnType<typeof createLegacyOps> & ReturnType<typeof createPrivateSyncOps> & ReturnType<typeof createMemberOps> & ReturnType<typeof createCheckInOps> & ReturnType<typeof createEventOps> & ReturnType<typeof createBadgeOps> & ReturnType<typeof createRunOps>) {
+export function createAnnouncementOps(ctx: StoreState) {
   const {
     setNotifications,
     currentMember,
   } = ctx;
 
-  /**
-   * Send a club-wide push announcement (Admin)
-   */
   /** Post a club announcement to everyone's bell feed (admins). Phones get it only via the Firebase console. */
   const sendPushAnnouncement = async (title: string, body: string) => {
     const notif: ClubNotification = {
