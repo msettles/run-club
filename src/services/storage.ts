@@ -177,7 +177,7 @@ export function useClubStore({ loadLeaderboard = true } = {}) {
     users: store.users,
     staffRosterLoaded: Boolean(store.staffRosterPage.current.cursor || store.staffRosterPage.current.complete),
     refreshStaffUsers: store.refreshStaffUsers, refreshGearHistory: store.refreshGearHistory,
-    loadMoreStaffUsers: store.loadMoreStaffUsers, findStaffUser: store.findStaffUser, exportStaffUsers: store.exportStaffUsers,
+    searchStaffUsers: store.searchStaffUsers, loadMoreStaffUsers: store.loadMoreStaffUsers, findStaffUser: store.findStaffUser, exportStaffUsers: store.exportStaffUsers,
     staffRosterLoading: store.staffRosterLoading, staffRosterError: store.staffRosterError, hasMoreStaffUsers: store.hasMoreStaffUsers,
     loadMoreGearHistory: store.loadMoreGearHistory, gearHistoryLoading: store.gearHistoryLoading, gearHistoryError: store.gearHistoryError, hasMoreGearHistory: store.hasMoreGearHistory,
     setUsers: store.setUsers,

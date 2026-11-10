@@ -1,13 +1,24 @@
 import { collection, doc, documentId, getDoc, getDocs, limit, orderBy, query, startAfter, where, type DocumentData, type QueryDocumentSnapshot } from 'firebase/firestore';
 import { db, isFirebaseConfigured } from '../firebase';
-import { isStaffProfile } from '../../utils/roles';
+import { isAdminProfile, isStaffProfile } from '../../utils/roles';
 import type { MilestoneAlert, UserProfile } from '../../types';
 import type { StoreState } from './state';
 export const STAFF_PAGE_SIZE = 50;
+export type StaffSearchRole = 'all' | 'member' | 'organizer' | 'admin';
+export interface StaffSearchResult { users: UserProfile[]; total: number; hasMore: boolean }
+export interface StaffSearchCache { rows?: UserProfile[]; pending?: Promise<UserProfile[]>; expires: number }
+export const newStaffSearchCache = (): StaffSearchCache => ({ expires: 0 });
+const searchText = (value: string) => value.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase();
+export function matchesStaffSearch(user: UserProfile, term: string, role: StaffSearchRole = 'all'): boolean {
+  const actualRole = isAdminProfile(user) ? 'admin' : user.role === 'organizer' ? 'organizer' : 'member';
+  const text = searchText([user.displayName, user.firstName, user.lastName, user.email].filter(Boolean).join(' '));
+  return (role === 'all' || role === actualRole) && searchText(term).trim().split(/\s+/).every((word) => text.includes(word));
+}
 export interface StaffPage { cursor?: QueryDocumentSnapshot<DocumentData>; pending: boolean; complete: boolean }
 export const newStaffPage = (complete = false): StaffPage => ({ pending: false, complete });
 
 export function resetStaffPages(ctx: StoreState) {
+  ctx.staffSearchCache.current = newStaffSearchCache();
   ctx.staffRosterPage.current = newStaffPage(!isFirebaseConfigured);
   ctx.gearHistoryPage.current = newStaffPage(!isFirebaseConfigured);
   ctx.setStaffRosterLoading(false); ctx.setStaffRosterError(null); ctx.setHasMoreStaffUsers(isFirebaseConfigured);
@@ -91,6 +102,30 @@ export function createStaffLoadingOps(ctx: StoreState) {
       cursor = snapshot.docs[snapshot.docs.length - 1];
     }
   };
+  const searchStaffUsers = async (term: string, role: StaffSearchRole = 'all', offset = 0): Promise<StaffSearchResult> => {
+    allowed();
+    if (!term.trim()) return { users: [], total: 0, hasMore: false };
+    const epoch = ctx.privateSyncEpoch.current;
+    const cache = ctx.staffSearchCache.current;
+    if (!cache.rows || cache.expires <= Date.now()) {
+      if (!cache.pending) {
+        const pending = exportStaffUsers().then((rows) => {
+          if (ctx.privateSyncEpoch.current !== epoch || ctx.staffSearchCache.current !== cache) throw new Error('Your staff session changed. Please retry.');
+          cache.rows = rows; cache.expires = Date.now() + 120_000;
+          return rows;
+        }).finally(() => { cache.pending = undefined; });
+        cache.pending = pending;
+      }
+      await cache.pending;
+    }
+    if (ctx.privateSyncEpoch.current !== epoch || ctx.staffSearchCache.current !== cache) throw new Error('Your staff session changed. Please retry.');
+    const available = [...new Map([...cache.rows!, ...ctx.users].map((user) => [user.email.toLowerCase(), user])).values()];
+    const matches = available.filter((user) => matchesStaffSearch(user, term, role)).sort((a, b) => a.displayName.localeCompare(b.displayName) || a.email.localeCompare(b.email));
+    const start = Math.max(0, Math.trunc(offset));
+    const users = matches.slice(start, start + STAFF_PAGE_SIZE);
+    ctx.setUsers((previous) => [...new Map([...users.filter((user) => user.email.toLowerCase() !== ctx.currentUser.email.toLowerCase()), ...previous].map((user) => [user.email.toLowerCase(), user])).values()]);
+    return { users, total: matches.length, hasMore: start + STAFF_PAGE_SIZE < matches.length };
+  };
   const refresh = async (kind: 'roster' | 'gear') => {
     if (!db || !isFirebaseConfigured) return;
     allowed();
@@ -98,11 +133,12 @@ export function createStaffLoadingOps(ctx: StoreState) {
     if (ref.current.pending) return;
     ref.current = newStaffPage();
     if (kind === 'roster') {
+      ctx.staffSearchCache.current = newStaffSearchCache();
       ctx.setHasMoreStaffUsers(true);
     } else {
       ctx.setHasMoreGearHistory(true);
     }
     await page(kind, true);
   };
-  return { refreshStaffUsers: () => refresh('roster'), refreshGearHistory: () => refresh('gear'), loadMoreStaffUsers: () => page('roster'), loadMoreGearHistory: () => page('gear'), findStaffUser, exportStaffUsers };
+  return { searchStaffUsers, refreshStaffUsers: () => refresh('roster'), refreshGearHistory: () => refresh('gear'), loadMoreStaffUsers: () => page('roster'), loadMoreGearHistory: () => page('gear'), findStaffUser, exportStaffUsers };
 }

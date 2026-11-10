@@ -19,7 +19,7 @@ Ten scenarios run in both desktop Chromium and mobile WebKit (20 checks):
 6. A failed profile save preserves entered names and can be retried without duplicate profiles.
 7. Pending profile submission disables repeat submission and Cancel until completion.
 8. A failed modal exposes recovery; Escape returns to the opener and the app can open another dialog.
-9. Staff roster lookup and CSV export retain their behavior with loaded-scope labels.
+9. Staff roster search matches partial names/emails and shows no-results states; CSV export remains complete.
 10. A pending gear handout moves into fulfilled history.
 
 The suite freezes wall time, seeds synthetic localStorage profiles/events and blocks external requests. Its dedicated Vite configuration explicitly disables Firebase even when a developer has production `.env` values. The onboarding fixture mounts the actual profile component and local store with a controlled simulated registration transport; the check-in tests navigate the full app. It does not exercise Google OAuth, email-link delivery or Firebase auth restoration. Existing Firestore integration/rules tests remain responsible for server-side authorization, transactions and concurrency.
@@ -29,6 +29,8 @@ The tests found missing label associations in the profile form. Fields now have 
 CI runs the suite in a separate job. On failure it retains screenshots and traces; its HTML report is available as an artifact for seven days. Reports contain synthetic fixtures only. Production builds do not include the browser fixtures or test configuration.
 
 ## Manual device checklist — pending
+
+Use [the detailed real-device test plan](real-device-test-plan.md) for prerequisites, case IDs, steps, pass criteria and result recording.
 
 These checks have **not** been completed by desktop browser emulation. Record device, OS/browser version, installed app version, result and any failure for each:
 

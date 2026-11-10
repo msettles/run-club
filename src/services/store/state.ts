@@ -1,4 +1,4 @@
-import { newStaffPage } from './staffLoading';
+import { newStaffSearchCache, newStaffPage } from './staffLoading';
 /** All club-store state (React state, browser persistence, derived current user). */
 import { useState, useEffect, useMemo, useRef } from 'react';
 import {
@@ -92,6 +92,7 @@ export function useStoreState() {
   const [routeCatalogError, setRouteCatalogError] = useState<string | null>(null);
   const [leaderboardLoaded, setLeaderboardLoaded] = useState(LOCAL_MODE);
   const [leaderboardError, setLeaderboardError] = useState<string | null>(null);
+  const staffSearchCache = useRef(newStaffSearchCache());
   const staffRosterPage = useRef(newStaffPage(LOCAL_MODE));
   const gearHistoryPage = useRef(newStaffPage(LOCAL_MODE));
   const [staffRosterLoading, setStaffRosterLoading] = useState(false);
@@ -281,7 +282,7 @@ export function useStoreState() {
     setIsSyncing,
     users,
     setUsers,
-    staffRosterPage, gearHistoryPage, staffRosterLoading, setStaffRosterLoading, staffRosterError, setStaffRosterError,
+    staffSearchCache, staffRosterPage, gearHistoryPage, staffRosterLoading, setStaffRosterLoading, staffRosterError, setStaffRosterError,
     hasMoreStaffUsers, setHasMoreStaffUsers, gearHistoryLoading, setGearHistoryLoading, gearHistoryError, setGearHistoryError, hasMoreGearHistory, setHasMoreGearHistory,
     meetupEvents: loadedMeetups,
     setMeetupEvents,
