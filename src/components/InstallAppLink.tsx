@@ -1,3 +1,4 @@
+import { Modal } from './Modal';
 import React, { useState } from 'react';
 import { Download, X } from 'lucide-react';
 import { promptInstall, useInstallState } from '../services/install';
@@ -30,11 +31,8 @@ export const InstallAppLink: React.FC = () => {
       </button>
 
       {showSteps && (
-        <div
+        <Modal title="Install Woodchuckers" onClose={() => setShowSteps(false)}
           className="fixed inset-0 z-[1000] flex items-center justify-center bg-stone-900/70 p-4"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="install-steps-title"
         >
           <div className="bg-white text-stone-900 rounded-2xl max-w-sm w-full p-5 shadow-2xl border border-stone-200 space-y-4 text-left">
             <div className="flex items-center justify-between">
@@ -73,7 +71,7 @@ export const InstallAppLink: React.FC = () => {
               Got it
             </button>
           </div>
-        </div>
+        </Modal>
       )}
     </>
   );

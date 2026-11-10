@@ -1,3 +1,4 @@
+import { Modal } from './Modal';
 import React, { useEffect, useState } from 'react';
 import { Download, Bell, BellRing, Smartphone, X } from 'lucide-react';
 import { enablePushOnThisDevice, getPushStatus, type PushStatus } from '../services/push';
@@ -142,7 +143,7 @@ export const InstallPwaBanner: React.FC<InstallPwaBannerProps> = ({ pushAccount 
             </button>
           )}
 
-          <button
+          <button aria-label="Dismiss banner"
             onClick={handleDismiss}
             className="p-1 text-woodland-300 hover:text-white rounded"
             title="Dismiss banner"
@@ -160,13 +161,13 @@ export const InstallPwaBanner: React.FC<InstallPwaBannerProps> = ({ pushAccount 
 
       {/* iOS Safari Guide Modal/Tooltip */}
       {showIOSGuide && (
-        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-stone-900/70 p-4">
+        <Modal title="Install Woodchuckers" onClose={() => setShowIOSGuide(false)} className="fixed inset-0 z-[1000] flex items-center justify-center bg-stone-900/70 p-4">
           <div className="bg-white text-stone-900 rounded-2xl max-w-sm w-full p-5 shadow-2xl border border-stone-200 space-y-4">
             <div className="flex items-center justify-between">
               <h4 className="font-bold text-base flex items-center gap-2">
                 <span>📲</span> Install on iPhone / iPad
               </h4>
-              <button
+              <button aria-label="Close window"
                 onClick={() => setShowIOSGuide(false)}
                 className="text-stone-400 hover:text-stone-700 p-1"
               >
@@ -186,7 +187,7 @@ export const InstallPwaBanner: React.FC<InstallPwaBannerProps> = ({ pushAccount 
               Got It!
             </button>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   );

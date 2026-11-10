@@ -1,3 +1,4 @@
+import { Modal } from './Modal';
 import React from 'react';
 import { X, CheckCircle, ShieldCheck, Zap, Sparkles } from 'lucide-react';
 
@@ -15,7 +16,7 @@ export const FirebaseSetupGuide: React.FC<FirebaseSetupGuideProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-stone-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+    <Modal title="App setup guide" onClose={onClose} className="fixed inset-0 z-[1000] flex items-center justify-center bg-stone-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
       <div className="bg-white rounded-2xl max-w-xl w-full max-h-[90vh] shadow-2xl border border-stone-200 flex flex-col overflow-hidden">
         {/* Header */}
         <div className="bg-gradient-to-r from-woodland-800 to-woodland-700 text-white p-5 flex items-center justify-between">
@@ -26,7 +27,7 @@ export const FirebaseSetupGuide: React.FC<FirebaseSetupGuideProps> = ({
               <p className="text-xs text-woodland-100">Woodland Woodchuckers Run Club Architecture</p>
             </div>
           </div>
-          <button
+          <button aria-label="Close window"
             onClick={onClose}
             className="p-1 rounded-full text-woodland-100 hover:text-white hover:bg-woodland-600/50"
           >
@@ -148,6 +149,6 @@ VITE_FIREBASE_APP_ID=1:123456789:web:abcdef`}
           </button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 };
