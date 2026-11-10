@@ -26,6 +26,19 @@ Do not clear the entire Firestore database: the route library must survive. Unre
 
 After cleanup and import, verify that no test users, test runs or derived participation remain; the route manifest is unchanged; historical names/counts reconcile to the approved source; and the first real run has the correct check-in configuration. Verify owner access and complete a controlled registration/check-in before opening the club to runners.
 
-## After launch
+## Indefinite retention and deletion permissions
 
-No automatic deletion or archival schedule is agreed for real club history. Preserve live attendance, claims and reward evidence until the owner approves a separate retention policy. Any later archiving must preserve the history required for totals, streaks, rewards and fulfilled milestone records.
+Keep club records indefinitely. There is no age-based expiration, automatic deletion, scheduled purge or recurring archival deletion.
+
+| Record | Who may explicitly delete it |
+| --- | --- |
+| User / runner account and profile | Admin only |
+| Check-in / attendance record | Admin only |
+| Run | Organizer or admin |
+| Route | Organizer or admin |
+
+These permissions do not override existing integrity safeguards, such as retaining routes referenced by scheduled or historical runs and requiring admin authority for run deletion when attendance rollback or an opened check-in requires it. Ordinary runners cannot delete these records. Authorized edits and corrections remain available under the existing rules.
+
+Pagination limits what is loaded on screen; it must never delete older records. Preserve attendance, claims, reward evidence and fulfilled milestone history unless an authorized person explicitly deletes the relevant record. Any cleanup of dependent records must stay within that authorized operation and preserve unrelated records.
+
+The planned pre-launch reset above remains a separate, explicitly requested admin operation: remove test users and runs with related data, keep every route, re-import approved named history, then create the first real club run. Do not run it automatically.

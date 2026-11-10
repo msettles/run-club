@@ -135,3 +135,5 @@ These tests use synthetic local data with Firebase disabled and external request
 ### Go-live data policy
 
 The app is currently in testing. The [go-live reset policy](docs/go-live-policy.md) preserves routes, removes test users/runs and related records, reloads the approved name-based historical database, and establishes the first real club run. A deployment does not trigger this reset.
+
+Records are retained indefinitely. There is no automatic deletion: users and check-ins are admin-only deletions; organizers or admins may delete runs and routes, subject to existing integrity safeguards.
