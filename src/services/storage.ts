@@ -1,8 +1,8 @@
 import { useEffect } from 'react';
-import { Badge, SpecialEventDefinition } from '../types';
+import { RunEvent, Badge, SpecialEventDefinition } from '../types';
 import { INITIAL_BADGES, INITIAL_SPECIAL_EVENTS } from '../data/catalog';
 import { isFirebaseConfigured, db } from './firebase';
-import { collection, type DocumentData, orderBy, limit, onSnapshot, query } from 'firebase/firestore';
+import { doc, collection, type DocumentData, orderBy, limit, onSnapshot, query } from 'firebase/firestore';
 import { ClubNotification, showLocalNotification } from './notifications';
 import { useStoreState } from './store/state';
 import { createScheduleLoadingOps, subscribeSchedule } from './store/scheduleLoading';
@@ -15,7 +15,7 @@ import { createEventOps } from './store/events';
 import { createBadgeOps } from './store/badges';
 import { createRunOps } from './store/runs';
 import { createAnnouncementOps } from './store/announcements';
-import { memberFromPublicDoc } from './store/helpers';
+import { meetupFromPublicDoc, memberFromPublicDoc } from './store/helpers';
 // Re-exported for existing importers.
 export { cleanFirestoreData, formatRouteForFirestore, hydrateRouteFromFirestore, toPublicMember, RECENT_CHECKIN_DAYS } from './store/helpers';
 
@@ -117,6 +117,25 @@ export function useClubStore({ loadLeaderboard = true } = {}) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [syncAttempt]);
 
+  const { linkedRunId, setLinkedRun, setLinkedMeetup, setLinkedRunLoading, setLinkedRunError } = s;
+  useEffect(() => {
+    if (!linkedRunId || !isFirebaseConfigured || !db) return;
+    let active = true;
+    const ready = new Set<string>();
+    setLinkedRunLoading(true); setLinkedRunError(null);
+    const fail = () => { if (active) { setLinkedRunError('This run could not be loaded. Please retry.'); setLinkedRunLoading(false); } };
+    const stops = [onSnapshot(doc(db, 'runs', linkedRunId), { includeMetadataChanges: true }, (snapshot) => {
+      if (!active || (!snapshot.exists() && snapshot.metadata.fromCache)) return;
+      setLinkedRun(snapshot.exists() ? { ...snapshot.data(), id: snapshot.id } as RunEvent : null);
+      ready.add('run'); if (ready.size === 2) setLinkedRunLoading(false);
+    }, fail), onSnapshot(doc(db, 'meetup_events', linkedRunId), { includeMetadataChanges: true }, (snapshot) => {
+      if (!active || (!snapshot.exists() && snapshot.metadata.fromCache)) return;
+      setLinkedMeetup(snapshot.exists() ? meetupFromPublicDoc({ ...snapshot.data(), id: snapshot.id }) : null);
+      ready.add('meetup'); if (ready.size === 2) setLinkedRunLoading(false);
+    }, fail)];
+    return () => { active = false; stops.forEach((stop) => stop()); };
+  }, [linkedRunId, syncAttempt, setLinkedRun, setLinkedMeetup, setLinkedRunLoading, setLinkedRunError]);
+
   const { setMembers, setLeaderboardLoaded, setLeaderboardError } = s;
   useEffect(() => {
     if (!isFirebaseConfigured || !db || !loadLeaderboard) return;
@@ -142,6 +161,7 @@ export function useClubStore({ loadLeaderboard = true } = {}) {
   return {
     // State
     runs: store.runs,
+    linkedRunId: store.linkedRunId, linkedRunLoading: store.linkedRunLoading, linkedRunError: store.linkedRunError,
     routes: store.routes,
     loadRoute: store.loadRoute,
     refreshRoutes: store.refreshRoutes,

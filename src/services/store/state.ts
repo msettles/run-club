@@ -19,6 +19,7 @@ import { INITIAL_BADGES, INITIAL_SPECIAL_EVENTS, GUEST_USER } from '../../data/c
 import { createRouteCatalogClient, RouteDetailsCache } from '../routeCatalog';
 import type { DocumentData, QueryDocumentSnapshot } from 'firebase/firestore';
 import { clubYmd } from '../../utils/dateUtils';
+import { sharedRunId } from '../../utils/runLinks';
 import { RUN_PAGE_SIZE } from './scheduleLoading';
 import { fetchFullRoute } from './routeLoading';
 import { isFirebaseConfigured, db } from '../firebase';
@@ -75,6 +76,11 @@ export function useStoreState() {
   const [routes, setRoutes] = useState<GPXRoute[]>(() =>
     (LOCAL_MODE ? loadMerged(STORAGE_KEYS.ROUTES, [], idOf) : []).map(hydrateRouteFromFirestore)
   );
+  const [linkedRunId] = useState(() => sharedRunId(window.location.search));
+  const [linkedRun, setLinkedRun] = useState<RunEvent | null>(null);
+  const [linkedMeetup, setLinkedMeetup] = useState<MeetupEvent | null>(null);
+  const [linkedRunLoading, setLinkedRunLoading] = useState(Boolean(linkedRunId && isFirebaseConfigured));
+  const [linkedRunError, setLinkedRunError] = useState<string | null>(null);
   const routeCatalogClient = useMemo(() => isFirebaseConfigured && db ? createRouteCatalogClient(`https://firestore.googleapis.com/v1/projects/${db.app.options.projectId}/databases/(default)/documents`) : null, []);
   const routeDetailsCache = useMemo(() => new RouteDetailsCache(fetchFullRoute), []);
   const routePageToken = useRef<string | undefined>();
@@ -240,8 +246,12 @@ export function useStoreState() {
     return memberFromUser(currentUser, currentMemberKey);
   }, [currentUserEmail, currentMemberKey, currentUser]);
 
+  const loadedRuns = useMemo(() => linkedRun ? [...runs.filter((run) => run.id !== linkedRun.id), linkedRun] : runs, [runs, linkedRun]);
+  const loadedMeetups = useMemo(() => linkedMeetup ? [...meetupEvents.filter((event) => event.id !== linkedMeetup.id), { ...linkedMeetup, codeWord: staffCodeWords.current[linkedMeetup.id] || linkedMeetup.codeWord }] : meetupEvents, [meetupEvents, linkedMeetup]);
+
   return {
-    runs,
+    runs: loadedRuns,
+    linkedRunId, linkedRunLoading, linkedRunError, setLinkedRun, setLinkedMeetup, setLinkedRunLoading, setLinkedRunError,
     setRuns,
     routes,
     setRoutes,
@@ -262,7 +272,7 @@ export function useStoreState() {
     setIsSyncing,
     users,
     setUsers,
-    meetupEvents,
+    meetupEvents: loadedMeetups,
     setMeetupEvents,
     staffCodeWords,
     privateSyncEpoch,
