@@ -45,3 +45,7 @@ firebase-debug.log
 # Reviewed, vendored resolver distribution (required to reproduce its tarball)
 !vendor/rollup-plugin-node-resolve/dist/
 !vendor/rollup-plugin-node-resolve/dist/**
+
+# Browser regression artifacts
+/playwright-report/
+/test-results/

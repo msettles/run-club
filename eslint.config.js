@@ -33,6 +33,11 @@ export default tseslint.config(
     languageOptions: { globals: globals.serviceworker },
   },
   {
+    files: ['tests/browser/**/*.{ts,tsx}', 'playwright.config.ts'],
+    extends: [js.configs.recommended, ...tseslint.configs.recommended],
+    languageOptions: { globals: { ...globals.node, ...globals.browser } },
+  },
+  {
     files: ['tests/**/*.mjs', '*.config.{js,ts}', 'scripts/**/*.{js,mjs}'],
     extends: [js.configs.recommended],
     languageOptions: { globals: globals.node },
