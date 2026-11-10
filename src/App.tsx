@@ -1,3 +1,5 @@
+import { Modal } from './components/Modal';
+import { ModalLoadBoundary } from './components/ModalLoadBoundary';
 import { LazyRouteMap } from './components/LazyRouteMap';
 import { routeVersionLabel } from './utils/runChoices';
 import { useState, useEffect, useRef, lazy, Suspense } from 'react';
@@ -456,6 +458,13 @@ export function App() {
     }
     setIsRouteStudioOpen(false);
     setEditingRoute(null);
+  };
+
+  const closeLazyDialogs = () => {
+    setCheckInNotice(null); setSelectedRunForCheckIn(null); setPendingCheckInRun(null);
+    setIsNewRunOpen(false); setEditingRun(null); setIsRouteStudioOpen(false); setEditingRoute(null);
+    setIsSetupGuideOpen(false); setIsBrandAssetsOpen(false); setIsVersionModalOpen(false);
+    setIsAuthModalOpen(false); setIsOnboardingOpen(false);
   };
 
   return (
@@ -1006,13 +1015,11 @@ export function App() {
       )}
 
       {/* Lazy-Loaded Modals & Drawers */}
-      <Suspense fallback={null}>
+      <ModalLoadBoundary onClose={closeLazyDialogs}>
+      <Suspense fallback={<Modal title="Loading window" onClose={closeLazyDialogs} className="fixed inset-0 flex items-center justify-center bg-stone-950/80 p-4"><div className="rounded-2xl bg-white p-6"><p role="status">Loading…</p><button type="button" onClick={closeLazyDialogs} className="mt-4 rounded border px-4 py-2">Cancel</button></div></Modal>}>
         {checkInNotice && (
-          <div
+          <Modal title="Check-in notice" onClose={() => setCheckInNotice(null)}
             className="fixed inset-0 z-[1000] flex items-center justify-center bg-stone-950/70 backdrop-blur-sm p-4"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="checkin-notice-title"
           >
             <div className="w-full max-w-sm bg-white rounded-3xl shadow-2xl border border-stone-200 p-6 text-center space-y-4">
               <div className="text-4xl" aria-hidden="true">🦫</div>
@@ -1028,7 +1035,7 @@ export function App() {
                 OK
               </button>
             </div>
-          </div>
+          </Modal>
         )}
 
         {/* Check In Modal (New Relational Check-in Experience) */}
@@ -1144,6 +1151,7 @@ export function App() {
           />
         )}
       </Suspense>
+      </ModalLoadBoundary>
     </div>
   );
 }

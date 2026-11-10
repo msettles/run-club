@@ -86,6 +86,7 @@ export interface BuildDirectionsOptions {
   poiReplacements?: Record<string, string>;
   crossStreets?: boolean;
   prefetchedOsm?: OsmResponse;
+  loadOsm?: (bounds: [number, number, number, number]) => Promise<OsmResponse>;
   onProgress?: (status: string) => void;
 }
 
@@ -107,6 +108,7 @@ export async function buildDirections(
     poiReplacements,
     crossStreets = true,
     prefetchedOsm,
+    loadOsm = fetchOsm,
     onProgress,
   } = options;
 
@@ -141,7 +143,7 @@ export async function buildDirections(
   if (!osmData) {
     onProgress?.('Fetching street and landmark data from OpenStreetMap...');
     try {
-      osmData = await fetchOsm(bbox);
+      osmData = await loadOsm(bbox);
     } catch (err) {
       console.warn('OSM Overpass query failed or timed out, falling back to geometric route cues:', err);
       onProgress?.('Street database offline — using course route pathway cues...');

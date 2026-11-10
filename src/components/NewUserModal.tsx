@@ -1,3 +1,4 @@
+import { Modal } from './Modal';
 import React, { useState, useMemo } from 'react';
 import { X, CheckCircle, ShieldCheck, Sparkles, Search, AlertCircle, RefreshCw } from 'lucide-react';
 import { LegacyMember, UserProfile } from '../types';
@@ -144,11 +145,11 @@ export const NewUserModal: React.FC<NewUserModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[1000] overflow-y-auto bg-stone-950/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
+    <Modal title="Runner profile" onClose={onClose} className="fixed inset-0 z-[1000] overflow-y-auto bg-stone-950/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
       <div className="relative w-full max-w-lg bg-white rounded-3xl shadow-2xl border border-stone-200 overflow-hidden animate-in fade-in zoom-in-95 duration-200 my-6">
         {/* Header */}
         <div className="bg-gradient-to-r from-woodland-950 via-woodland-900 to-[#13495d] px-6 py-5 text-white relative">
-          <button
+          <button aria-label="Close window"
             onClick={onClose}
             className="absolute top-4 right-4 p-2 text-stone-300 hover:text-white rounded-full hover:bg-white/10 transition cursor-pointer"
           >
@@ -423,6 +424,6 @@ export const NewUserModal: React.FC<NewUserModalProps> = ({
           </div>
         </form>
       </div>
-    </div>
+    </Modal>
   );
 };

@@ -45,7 +45,7 @@ export interface OsmResponse {
 /**
  * Download OpenStreetMap street & POI network for a bounding box
  */
-export async function fetchOsm(bbox: [number, number, number, number]): Promise<OsmResponse> {
+export async function fetchOsm(bbox: [number, number, number, number], signal?: AbortSignal): Promise<OsmResponse> {
   const [s, w, n, e] = bbox;
   // Streamlined query focusing on walkable/runnable highways and key landmark amenities
   const query = `[out:json][timeout:15];
@@ -58,7 +58,10 @@ out tags geom;`;
   let lastError: any = null;
 
   for (const url of OVERPASS_URLS) {
+    signal?.throwIfAborted();
     const controller = new AbortController();
+    const abort = () => controller.abort(signal?.reason);
+    signal?.addEventListener('abort', abort, { once: true });
     let timeoutId: ReturnType<typeof setTimeout> | undefined;
     try {
       // 10-second timeout per mirror
@@ -79,13 +82,14 @@ out tags geom;`;
       }
 
       const data: OsmResponse = await response.json();
-      if (data && Array.isArray(data.elements) && data.elements.length > 0) {
+      if (data && Array.isArray(data.elements) && data.elements.length > 0 && !('remark' in data)) {
         return data;
       }
     } catch (err: any) {
+      signal?.throwIfAborted();
       lastError = err;
       console.warn(`Overpass mirror ${url} failed:`, err?.message || err);
-    } finally { clearTimeout(timeoutId); }
+    } finally { clearTimeout(timeoutId); signal?.removeEventListener('abort', abort); }
   }
 
   // Non-fatal fallback: When public Overpass servers are down, rate limited, or slow,

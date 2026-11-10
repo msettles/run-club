@@ -1,3 +1,4 @@
+import { Modal } from './Modal';
 import React, { useState } from 'react';
 import { RunEvent, GPXRoute, PaceGroup, SpecialEventType, SpecialEventDefinition, RunRouteChoice } from '../types';
 import { type RouteCatalogPaginationProps, RouteChoicesEditor } from './RouteChoicesEditor';
@@ -95,7 +96,7 @@ export const EditRunModal: React.FC<EditRunModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-stone-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+    <Modal title="Edit run" onClose={onClose} className="fixed inset-0 z-[1000] flex items-center justify-center bg-stone-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
       <div className="bg-white rounded-2xl max-w-lg w-full max-h-[90vh] shadow-2xl border border-stone-200 flex flex-col overflow-hidden">
         {/* Header */}
         <div className="bg-stone-50 border-b border-stone-200 p-4 flex items-center justify-between">
@@ -106,7 +107,7 @@ export const EditRunModal: React.FC<EditRunModalProps> = ({
               <p className="text-xs text-stone-500">ID: {run.id}</p>
             </div>
           </div>
-          <button onClick={onClose} className="p-1 rounded-full text-stone-400 hover:text-stone-700">
+          <button aria-label="Close window" onClick={onClose} className="p-1 rounded-full text-stone-400 hover:text-stone-700">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -334,6 +335,6 @@ export const EditRunModal: React.FC<EditRunModalProps> = ({
           </div>
         </form>
       </div>
-    </div>
+    </Modal>
   );
 };

@@ -1,3 +1,4 @@
+import { Modal } from './Modal';
 import { formatMiles } from '../utils/miles';
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { celebrate } from '../utils/celebrate';
@@ -285,7 +286,7 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
       }
     };
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/80 backdrop-blur-sm p-4" role="dialog" aria-modal="true" aria-labelledby="choose-run-title">
+      <Modal title="Run check-in" onClose={onClose} className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/80 backdrop-blur-sm p-4">
         <form onSubmit={findRun} className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl border border-stone-200 p-6 space-y-4">
           <button type="button" onClick={onClose} aria-label="Close" className="absolute top-4 right-4 p-2 text-stone-400 hover:text-stone-700 rounded-full hover:bg-stone-100 transition">
             <X className="w-5 h-5" />
@@ -335,7 +336,7 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
             {isResolving ? 'Checking…' : 'Find my run'}
           </button>
         </form>
-      </div>
+      </Modal>
     );
   }
 
@@ -347,7 +348,7 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
         ? `Check-in for this run opens ${formatOpening(checkInWindow(matchedEvent).opensAt)}.`
         : 'Check-in for this run closed at midnight on the day of the run.';
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/80 backdrop-blur-sm p-4" role="dialog" aria-modal="true" aria-labelledby="checkin-closed-title">
+      <Modal title="Run check-in" onClose={onClose} className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/80 backdrop-blur-sm p-4">
         <div className="relative w-full max-w-sm bg-white rounded-3xl shadow-2xl border border-stone-200 p-6 text-center space-y-4">
           <div className="text-4xl" aria-hidden="true">🦫</div>
           <h3 id="checkin-closed-title" className="text-lg font-display font-black uppercase tracking-wide text-stone-900">
@@ -362,15 +363,15 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
             OK
           </button>
         </div>
-      </div>
+      </Modal>
     );
   }
 
   if (isGuest) {
     return (
-      <div className="fixed inset-0 z-50 overflow-y-auto bg-stone-950/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 min-h-screen py-6 sm:py-8">
+      <Modal title="Run check-in" onClose={onClose} className="fixed inset-0 z-50 overflow-y-auto bg-stone-950/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 min-h-screen py-6 sm:py-8">
         <div className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl border border-stone-200 overflow-hidden animate-in fade-in duration-200 p-6 sm:p-8 text-center space-y-5">
-          <button
+          <button aria-label="Close window"
             onClick={onClose}
             className="absolute top-4 right-4 p-2 text-stone-400 hover:text-stone-700 rounded-full hover:bg-stone-100 transition cursor-pointer"
           >
@@ -420,7 +421,7 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
             Cancel
           </button>
         </div>
-      </div>
+      </Modal>
     );
   }
 
@@ -498,7 +499,7 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
   const activeCheckIn = successResult?.checkIn || existingCheckIn;
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-stone-950/80 backdrop-blur-sm flex justify-center p-3 sm:p-4 min-h-screen py-6 sm:py-8">
+    <Modal title="Run check-in" onClose={onClose} className="fixed inset-0 z-50 overflow-y-auto bg-stone-950/80 backdrop-blur-sm flex justify-center p-3 sm:p-4 min-h-screen py-6 sm:py-8">
       <div className="relative w-full max-w-xl m-auto max-h-[90vh] flex flex-col bg-white rounded-3xl shadow-2xl border border-stone-200 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
         
         {/* Top Header */}
@@ -516,7 +517,7 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
               </p>
             </div>
           </div>
-          <button
+          <button aria-label="Close window"
             onClick={onClose}
             className="p-2 text-stone-300 hover:text-white rounded-full hover:bg-white/10 transition"
           >
@@ -1164,6 +1165,6 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
           )}
         </div>
       </div>
-    </div>
+    </Modal>
   );
 };

@@ -44,3 +44,36 @@ it('bounds the complete job including slow response bodies and geocoding', async
   await rejected;
   expect(WorkerHarness.instances[0].terminate).toHaveBeenCalledOnce();
 });
+
+it('brokers OSM requests without finishing the geometry worker', async () => {
+  const { sessionOsmCache } = await import('./osmCache');
+  const osm = { elements: [{ type: 'way' as const, id: 1 }] };
+  const load = vi.spyOn(sessionOsmCache, 'load').mockResolvedValue(osm);
+  try {
+    const result = generateRouteDirectionsFromGpx('', 'test.gpx', { parsed });
+    const worker = WorkerHarness.instances[0];
+    worker.onmessage?.({ data: { osmRequest: { id: 7, bounds: [38, -122, 39, -121] } } });
+    await Promise.resolve();
+    expect(worker.postMessage).toHaveBeenLastCalledWith({ osmResponse: { id: 7, data: osm } });
+    expect(worker.terminate).not.toHaveBeenCalled();
+    worker.onmessage?.({ data: { result: { name: 'Done' } } });
+    await expect(result).resolves.toMatchObject({ name: 'Done' });
+    expect(load.mock.calls[0][1]?.aborted).toBe(true);
+  } finally { load.mockRestore(); }
+});
+it('releases outstanding OSM work on cancellation and does not post late data to a terminated worker', async () => {
+  const { sessionOsmCache } = await import('./osmCache');
+  let resolve!: (data: { elements: [] }) => void;
+  const load = vi.spyOn(sessionOsmCache, 'load').mockImplementation(() => new Promise((done) => { resolve = done; }));
+  try {
+    const controller = new AbortController();
+    const result = generateRouteDirectionsFromGpx('', 'test.gpx', { parsed, signal: controller.signal });
+    const rejected = expect(result).rejects.toHaveProperty('name', 'AbortError');
+    const worker = WorkerHarness.instances[0];
+    worker.onmessage?.({ data: { osmRequest: { id: 7, bounds: [38, -122, 39, -121] } } });
+    controller.abort(); await rejected;
+    expect(load.mock.calls[0][1]?.aborted).toBe(true);
+    resolve({ elements: [] }); await Promise.resolve();
+    expect(worker.postMessage).toHaveBeenCalledTimes(1);
+  } finally { load.mockRestore(); }
+});

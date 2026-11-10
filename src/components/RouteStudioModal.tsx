@@ -1,3 +1,4 @@
+import { Modal } from './Modal';
 import React, { useState, useEffect, useRef } from 'react';
 import L from 'leaflet';
 import {
@@ -367,7 +368,7 @@ export const RouteStudioModal: React.FC<RouteStudioModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[1100] flex items-center justify-center bg-stone-950/70 backdrop-blur-sm p-2 sm:p-4 overflow-y-auto animate-in fade-in duration-200">
+    <Modal title="Route studio" onClose={onClose} className="fixed inset-0 z-[1100] flex items-center justify-center bg-stone-950/70 backdrop-blur-sm p-2 sm:p-4 overflow-y-auto animate-in fade-in duration-200">
       <div className="bg-white rounded-3xl max-w-5xl w-full my-auto shadow-2xl border border-stone-200 flex flex-col max-h-[95vh] overflow-hidden">
         {/* Header */}
         <div className="bg-gradient-to-r from-woodland-950 via-woodland-900 to-[#13495d] text-white p-4 sm:p-5 flex items-center justify-between shrink-0">
@@ -384,7 +385,7 @@ export const RouteStudioModal: React.FC<RouteStudioModalProps> = ({
               </p>
             </div>
           </div>
-          <button
+          <button aria-label="Close window"
             onClick={onClose}
             className="p-2 rounded-full text-woodland-200 hover:text-white hover:bg-white/10 transition"
           >
@@ -878,6 +879,6 @@ export const RouteStudioModal: React.FC<RouteStudioModalProps> = ({
           </div>
         </form>
       </div>
-    </div>
+    </Modal>
   );
 };

@@ -1,3 +1,4 @@
+import { Modal } from './Modal';
 import React, { useState } from 'react';
 import { X, RefreshCw, CheckCircle2, GitCommit, Calendar, Tag } from 'lucide-react';
 import { VERSION_LABEL, COMMIT_HASH, BUILD_TIME, forceAppUpdate } from '../utils/version';
@@ -25,7 +26,7 @@ export const VersionModal: React.FC<VersionModalProps> = ({ isOpen, onClose }) =
   };
 
   return (
-    <div className="fixed inset-0 z-[1050] flex items-center justify-center p-4 bg-stone-900/60 backdrop-blur-xs animate-in fade-in duration-150">
+    <Modal title="App version" onClose={onClose} className="fixed inset-0 z-[1050] flex items-center justify-center p-4 bg-stone-900/60 backdrop-blur-xs animate-in fade-in duration-150">
       <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-stone-200 relative overflow-hidden space-y-5 animate-in zoom-in-95 duration-200">
         {/* Subtle decorative background glow */}
         <div className="absolute top-0 right-0 -mt-8 -mr-8 w-32 h-32 bg-woodland-500/10 rounded-full blur-2xl pointer-events-none" />
@@ -45,7 +46,7 @@ export const VersionModal: React.FC<VersionModalProps> = ({ isOpen, onClose }) =
               <p className="text-xs text-stone-500 font-medium">Build &amp; Version Information</p>
             </div>
           </div>
-          <button
+          <button aria-label="Close window"
             onClick={onClose}
             className="p-1.5 rounded-full text-stone-400 hover:text-stone-700 hover:bg-stone-100 transition"
           >
@@ -109,6 +110,6 @@ export const VersionModal: React.FC<VersionModalProps> = ({ isOpen, onClose }) =
           <span>{isUpdating ? 'Purging Cache & Reloading...' : 'Check for Updates & Refresh App'}</span>
         </button>
       </div>
-    </div>
+    </Modal>
   );
 };
