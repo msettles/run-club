@@ -30,6 +30,8 @@ CI runs the suite in a separate job. On failure it retains screenshots and trace
 
 ## Manual device checklist — pending
 
+Use [the detailed real-device test plan](real-device-test-plan.md) for prerequisites, case IDs, steps, pass criteria and result recording.
+
 These checks have **not** been completed by desktop browser emulation. Record device, OS/browser version, installed app version, result and any failure for each:
 
 | Scenario | iPhone / Safari & installed PWA | Android / Chrome & installed PWA |
