@@ -18,6 +18,8 @@ Run Club is the platform; each club runs its own copy. The model is **fork, edit
 
 ## 1. Fork and run locally
 
+Run Club is under the [PolyForm Noncommercial License](../LICENSE): free for clubs to use and change, not for commercial use. Keep the `LICENSE` file, with its notice crediting the original repository, in your fork.
+
 Fork the repository on GitHub, then:
 
 ```bash

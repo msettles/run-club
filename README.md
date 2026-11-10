@@ -134,7 +134,13 @@ Sending straight from **Post Announcement** needs Cloud Functions (Blaze plan, e
 - [`BRANDING.md`](BRANDING.md): logos and colours
 - [`docs/route-creation-architecture-plan.md`](docs/route-creation-architecture-plan.md): route engine design. The original Python prototype has been removed; `src/utils/routeEngine/` is the source of truth.
 
-MIT License. Run Club was first made for the Woodland Woodchuckers community.
+## License
+
+[PolyForm Noncommercial License 1.0.0](LICENSE). Free to use, change and share for noncommercial purposes, including by running clubs. Commercial use needs separate permission from the author.
+
+Copies and forks must keep the `LICENSE` file, including its `Required Notice` line crediting the original repository, https://github.com/msettles/run-club. Third-party code under `vendor/` and in `node_modules/` keeps its own licence.
+
+Run Club was first made for the Woodland Woodchuckers community.
 
 ### Browser regression tests
 
