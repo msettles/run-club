@@ -1,6 +1,6 @@
 # Pagination and route loading
 
-Implemented after the v1.2.0 release on `codex/performance-pagination-routes`.
+Released in v1.2.1: paginated history, metadata-only route loading and deferred member reads.
 
 ## Loading behavior
 
