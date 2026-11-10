@@ -109,16 +109,27 @@ export function createCheckInOps(ctx: StoreState & ReturnType<typeof createLegac
     }
   };
   const markMilestoneFulfilled = async (id: string, fulfilledBy: string) => {
+    const epoch = ctx.privateSyncEpoch?.current;
+    const gearPage = ctx.gearHistoryPage?.current;
     const fulfilledAt = new Date().toISOString();
+    let completed: MilestoneAlert;
     if (isFirebaseConfigured && db) {
       const firestore = db;
-      await runTransaction(firestore, async (tx) => {
+      completed = await runTransaction(firestore, async (tx) => {
         const ref = doc(firestore, 'milestone_alerts', id);
-        if (!(await tx.get(ref)).exists()) throw new Error('This gear alert no longer exists. Refresh the queue.');
+        const snapshot = await tx.get(ref);
+        if (!snapshot.exists()) throw new Error('This gear alert no longer exists. Refresh the queue.');
         tx.update(ref, { fulfilled: true, fulfilledAt, fulfilledBy });
+        return { ...snapshot.data(), id, fulfilled: true, fulfilledAt, fulfilledBy } as MilestoneAlert;
       });
+    } else {
+      const previous = ctx.milestoneAlerts.find((alert) => alert.id === id);
+      if (!previous) throw new Error('This gear alert no longer exists. Refresh the queue.');
+      completed = { ...previous, fulfilled: true, fulfilledAt, fulfilledBy };
     }
-    ctx.setMilestoneAlerts((prev) => prev.map((a) => a.id === id ? { ...a, fulfilled: true, fulfilledAt, fulfilledBy } : a));
+    if (epoch !== ctx.privateSyncEpoch?.current || gearPage !== ctx.gearHistoryPage?.current) return;
+    // The pending listener may remove this row before the transaction resolves.
+    ctx.setMilestoneAlerts((previous) => [...previous.filter((alert) => alert.id !== id), completed]);
   };
   return { checkInRunner, markMilestoneFulfilled };
 }

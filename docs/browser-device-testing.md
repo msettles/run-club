@@ -9,7 +9,7 @@ npm run typecheck:browser
 npm run test:browser
 ```
 
-Eight scenarios run in both desktop Chromium and mobile WebKit (16 checks):
+Ten scenarios run in both desktop Chromium and mobile WebKit (20 checks):
 
 1. QR entry saves check-in and automatic RSVP before route/milestone screens are completed, retaining attendance after reload.
 2. An incorrect code word does not write attendance; correction permits retry.
@@ -19,6 +19,8 @@ Eight scenarios run in both desktop Chromium and mobile WebKit (16 checks):
 6. A failed profile save preserves entered names and can be retried without duplicate profiles.
 7. Pending profile submission disables repeat submission and Cancel until completion.
 8. A failed modal exposes recovery; Escape returns to the opener and the app can open another dialog.
+9. Staff roster lookup and CSV export retain their behavior with loaded-scope labels.
+10. A pending gear handout moves into fulfilled history.
 
 The suite freezes wall time, seeds synthetic localStorage profiles/events and blocks external requests. Its dedicated Vite configuration explicitly disables Firebase even when a developer has production `.env` values. The onboarding fixture mounts the actual profile component and local store with a controlled simulated registration transport; the check-in tests navigate the full app. It does not exercise Google OAuth, email-link delivery or Firebase auth restoration. Existing Firestore integration/rules tests remain responsible for server-side authorization, transactions and concurrency.
 

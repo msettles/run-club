@@ -97,6 +97,15 @@ export const MembersTab: React.FC<AdminDashboardProps> = (props) => {
       setLegacyImportBusy(false);
     }
   };
+  const [lookupEmail, setLookupEmail] = useState('');
+  const [lookupMessage, setLookupMessage] = useState('');
+  const [lookupBusy, setLookupBusy] = useState(false);
+  const [exportBusy, setExportBusy] = useState(false);
+  useEffect(() => {
+    if (!props.staffRosterLoaded) void props.onLoadMoreStaffUsers?.().catch(() => {});
+    // Operations use current render state; opening the roster starts one page.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser?.email, currentUser?.role, props.staffRosterLoaded]);
   // Filtered members
   const filteredUsers = users.filter(
     (u) =>
@@ -161,9 +170,13 @@ export const MembersTab: React.FC<AdminDashboardProps> = (props) => {
   };
 
 
-  const exportUsersCSV = () => {
+  const exportUsersCSV = async () => {
+    if (exportBusy) return;
+    setExportBusy(true); setLookupMessage('');
+    try {
+    const profiles = props.onExportStaffUsers ? await props.onExportStaffUsers() : users;
     const headers = ['Email', 'Display Name', 'Shirt Size', 'Birthday', 'Age', 'Total Runs', 'Pre-2021 Runs', 'Logged Runs', 'Total Miles', 'Runs Count', 'Walks Count', 'First Run Date', 'Linked Legacy Names'];
-    const rows = users.map((u) => [
+    const rows = profiles.map((u) => [
       u.email,
       u.displayName,
       u.shirtSize,
@@ -179,10 +192,21 @@ export const MembersTab: React.FC<AdminDashboardProps> = (props) => {
       (u.linkedLegacyNames || []).join('; '),
     ]);
     downloadCSV(headers, rows, 'woodchuckers-users-profiles.csv');
+    } catch { setLookupMessage('Profile export failed. Please retry.'); } finally { setExportBusy(false); }
   };
 
   return (
     <div className="space-y-6">
+      {props.onFindStaffUser && <form className="flex flex-wrap items-end gap-2" onSubmit={async (event) => {
+        event.preventDefault(); if (lookupBusy) return;
+        setLookupBusy(true); setLookupMessage('');
+        try { const found = await props.onFindStaffUser!(lookupEmail); if (found) { setMemberSearch(found.email); setRoleFilter('all'); } setLookupMessage(found ? `Loaded ${found.displayName}.` : 'No profile found for that email.'); }
+        catch { setLookupMessage('Profile lookup failed. Please retry.'); } finally { setLookupBusy(false); }
+      }}><label className="text-sm">Find runner by exact email<input type="email" required value={lookupEmail} onChange={(event) => setLookupEmail(event.target.value)} className="ml-2 rounded border p-2" /></label><button type="submit" disabled={lookupBusy} className="rounded border bg-white p-2">{lookupBusy ? 'Looking up…' : 'Find runner'}</button></form>}
+      {lookupMessage && <p role="status" className="text-sm">{lookupMessage}</p>}
+      {props.onRefreshStaffUsers && <button type="button" disabled={props.staffRosterLoading} className="rounded border bg-white p-2 text-sm" onClick={() => { void props.onRefreshStaffUsers?.().catch(() => {}); }}>Refresh runner profiles</button>}
+      {props.staffRosterError && <p role="alert" className="text-sm text-amber-900">{props.staffRosterError}</p>}
+      {props.hasMoreStaffUsers && <button type="button" disabled={props.staffRosterLoading} className="rounded border bg-white p-2 text-sm" onClick={() => { void props.onLoadMoreStaffUsers?.().catch(() => {}); }}>{props.staffRosterLoading ? 'Loading profiles…' : 'Load more runner profiles'}</button>}
       {/* User Roster */}
       <div className="bg-white rounded-2xl p-6 shadow-sm border border-stone-200 space-y-4">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-stone-100 pb-3">
@@ -191,7 +215,7 @@ export const MembersTab: React.FC<AdminDashboardProps> = (props) => {
               Active User Profiles (Keyed on Email)
             </h3>
             <p className="text-xs text-stone-500">
-              Roster of registered runners, their roles, shirt sizes, lifetime miles, and claimed legacy records.
+              Showing loaded profiles. Filters and role counts apply to these rows. Load more or look up an exact email to find another runner. CSV exports include all profiles.
             </p>
           </div>
 
@@ -213,12 +237,12 @@ export const MembersTab: React.FC<AdminDashboardProps> = (props) => {
                 type="text"
                 value={memberSearch}
                 onChange={(e) => setMemberSearch(e.target.value)}
-                placeholder="Search runner or email..."
+                placeholder="Search loaded runner or email..."
                 className="pl-8 pr-3 py-1.5 text-xs border rounded-xl outline-none"
               />
             </div>
             <button
-              onClick={exportUsersCSV}
+              onClick={() => { void exportUsersCSV(); }} disabled={exportBusy}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-woodland-700 hover:bg-woodland-800 text-white font-bold text-xs rounded-xl transition shadow-xs"
             >
               <Download className="w-3.5 h-3.5" />

@@ -43,7 +43,7 @@ export const MilestonesTab: React.FC<AdminDashboardProps> = (props) => {
               <span className="text-lg font-black font-mono text-amber-700">{pendingMilestones.length}</span>
             </div>
             <div className="px-3.5 py-2 bg-emerald-50 rounded-xl border border-emerald-200 text-center">
-              <span className="text-[10px] uppercase font-bold text-emerald-800 block">Fulfilled Awards</span>
+              <span className="text-[10px] uppercase font-bold text-emerald-800 block">Loaded Fulfilled Awards</span>
               <span className="text-lg font-black font-mono text-emerald-700">{fulfilledMilestones.length}</span>
             </div>
           </div>
@@ -169,12 +169,15 @@ export const MilestonesTab: React.FC<AdminDashboardProps> = (props) => {
         )}
       </div>
 
+      {props.onRefreshGearHistory && <button type="button" disabled={props.gearHistoryLoading} className="rounded border bg-white p-2 text-sm" onClick={() => { void props.onRefreshGearHistory?.().catch(() => {}); }}>Refresh fulfilled gear history</button>}
+      {props.gearHistoryError && <p role="alert" className="text-sm text-amber-900">{props.gearHistoryError}</p>}
+      {props.hasMoreGearHistory && <button type="button" disabled={props.gearHistoryLoading} className="rounded border bg-white p-2 text-sm" onClick={() => { void props.onLoadMoreGearHistory?.().catch(() => {}); }}>{props.gearHistoryLoading ? 'Loading fulfilled history…' : 'Load more fulfilled gear history'}</button>}
       {/* SECTION 2: COMPLETED HANDOUTS HISTORY */}
       {fulfilledMilestones.length > 0 && (
         <div className="bg-white rounded-2xl p-6 shadow-sm border border-stone-200 space-y-3">
           <h4 className="text-xs font-bold text-stone-800 uppercase tracking-wider flex items-center gap-2">
             <Check className="w-4 h-4 text-emerald-600" />
-            <span>Previously Fulfilled Awards ({fulfilledMilestones.length})</span>
+            <span>Loaded Fulfilled Awards ({fulfilledMilestones.length})</span>
           </h4>
 
           <div className="overflow-x-auto">

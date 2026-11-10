@@ -11,6 +11,9 @@ vi.mock('firebase/firestore', () => ({
 
 function context() {
   return {
+    staffRosterPage: { current: { pending: false, complete: false } }, gearHistoryPage: { current: { pending: false, complete: false } },
+    setStaffRosterLoading: vi.fn(), setStaffRosterError: vi.fn(), setHasMoreStaffUsers: vi.fn(),
+    setGearHistoryLoading: vi.fn(), setGearHistoryError: vi.fn(), setHasMoreGearHistory: vi.fn(),
     privateUnsubscribers: { current: [] }, setPrivateSyncError: vi.fn(),
     privateSyncEpoch: { current: 0 }, staffCodeWords: { current: {} },
     setUsers: vi.fn(), setMeetupEvents: vi.fn(), setCheckins: vi.fn(), setOwnLegacyEvents: vi.fn(), setLegacyMembers: vi.fn(), setMilestoneAlerts: vi.fn(),
@@ -48,4 +51,11 @@ it('does not re-read or re-seed routes during staff sign-in', async () => {
   await ops.syncPrivateData('alice@example.com', true);
   expect(api.getDocs.mock.calls.some(([ref]) => ref === 'routes')).toBe(false);
   expect(api.setDoc).not.toHaveBeenCalled();
+});
+
+it('does not subscribe to the complete staff profile collection at sign-in', async () => {
+  const ctx = context();
+  await createPrivateSyncOps(ctx as unknown as Parameters<typeof createPrivateSyncOps>[0]).syncPrivateData('alice@example.com', true);
+  expect(api.onSnapshot.mock.calls.some(([ref]) => ref === 'users')).toBe(false);
+  expect(api.onSnapshot.mock.calls.some(([ref]) => ref === 'users/alice@example.com')).toBe(true);
 });

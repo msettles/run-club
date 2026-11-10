@@ -106,3 +106,13 @@ it('returns the newly earned incremental level while the verified reward refresh
   expect(result.user?.badgeCounts?.five).toBe(2);
   expect(firestore.set).toHaveBeenCalledWith('users/alice@example.com', expect.objectContaining({ badgeCounts: { five: 1 } }));
 });
+
+it('keeps a completed handout visible when the pending listener removes it before the save returns', async () => {
+  const ctx = context();
+  firestore.docs['milestone_alerts/gear'] = { userEmail: 'alice@example.com', runnerName: 'Alice', fulfilled: false };
+  const ops = createCheckInOps(ctx as unknown as Parameters<typeof createCheckInOps>[0]);
+  await ops.markMilestoneFulfilled('gear', 'Organizer');
+  const update = ctx.setMilestoneAlerts.mock.calls[0][0];
+  expect(update([])).toEqual([expect.objectContaining({ id: 'gear', runnerName: 'Alice', fulfilled: true, fulfilledBy: 'Organizer' })]);
+  expect(firestore.update).toHaveBeenCalledWith('milestone_alerts/gear', expect.objectContaining({ fulfilled: true }));
+});

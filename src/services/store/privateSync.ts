@@ -1,3 +1,4 @@
+import { resetStaffPages } from './staffLoading';
 /** Live private data scoped to the signed-in account and role. */
 import type { UserProfile, CheckInRecord, MilestoneAlert } from '../../types';
 import { isFirebaseConfigured, db } from '../firebase';
@@ -15,6 +16,9 @@ export function createPrivateSyncOps(ctx: StoreState & ReturnType<typeof createL
   const syncPrivateData = async (email: string, isStaff: boolean, _isAdmin = false) => {
     if (!isFirebaseConfigured || !db) return;
     stop();
+    resetStaffPages(ctx);
+    setUsers((previous) => previous.filter((user) => user.email.toLowerCase() === email.trim().toLowerCase()));
+    setMilestoneAlerts([]);
     setPrivateSyncError(null);
     const epoch = ++privateSyncEpoch.current;
     const current = () => epoch === privateSyncEpoch.current;
@@ -24,6 +28,7 @@ export function createPrivateSyncOps(ctx: StoreState & ReturnType<typeof createL
       if (!current()) return;
       console.warn('Private subscription failed:', err);
       if ((err as { code?: string })?.code === 'permission-denied') {
+        resetStaffPages(ctx);
         setUsers((prev) => prev.filter((u) => u.email.toLowerCase() === cleanEmail));
         setCheckins((prev) => prev.filter((c) => c.userEmail.toLowerCase() === cleanEmail));
         setMilestoneAlerts((prev) => prev.filter((a) => a.userEmail.toLowerCase() === cleanEmail));
@@ -41,10 +46,6 @@ export function createPrivateSyncOps(ctx: StoreState & ReturnType<typeof createL
       setUsers((prev) => owner ? [owner, ...(isStaff ? prev.filter((u) => u.email.toLowerCase() !== cleanEmail) : [])] : []);
       if (owner) void ctx.syncMemberProjection(cleanEmail).catch(fail);
     }, fail));
-    if (isStaff) {
-      privateUnsubscribers.current.push(onSnapshot(collection(firestore, 'users'),
-        (snap) => { if (current()) setUsers(snap.docs.map((d) => d.data() as UserProfile)); }, fail));
-    }
     let own: CheckInRecord[] = [];
     let recent: CheckInRecord[] = [];
     const publishCheckins = () => {
@@ -63,12 +64,13 @@ export function createPrivateSyncOps(ctx: StoreState & ReturnType<typeof createL
         setMeetupEvents((prev) => prev.map((e) => ({ ...e, codeWord: words[e.id] || '' })));
       }, fail));
     }
-    privateUnsubscribers.current.push(onSnapshot(isStaff ? collection(firestore, 'milestone_alerts') : query(collection(firestore, 'milestone_alerts'), where('userEmail', '==', cleanEmail)),
-      (snap) => { if (current()) setMilestoneAlerts(snap.docs.map((d) => d.data() as MilestoneAlert)); }, fail));
+    privateUnsubscribers.current.push(onSnapshot(isStaff ? query(collection(firestore, 'milestone_alerts'), where('fulfilled', '==', false)) : query(collection(firestore, 'milestone_alerts'), where('userEmail', '==', cleanEmail)),
+      (snap) => { if (current()) setMilestoneAlerts((previous) => [...(isStaff ? previous.filter((alert) => alert.fulfilled) : []), ...snap.docs.map((d) => ({ ...d.data(), id: d.id }) as MilestoneAlert)]); }, fail));
   };
   const clearPrivateData = () => {
     if (!isFirebaseConfigured) return;
     privateSyncEpoch.current++;
+    resetStaffPages(ctx);
     if (ctx.privateSessionEpoch) ctx.privateSessionEpoch.current++;
     setPrivateSyncError(null);
     stop();

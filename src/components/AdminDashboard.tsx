@@ -42,6 +42,19 @@ export interface AdminDashboardProps {
   // Relational V2 props
   meetupEvents: MeetupEvent[];
   checkins: CheckInRecord[];
+  staffRosterLoaded?: boolean;
+  onRefreshStaffUsers?: () => Promise<void>;
+  onRefreshGearHistory?: () => Promise<void>;
+  onLoadMoreStaffUsers?: () => Promise<void>;
+  onFindStaffUser?: (email: string) => Promise<UserProfile | undefined>;
+  onExportStaffUsers?: () => Promise<UserProfile[]>;
+  staffRosterLoading?: boolean;
+  staffRosterError?: string | null;
+  hasMoreStaffUsers?: boolean;
+  onLoadMoreGearHistory?: () => Promise<void>;
+  gearHistoryLoading?: boolean;
+  gearHistoryError?: string | null;
+  hasMoreGearHistory?: boolean;
   users: UserProfile[];
   legacyMembers: LegacyMember[];
   milestoneAlerts?: MilestoneAlert[];
@@ -120,7 +133,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = (props) => {
             <span className="text-lg font-black font-mono text-amber-400">{totalCheckinsLogged}</span>
           </div>
           <div className="px-3.5 py-2 bg-stone-800 rounded-xl border border-stone-700 text-center">
-            <span className="text-[10px] uppercase font-bold text-stone-400 block">Lifetime Miles</span>
+            <span className="text-[10px] uppercase font-bold text-stone-400 block">Loaded Profile Miles</span>
             <span className="text-lg font-black font-mono text-emerald-400">{totalLifetimeMiles}</span>
           </div>
           <div className="px-3.5 py-2 bg-stone-800 rounded-xl border border-stone-700 text-center">
@@ -221,7 +234,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = (props) => {
           }`}
         >
           <Users className="w-4 h-4 text-woodland-600" />
-          <span>Runners &amp; Claims ({users.length})</span>
+          <span>Runners &amp; Claims ({users.length} loaded)</span>
         </button>
 
         <button
