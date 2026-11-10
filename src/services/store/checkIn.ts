@@ -52,8 +52,17 @@ export function createCheckInOps(ctx: StoreState & ReturnType<typeof createLegac
           const mine: Attendee = { memberId: key, name: computed.updatedUser.displayName, checkedIn: true, checkedInAt: computed.newCheckIn.createdAt, rsvpDate: computed.newCheckIn.createdAt };
           const current = (run.data().attendees || []) as Attendee[];
           const previous = current.find((a) => a.memberId === key);
-          const next = [...current.filter((a) => a.memberId !== key), { ...mine, ...(previous ? { rsvpDate: previous.rsvpDate } : {}) }];
-          tx.update(runRef, { attendees: next });
+          const entry: Attendee = { ...mine, ...(previous ? { rsvpDate: previous.rsvpDate } : {}) };
+          const others = current.filter((a) => a.memberId !== key);
+          // An edit usually leaves the runner's entry as it was. The rules only accept
+          // a runner adding, removing or replacing their own entry, so an unchanged
+          // list is not written at all (and the entry keeps its place when it changes).
+          const unchanged = Boolean(previous) && others.length === current.length - 1 &&
+            (['memberId', 'name', 'checkedIn', 'checkedInAt', 'rsvpDate'] as const).every((field) => previous![field] === entry[field]);
+          const next = unchanged ? current : previous && others.length === current.length - 1
+            ? current.map((a) => (a.memberId === key ? entry : a))
+            : [...others, entry];
+          if (!unchanged) tx.update(runRef, { attendees: next });
           tx.set(ciRef, cleanFirestoreData(computed.newCheckIn));
           tx.set(userRef, cleanFirestoreData(persistedUser));
           if (alert) tx.set(doc(firestore, 'milestone_alerts', alert.id), cleanFirestoreData(alert));

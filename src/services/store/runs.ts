@@ -305,7 +305,8 @@ export function createRunOps(ctx: StoreState & ReturnType<typeof createLegacyOps
       cleanup.delete(doc(currentDb, 'runs', runId));
       cleanup.delete(doc(currentDb, 'meetup_events', runId));
       if (savedEvent.date && savedEvent.codeWord) cleanup.delete(doc(currentDb, 'meetup_codes', await codeKeyFor(savedEvent.date, savedEvent.codeWord)));
-      if (isAdminProfile(currentUser)) cleanup.delete(doc(currentDb, 'meetup_secrets', runId));
+      // Organizers only get this far before check-in opens, which is when the rules let them remove the code word.
+      cleanup.delete(doc(currentDb, 'meetup_secrets', runId));
       await cleanup.commit();
 
     } else {

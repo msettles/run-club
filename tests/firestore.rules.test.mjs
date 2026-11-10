@@ -552,6 +552,29 @@ test('code word can change before check-in opens, and is locked after', async ()
   await assertFails(setDoc(doc(ctx(ALICE), 'meetup_secrets', FUTURE), { codeWord: 'X' }));
 });
 
+test('organizers can remove a run\'s code word only before its check-in opens', async () => {
+  const FUTURE = '2099-01-07';
+  await env.withSecurityRulesDisabled(async (c) => {
+    const db = c.firestore();
+    await setDoc(doc(db, 'meetup_events', FUTURE), {
+      id: FUTURE, date: FUTURE, title: 'Later', activeDistances: ['route-3'], routes: { 'route-3': { actualMiles: 3.1, isLoop: false } },
+      checkInOpensAt: Timestamp.fromMillis(Date.now() + 86400e3),
+      checkInClosesAt: Timestamp.fromMillis(Date.now() + 2 * 86400e3),
+    });
+    await setDoc(doc(db, 'meetup_secrets', FUTURE), { codeWord: 'ACORN' });
+  });
+  const org = ctx(ORGANIZER);
+  await assertFails(deleteDoc(doc(ctx(ALICE), 'meetup_secrets', FUTURE)));
+  // Tonight's check-in is open: only an admin may remove its code word.
+  await assertFails(deleteDoc(doc(org, 'meetup_secrets', RUN)));
+  // Deleting a run that has not opened removes the event and its code word together.
+  const batch = writeBatch(org);
+  batch.delete(doc(org, 'meetup_events', FUTURE));
+  batch.delete(doc(org, 'meetup_secrets', FUTURE));
+  await assertSucceeds(batch.commit());
+  await assertSucceeds(deleteDoc(doc(ctx(BOOTSTRAP), 'meetup_secrets', RUN)));
+});
+
 // ---- One check-in per runner per run; the code word picks the run ----
 
 async function seedSecondRun(word = 'PINECONE') {
@@ -625,6 +648,9 @@ test('deleting a run with check-ins: admin rolls back runners; organizer cannot'
 
   // Organizer can't rewrite Alice's stats
   const org = ctx(ORGANIZER);
+  // ...and can't remove the check-in on its own either (that would skip the rollback)
+  await assertFails(deleteDoc(doc(org, 'checkins', `${RUN}_${ALICE}`)));
+  await assertFails(deleteDoc(doc(ctx(ALICE), 'checkins', `${RUN}_${ALICE}`)));
   const ob = writeBatch(org);
   ob.delete(doc(org, 'checkins', `${RUN}_${ALICE}`));
   ob.set(doc(org, 'users', ALICE), baseUser(ALICE));

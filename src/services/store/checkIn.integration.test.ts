@@ -68,6 +68,33 @@ it.skipIf(!enabled)('concurrent check-ins from stale clients preserve both runs,
   }
 });
 
+it.skipIf(!enabled)('a member can edit their own check-in, alone or among other attendees', async () => {
+  const go = (activity: 'running' | 'walking') => operations().checkInRunner({ eventId: 'first', userEmail: email, codeWordEntered: 'FIRST', activity, distanceChoice: 'route' });
+  const first = await go('running');
+  expect(first.success).toBe(true);
+  await first.rewardsReady;
+  const edited = await go('walking');
+  expect(edited).toMatchObject({ success: true, message: 'Check-in updated!' });
+  await edited.rewardsReady;
+  // Someone else joins after this runner, then the runner renames and edits again.
+  const other = { memberId: 'other-runner', name: 'Other Runner', checkedIn: false, rsvpDate: date };
+  await env.withSecurityRulesDisabled(async (context) => {
+    const db = context.firestore() as unknown as Firestore;
+    const run = (await getDoc(doc(db, 'runs', 'first'))).data()!;
+    await updateDoc(doc(db, 'runs', 'first'), { attendees: [...run.attendees, other] });
+  });
+  const again = await go('running');
+  expect(again.success).toBe(true);
+  await again.rewardsReady;
+  await updateDoc(doc(backend.current!, 'users', email), { displayName: 'Renamed Runner' });
+  const renamed = await go('walking');
+  expect(renamed.success).toBe(true);
+  await renamed.rewardsReady;
+  const key = await memberKeyFor(email);
+  expect((await getDoc(doc(backend.current!, 'runs', 'first'))).data()!.attendees).toEqual([expect.objectContaining({ memberId: key, name: 'Renamed Runner', checkedIn: true }), other]);
+  expect((await getDoc(doc(backend.current!, 'users', email))).data()).toMatchObject({ totalRuns: 1, totalMiles: 3.1, runCount: 0, walkCount: 1 });
+});
+
 it.skipIf(!enabled)('attendance-backed rewards work and arbitrary badge/streak grants fail', async () => {
   const checkin = await operations().checkInRunner({ eventId: 'first', userEmail: email, codeWordEntered: 'FIRST', activity: 'running', distanceChoice: 'route' });
   expect(checkin.success).toBe(true);
