@@ -933,6 +933,17 @@ export function App() {
             >
               PWA Ready • Offline Enabled
             </button>
+            <a
+              href="https://github.com/msettles/run-club"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-stone-500 hover:underline"
+              data-testid="built-with-run-club"
+            >
+              <span>Built with</span>
+              <img src="/runclub-icon.png" alt="" width={16} height={16} className="w-4 h-4 object-contain" />
+              <span className="font-semibold text-stone-800">Run Club</span>
+            </a>
           </div>
         </div>
       </footer>

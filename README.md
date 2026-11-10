@@ -1,12 +1,22 @@
-# 🦫 Woodland Woodchuckers Run Club
+<p align="center"><img src="public/runclub.png" alt="Run Club" width="260" /></p>
+
+# Run Club
+
+An installable web app (PWA) for running clubs: run schedule, code-word check-ins, leaderboards, milestones and badges, GPX routes with turn-by-turn directions, old-app history claims, announcements and phone notifications.
+
+**Run Club** is the platform. Each club runs its own copy with its own name, theme, icons and Firebase project.
+
+## 🦫 First club: Woodland Woodchuckers
 
 > *"Pounding trails & pavement — one burrow at a time!"*
 
-The club's installable web app (PWA): run schedule, code-word check-ins, leaderboards, milestones and badges, GPX routes with turn-by-turn directions, old-app history claims, announcements and phone notifications.
+This repository currently builds the Woodland Woodchuckers app: the installed app name, bottle-cap install icon, colours and wording are all Woodland's. The browser tab icon and the footer's "Built with Run Club" credit are the platform's.
+
+Starting another club? See [`docs/new-club-setup.md`](docs/new-club-setup.md) (fork, edit, deploy) and [`docs/club-extraction-plan.md`](docs/club-extraction-plan.md) (the plan to gather every club-specific setting into one place).
 
 **Live:** https://woodland-woodchuckers.web.app · **Stack:** React 18 · TypeScript · Vite 6 · Tailwind 3 · Firebase 13 (Spark plan: Auth, Firestore, Hosting, Cloud Messaging) · Leaflet / OpenStreetMap
 
-![CI](https://github.com/msettles/woodland_woodchuckers/actions/workflows/ci.yml/badge.svg)
+![CI](https://github.com/msettles/run-club/actions/workflows/ci.yml/badge.svg)
 
 ---
 
@@ -124,7 +134,13 @@ Sending straight from **Post Announcement** needs Cloud Functions (Blaze plan, e
 - [`BRANDING.md`](BRANDING.md): logos and colours
 - [`docs/route-creation-architecture-plan.md`](docs/route-creation-architecture-plan.md): route engine design. The original Python prototype has been removed; `src/utils/routeEngine/` is the source of truth.
 
-MIT License. Made for the Woodland Woodchuckers community.
+## License
+
+[PolyForm Noncommercial License 1.0.0](LICENSE). Free to use, change and share for noncommercial purposes, including by running clubs. Commercial use needs separate permission from the author.
+
+Copies and forks must keep the `LICENSE` file, including its `Required Notice` line crediting the original repository, https://github.com/msettles/run-club. Third-party code under `vendor/` and in `node_modules/` keeps its own licence.
+
+Run Club was first made for the Woodland Woodchuckers community.
 
 ### Browser regression tests
 
