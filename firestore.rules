@@ -801,7 +801,9 @@ service cloud.firestore {
                           isInsideCheckInWindow(request.resource.data.runId, request.resource.data.date)) || (isStaff() && participationAllowed(request.resource.data.runId, request.resource.data.userEmail))
                        );
 
-      allow delete: if isStaff();
+      // Admins only: removing a check-in goes with rolling back that runner's
+      // totals, which only an admin can write.
+      allow delete: if isAdmin();
     }
 
     // 5. USERS — private profiles. Doc ID is the lowercase email.
@@ -896,7 +898,8 @@ service cloud.firestore {
       allow update: if isStaff() &&
                        (request.resource.data.codeWord == resource.data.codeWord ||
                         !checkInHasOpened(eventId));
-      allow delete: if isAdmin();
+      // Same as the event itself: staff until check-in opens, admins afterwards.
+      allow delete: if isAdmin() || (isStaff() && !checkInHasOpened(eventId));
     }
 
     // 9c. MEETUP CODES — lookup key sha256("<date>:<CODEWORD>") -> { runId, date }.
