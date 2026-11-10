@@ -17,7 +17,7 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
   const [activeTab, setActiveTab] = useState<'miles' | 'runs' | 'streak'>('miles');
 
   // Streaks as of today (a stored streak ends once the runner misses a week)
-  const streakOf = (m: Member) => liveStreak(m.streak, m.lastCheckInDate);
+  const streakOf = (m: Member) => liveStreak(m.streak, m.lastCheckInDate, undefined, m.streakProofWeek);
 
   // Sort members based on selected tab
   const sortedMembers = [...members].sort((a, b) => {

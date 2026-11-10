@@ -1,3 +1,4 @@
+import { routeVersionLabel } from './utils/runChoices';
 import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { useClubStore } from './services/storage';
 import { RunEvent, GPXRoute, UserProfile } from './types';
@@ -10,6 +11,7 @@ import { InstallAppLink } from './components/InstallAppLink';
 import { MobileBottomNav } from './components/MobileBottomNav';
 import { MilestonesPage } from './components/MilestonesPage';
 import { FULL_VERSION } from './utils/version';
+import { reconcilePushAccount, disablePushOnThisDevice, getPushStatus } from './services/push';
 import { onAuthChange, logoutUser, checkAndCompleteEmailLinkSignIn } from './services/authService';
 import { User as FirebaseUser } from 'firebase/auth';
 import { db } from './services/firebase';
@@ -81,10 +83,14 @@ export function App() {
     currentUser,
     registerUser,
     checkInRunner,
+    refreshDerivedStats,
     resolveRunByCodeWord,
     countPushDevices,
     countRunCheckIns,
     scheduleLoaded,
+    syncError,
+    syncRevision,
+    retrySync,
     switchCurrentUser,
     milestoneAlerts,
     markMilestoneFulfilled,
@@ -182,6 +188,7 @@ export function App() {
   pendingCheckInRunRef.current = pendingCheckInRun;
 
   const authEpoch = useRef(0);
+  const authenticatedEmail = useRef('');
 
   // Handle post-auth check: if user has a profile, switch to them; if new, launch onboarding
   const handleUserAuthenticated = async (email: string, displayName?: string | null, epoch = authEpoch.current) => {
@@ -208,9 +215,10 @@ export function App() {
     }
 
     if (epoch !== authEpoch.current) return;
+    setIsAuthModalOpen(false);
     if (existingProfile) {
       switchCurrentUser(cleanEmail);
-      syncPrivateData(cleanEmail, isStaffProfile(existingProfile), isAdminProfile(existingProfile));
+      reconcilePushAccount(cleanEmail).catch((err) => console.warn('Notification account registration failed:', err));
       const pending = pendingCheckInRunRef.current;
       if (pending) {
         setSelectedRunForCheckIn(pending);
@@ -231,13 +239,19 @@ export function App() {
   // getDoc -> setUsers -> re-subscribe loop.
   useEffect(() => {
     // Completing the link signs the user in; onAuthChange below then handles them.
-    checkAndCompleteEmailLinkSignIn().catch((err) => console.error('Email sign in check error:', err));
+    checkAndCompleteEmailLinkSignIn().catch((err) => {
+      console.error('Email sign in check error:', err);
+      setCheckInNotice('The sign-in link could not be completed. Request a fresh link and try again.');
+      setIsAuthModalOpen(true);
+    });
 
     const sessionEpoch = authEpoch;
     const unsubscribe = onAuthChange((user) => {
       const epoch = ++authEpoch.current;
-      if (isFirebaseConfigured) clearPrivateData();
+      if (isFirebaseConfigured) { setAuthReady(false); clearPrivateData(); }
+      setSelectedRunForCheckIn(null);
       setIsOnboardingOpen(false);
+      authenticatedEmail.current = user?.email?.toLowerCase() || '';
       setFirebaseUser(user);
       if (user && user.email) {
         handleUserAuthenticated(user.email, user.displayName, epoch).finally(() => {
@@ -257,10 +271,20 @@ export function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Role changes must replace subscriptions as well as update navigation.
+  useEffect(() => {
+    if (!isFirebaseConfigured || !authReady || !currentUser.email || currentUser.role === 'guest') return;
+    void syncPrivateData(currentUser.email, isStaffProfile(currentUser), isAdminProfile(currentUser)).then(() => {
+      void refreshDerivedStats(currentUser).catch((err) => console.warn('Reward refresh needs a retry:', err));
+    });
+    // The operation closures change each render; only identity/role changes restart listeners.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authReady, currentUser.email, currentUser.role, syncRevision]);
+
   const openCheckInFor = (target: CheckInTarget) => {
-    if (!isUserLoggedIn) {
+    if (!isUserLoggedIn || currentUser.role === 'guest') {
       setPendingCheckInRun(target);
-      setIsAuthModalOpen(true);
+      handleOpenRegister();
     } else {
       setSelectedRunForCheckIn(target);
     }
@@ -268,7 +292,11 @@ export function App() {
   const handleOpenCheckIn = (run: Pick<RunEvent, 'id'>) => openCheckInFor({ runId: run.id });
 
   const handleOpenRegister = () => {
-    if (isUserLoggedIn) {
+    if (firebaseUser?.email && currentUser.role === 'guest') {
+      setOnboardingEmail(firebaseUser.email);
+      setOnboardingDisplayName(firebaseUser.displayName || '');
+      setIsOnboardingOpen(true);
+    } else if (isUserLoggedIn) {
       alert(`You are already a registered Woodchucker (${currentUser.displayName})!`);
     } else {
       setIsAuthModalOpen(true);
@@ -296,14 +324,14 @@ export function App() {
   // once the events have loaded.
   const qrHandledRef = useRef(false);
   useEffect(() => {
-    if (qrHandledRef.current || !scheduleLoaded) return;
+    if (qrHandledRef.current || !scheduleLoaded || !authReady) return;
     const params = new URLSearchParams(window.location.search);
     if (params.get('checkin') === 'true' || window.location.hash === '#checkin') {
       qrHandledRef.current = true;
       handleQuickCheckIn();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scheduleLoaded, meetupEvents]);
+  }, [scheduleLoaded, meetupEvents, authReady]);
 
   // Scheduling or editing a run also updates that night's check-in event,
   // so runners pick from the run's distance options when they check in.
@@ -436,12 +464,18 @@ export function App() {
         onOpenRegister={handleOpenRegister}
         onOpenVersionModal={() => setIsVersionModalOpen(true)}
         onLogout={async () => {
+          try { if (await getPushStatus() === 'on') await disablePushOnThisDevice(); }
+          catch (err) { console.warn('Notification cleanup failed during sign-out:', err); }
+          setSelectedRunForCheckIn(null);
+          setPendingCheckInRun(null);
           await logoutUser();
           setFirebaseUser(null);
           switchCurrentUser('');
           clearPrivateData();
         }}
       />
+
+      {syncError && <div role="alert" className="mx-auto mt-4 w-full max-w-7xl rounded-xl bg-amber-100 p-3 text-sm text-amber-950">{syncError} <button type="button" onClick={retrySync} className="font-bold underline">Retry loading</button></div>}
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -634,7 +668,7 @@ export function App() {
                       : 'bg-white text-stone-700 border border-stone-200 hover:bg-stone-50'
                   }`}
                 >
-                  <span>{r.name}</span>
+                  <span>{r.name}{r.updatedAt && <span className="block text-[10px] font-normal">{routeVersionLabel(r)}</span>}</span>
                   <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-semibold ${
                     selectedRoute?.id === r.id ? 'bg-woodland-950 text-woodland-200' : 'bg-stone-100 text-stone-600'
                   }`}>
@@ -676,6 +710,7 @@ export function App() {
                 >
                   <div className="flex items-start justify-between gap-2 mb-2">
                     <h4 className="text-sm font-bold text-stone-900 leading-snug">{r.name}</h4>
+                    {r.updatedAt && <p className="text-[10px] text-stone-500">{routeVersionLabel(r)}</p>}
                     <span className="text-[10px] bg-stone-100 text-stone-700 px-2 py-0.5 rounded-full font-semibold shrink-0">
                       {r.surface}
                     </span>
@@ -971,7 +1006,7 @@ export function App() {
             routes={routes}
             checkins={checkins}
             onCheckInRunner={checkInRunner}
-            onOpenAuthModal={() => setIsAuthModalOpen(true)}
+            onOpenAuthModal={() => { setPendingCheckInRun(selectedRunForCheckIn); handleOpenRegister(); }}
           />
         )}
 
@@ -1056,6 +1091,7 @@ export function App() {
             legacyMembers={legacyMembers}
             onRegisterUser={registerUser}
             onSuccess={(newUser) => {
+              if (isFirebaseConfigured && authenticatedEmail.current !== newUser.email.toLowerCase()) return;
               switchCurrentUser(newUser.email);
               setIsOnboardingOpen(false);
               if (pendingCheckInRun) {

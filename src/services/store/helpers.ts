@@ -7,7 +7,7 @@ import {
 } from '../../types';
 import { 
   GUEST_USER
-} from '../../data/initialData';
+} from '../../data/catalog';
 import { localYmd } from '../../utils/dateUtils';
 
 /**
@@ -152,6 +152,7 @@ export function toPublicMember(user: UserProfile, memberKey: string): Record<str
     walkCount: user.walkCount,
     petRunCount: user.petRunCount,
     streak: user.currentStreakWeeks || 0,
+    streakProofWeek: user.streakProofWeek,
     favoritePace: user.preferredPace || '9:00 min/mi',
     unlockedBadgeIds: user.unlockedBadgeIds,
     badgeCounts: user.badgeCounts,
@@ -206,5 +207,12 @@ export function saveToStorage<T>(key: string, data: T): void {
     localStorage.setItem(key, JSON.stringify(data));
   } catch (e) {
     console.error(`Error saving key ${key} to storage:`, e);
+  }
+}
+
+/** Leave room for Firestore field overhead before starting a multi-document save. */
+export function assertDocumentFitsFirestore(value: unknown, label: string): void {
+  if (new TextEncoder().encode(JSON.stringify(cleanFirestoreData(value))).length > 900 * 1024) {
+    throw new Error(`${label} is too large to save. Reduce the amount of data before trying again.`);
   }
 }

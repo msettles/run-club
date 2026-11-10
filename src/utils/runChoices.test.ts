@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
 import { buildMeetupFromRun, deriveRunStats, getRunChoices, resolveChoices } from './runChoices';
-import type { GPXRoute } from '../types';
+import type { GPXRoute, RouteTurnStep } from '../types';
 
 const route = (id: string, distanceMiles: number, surface: GPXRoute['surface'] = 'Pavement'): GPXRoute => ({
   id, name: id, distanceMiles, surface, description: '', elevationGainFt: 20, points: [], difficulty: 'Easy', createdAt: '',
@@ -21,13 +21,22 @@ it('supports a legacy single route and safely handles a missing one', () => {
   expect(deriveRunStats([]).distanceMiles).toBe(0);
 });
 
-it('keys check-in choices by route ID as well as distance and retains code words on edits', () => {
+it('stores each check-in choice once by route ID and retains code words on edits', () => {
   const run = { id: 'run', title: 'Wednesday', date: '2026-11-11', time: '06:00 PM', routeChoices: [{ routeId: 'short' }] };
   const original = buildMeetupFromRun(run, routes, ' acorn ');
   const edited = buildMeetupFromRun(run, routes, '', { ...original, notes: 'Bring lights' });
   expect(edited.codeWord).toBe('ACORN');
   expect(edited.notes).toBe('Bring lights');
   expect(edited.activeDistances).toEqual(['short']);
-  expect(edited.routes.short).toBe(edited.routes['1.2']);
+  expect(Object.keys(edited.routes)).toEqual(['short']);
+  expect(edited.routes['1.2']).toBeUndefined();
   expect(edited.routes.short.actualMiles).toBe(1.23);
+});
+
+it('keeps a full 20-route meetup below the document limit without copied directions or aliases', () => {
+  const large = Array.from({ length: 20 }, (_, index) => ({ ...route(`route-${index}`, 3.1), directions: Array.from({ length: 190 }, (_, step): RouteTurnStep => ({ step, cue: 'L', instruction: 'Continue through the intersection for the next block', instruction_concise: 'Left at intersection', street: 'Main', distance_m: 20, distance: '66 ft', at_km: step / 10, point: [-121, 38] })) }));
+  const event = buildMeetupFromRun({ id: 'run', date: '2026-11-11', time: '18:00', title: 'Club', routeChoices: large.map((r) => ({ routeId: r.id })) }, large, 'ACORN');
+  expect(Object.keys(event.routes)).toHaveLength(20);
+  expect(new TextEncoder().encode(JSON.stringify(event)).length).toBeLessThan(100_000);
+  expect(Object.values(event.routes).every((option) => !option.directionsList)).toBe(true);
 });

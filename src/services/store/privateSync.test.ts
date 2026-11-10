@@ -1,7 +1,7 @@
 import { beforeEach, expect, it, vi } from 'vitest';
 import { createPrivateSyncOps } from './privateSync';
 
-const api = vi.hoisted(() => ({ getDocs: vi.fn(), getDoc: vi.fn(), setDoc: vi.fn() }));
+const api = vi.hoisted(() => ({ getDocs: vi.fn(), getDoc: vi.fn(), setDoc: vi.fn(), onSnapshot: vi.fn() }));
 vi.mock('../firebase', () => ({ isFirebaseConfigured: true, db: {} }));
 vi.mock('firebase/firestore', () => ({
   collection: (_db: unknown, name: string) => name,
@@ -11,6 +11,7 @@ vi.mock('firebase/firestore', () => ({
 
 function context() {
   return {
+    privateUnsubscribers: { current: [] }, setPrivateSyncError: vi.fn(),
     privateSyncEpoch: { current: 0 }, staffCodeWords: { current: {} },
     setUsers: vi.fn(), setMeetupEvents: vi.fn(), setCheckins: vi.fn(), setOwnLegacyEvents: vi.fn(), setLegacyMembers: vi.fn(), setMilestoneAlerts: vi.fn(),
     fetchLegacyEvents: vi.fn().mockResolvedValue([]), loadLegacyPool: vi.fn().mockResolvedValue([]),
@@ -18,19 +19,21 @@ function context() {
 }
 beforeEach(() => {
   vi.clearAllMocks();
+  api.onSnapshot.mockReturnValue(vi.fn());
   api.getDoc.mockResolvedValue({ exists: () => true, data: () => ({ linkedLegacyIds: [] }) });
 });
 
 it('does not restore private data when requests finish after sign-out', async () => {
-  let resolve!: (value: { docs: [] }) => void;
-  const pending = new Promise<{ docs: [] }>((done) => { resolve = done; });
-  api.getDocs.mockReturnValue(pending);
+  const callbacks: Array<(snap: { docs: [] }) => void> = [];
+  const unsubscribe = vi.fn();
+  api.onSnapshot.mockImplementation((_ref, next) => { callbacks.push(next); return unsubscribe; });
   const ctx = context();
   const ops = createPrivateSyncOps(ctx as unknown as Parameters<typeof createPrivateSyncOps>[0]);
   const syncing = ops.syncPrivateData('alice@example.com', true);
   ops.clearPrivateData();
   for (const setter of [ctx.setUsers, ctx.setCheckins, ctx.setMilestoneAlerts, ctx.setOwnLegacyEvents, ctx.setMeetupEvents, ctx.setLegacyMembers]) setter.mockClear();
-  resolve({ docs: [] });
+  callbacks.forEach((next) => next({ docs: [] }));
+  expect(unsubscribe).toHaveBeenCalledTimes(callbacks.length);
   await syncing;
   expect(ctx.setUsers).not.toHaveBeenCalled();
   expect(ctx.setCheckins).not.toHaveBeenCalled();

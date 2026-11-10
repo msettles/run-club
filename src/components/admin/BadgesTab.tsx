@@ -6,7 +6,7 @@ import {
   ActivityType,
   DistanceChoice
 } from '../../types';
-import { INITIAL_BADGES, INITIAL_SPECIAL_EVENTS } from '../../data/initialData';
+import { INITIAL_BADGES, INITIAL_SPECIAL_EVENTS } from '../../data/catalog';
 import { 
   Sparkles,
   Plus,

@@ -37,3 +37,9 @@ export function calculateAge(birthday?: string | null): number | undefined {
 export function localYmd(d: Date = new Date()): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
+
+/** Calendar date at the club, regardless of the runner's device time zone. */
+export function clubYmd(date = new Date()): string {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(date).map((part) => [part.type, part.value]));
+  return `${parts.year}-${parts.month}-${parts.day}`;
+}

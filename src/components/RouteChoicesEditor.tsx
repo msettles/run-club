@@ -1,3 +1,4 @@
+import { routeVersionLabel } from '../utils/runChoices';
 import { formatMiles } from '../utils/miles';
 import React from 'react';
 import { GPXRoute, RunRouteChoice } from '../types';
@@ -29,10 +30,11 @@ export const RouteChoicesEditor: React.FC<RouteChoicesEditorProps> = ({ routes, 
   };
 
   const add = () => {
-    if (routes.length === 0) return;
+    if (routes.length === 0 || choices.length >= 20) return;
     // Pick first route that isn't already in choices, or default to first route
     const usedRouteIds = new Set(choices.map((c) => c.routeId));
-    const nextRoute = routes.find((r) => !usedRouteIds.has(r.id)) || routes[0];
+    const nextRoute = routes.find((r) => !usedRouteIds.has(r.id));
+    if (!nextRoute) return;
     onChange([...choices, { routeId: nextRoute.id }]);
   };
 
@@ -54,6 +56,7 @@ export const RouteChoicesEditor: React.FC<RouteChoicesEditorProps> = ({ routes, 
           <button
             type="button"
             onClick={add}
+            disabled={choices.length >= 20 || routes.every((route) => choices.some((choice) => choice.routeId === route.id))}
             className="text-xs text-woodland-700 hover:text-woodland-900 font-bold flex items-center gap-1 bg-woodland-50 hover:bg-woodland-100 px-2.5 py-1.5 rounded-lg border border-woodland-200 transition shrink-0"
           >
             <Plus className="w-3.5 h-3.5" /> Add Route Option
@@ -99,7 +102,7 @@ export const RouteChoicesEditor: React.FC<RouteChoicesEditorProps> = ({ routes, 
                   {!r && <option value={c.routeId}>Select route...</option>}
                   {routes.map((rt) => (
                     <option key={rt.id} value={rt.id}>
-                      {rt.name} — {formatMiles(rt.distanceMiles)} mi ({rt.surface})
+                      {rt.name} — {formatMiles(rt.distanceMiles)} mi ({rt.surface}) {routeVersionLabel(rt) ? `• ${routeVersionLabel(rt)}` : ''}
                     </option>
                   ))}
                 </select>

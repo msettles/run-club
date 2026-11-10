@@ -152,8 +152,8 @@ export const MapViewer: React.FC<MapViewerProps> = ({
       },
       (err) => {
         console.warn('Geolocation error:', err);
+        stopLocationTracking();
         setLocationError('Unable to retrieve GPS location.');
-        setIsTrackingLocation(false);
       },
       { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
     );

@@ -3,7 +3,7 @@ import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { celebrate } from '../utils/celebrate';
 import { milestoneProgress } from '../utils/milestones';
 import { RunEvent, MeetupEvent, UserProfile, RouteOption, ActivityType, DistanceChoice, CheckInRecord, Badge, GPXRoute } from '../types';
-import { CLUB_MILESTONES } from '../data/initialData';
+import { CLUB_MILESTONES } from '../data/catalog';
 import { checkInStatus, checkInWindow, formatOpening } from '../utils/checkInWindow';
 import { MapViewer } from './MapViewer';
 import { downloadGPXFile } from '../utils/gpxParser';
@@ -103,15 +103,16 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
   const availableOptions = useMemo(() => {
     const list: { key: string; route: RouteOption }[] = [];
     if (activeEvent && activeEvent.routes) {
-      const keys = (activeEvent.activeDistances && activeEvent.activeDistances.length > 0)
+      const keys = activeEvent.activeDistances
         ? activeEvent.activeDistances
         : Object.keys(activeEvent.routes);
 
       const seen = new Set<string>();
       for (const k of keys) {
         const r = activeEvent.routes[k];
-        if (r && !seen.has(r.name + r.actualMiles)) {
-          seen.add(r.name + r.actualMiles);
+        const identity = r?.routeId || (activeEvent.activeDistances?.length ? k : r?.name + String(r?.actualMiles));
+        if (r && !seen.has(identity)) {
+          seen.add(identity);
           list.push({ key: k, route: r });
         }
       }
@@ -155,6 +156,7 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
     return Boolean(existingCheckIn?.withPet);
   });
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const submittingRef = useRef(false);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
   // Success state
@@ -406,6 +408,7 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
   }
 
   const handlePerformCheckIn = async () => {
+    if (submittingRef.current) return;
     setErrorMsg(null);
     if (!selectedOption) {
       setErrorMsg('No routes are configured for this run. Please ask an organizer to add a route.');
@@ -417,6 +420,9 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
       return;
     }
 
+    submittingRef.current = true;
+    setIsSubmitting(true);
+    try {
     // The code word identifies the run; catch a word that belongs to a different run.
     if (!existingCheckIn && onResolveCodeWord) {
       try {
@@ -435,8 +441,6 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
       }
     }
 
-    setIsSubmitting(true);
-    try {
       const res = await onCheckInRunner({
         eventId: activeEvent.id,
         userEmail: currentUser.email,
@@ -462,6 +466,7 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
     } catch (err: any) {
       setErrorMsg(err.message || 'Error during check-in.');
     } finally {
+      submittingRef.current = false;
       setIsSubmitting(false);
     }
   };
@@ -513,7 +518,7 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
           )}
 
           {/* VIEW 1: SUCCESS POST-CHECK-IN FLOW */}
-          {(successResult || (existingCheckIn && !isEditingCheckIn)) ? (
+          {((successResult || existingCheckIn) && !isEditingCheckIn) ? (
             postCheckInStep === 'run_info' ? (
               /* PAGE 1: RUN INFORMATION (APPS, MAP, TURN-BY-TURN) */
               <div className="text-left space-y-4 animate-in fade-in duration-200">
@@ -555,6 +560,19 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
                   type="button"
                   onClick={() => {
                     setErrorMsg(null);
+                    const saved = existingCheckIn || successResult?.checkIn;
+                    if (saved) {
+                      const oldOption = activeEvent.routes[String(saved.distanceChoice)];
+                      const option = availableOptions.find((o) => o.key === String(saved.distanceChoice)) ||
+                        availableOptions.find((o) => oldOption?.routeId && o.route.routeId === oldOption.routeId) ||
+                        availableOptions.find((o) => o.route.name === saved.routeName);
+                      const key = option?.key || availableOptions[0]?.key || '';
+                      setSelectedOptionKey(key);
+                      setSelectedActivity(saved.activity);
+                      setRunningWithPet(Boolean(saved.withPet));
+                      setLoopSelections((prev) => ({ ...prev, [key]: saved.loops || 1 }));
+                      setCodeWordInput(saved.codeWord || activeEvent.codeWord || '');
+                    }
                     setIsEditingCheckIn(true);
                   }}
                   className="w-full py-2.5 px-4 bg-stone-100 hover:bg-stone-200 text-stone-800 font-bold text-xs rounded-xl transition flex items-center justify-center gap-1.5 border border-stone-300 shadow-2xs cursor-pointer"
@@ -930,7 +948,7 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
                     const optBaseMiles = opt.route.baseMiles || opt.route.actualMiles;
                     const optTotalMiles = opt.route.isLoop ? (optBaseMiles * optLoops) : opt.route.actualMiles;
                     const optFormattedMiles = formatMiles(optTotalMiles);
-                    const maxPresets = Math.max(opt.route.maxLoops || 4, 4);
+                    const maxPresets = Math.min(20, Math.max(opt.route.maxLoops || 4, 4));
 
                     return (
                       <div
@@ -1031,11 +1049,12 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
                                 <button
                                   type="button"
                                   onClick={() => {
-                                    const next = Math.min(10, optLoops + 1);
+                                    const next = Math.min(20, optLoops + 1);
                                     setLoopSelections((prev) => ({ ...prev, [opt.key]: next }));
                                     setSelectedOptionKey(opt.key);
                                   }}
                                   className="px-2 py-0.5 text-xs font-bold text-stone-600 hover:bg-stone-100"
+                                  disabled={optLoops >= 20}
                                   title="More loops"
                                 >
                                   +

@@ -15,7 +15,7 @@ import {
   Timestamp,
 } from 'firebase/firestore';
 import { codeKeyFor } from '../../utils/memberKey';
-import { cleanFirestoreData } from './helpers';
+import { assertDocumentFitsFirestore, cleanFirestoreData } from './helpers';
 import type { StoreState } from './state';
 
 export function createEventOps(ctx: StoreState) {
@@ -30,6 +30,7 @@ export function createEventOps(ctx: StoreState) {
    * Save / update a meetup event (Admin)
    */
   const saveMeetupEvent = async (event: MeetupEvent, run?: RunEvent) => {
+    assertDocumentFitsFirestore(event, 'This meetup');
     const win = computeCheckInWindow(event.date, event.time);
     const runId = event.runId || event.id;
     const previous = meetupEvents.find((e) => e.id === runId);
@@ -48,6 +49,10 @@ export function createEventOps(ctx: StoreState) {
         const [savedEvent, savedSecret] = await Promise.all([transaction.get(eventRef), transaction.get(secretRef)]);
         const oldWord = (savedSecret.data()?.codeWord || '').trim().toUpperCase();
         const oldDate = savedEvent.data()?.date;
+        const opens = savedEvent.data()?.checkInOpensAt?.toMillis?.();
+        if (savedEvent.data()?.codeWordSet !== false && opens !== undefined && opens <= Date.now() &&
+            (oldDate !== event.date || opens !== win.opensAt.getTime() || savedEvent.data()?.checkInClosesAt?.toMillis?.() !== win.closesAt.getTime()))
+          throw new Error('The date and check-in window are locked after check-in opens. Schedule another run for a different time.');
         word = (event.codeWord || oldWord).trim().toUpperCase();
         if (!word) throw new Error('Enter the check-in code word.');
         const key = await codeKeyFor(event.date, word);
@@ -60,17 +65,21 @@ export function createEventOps(ctx: StoreState) {
         const { codeWord: _word, checkInOpensAt: _opens, checkInClosesAt: _closes, ...publicEvent } = event;
         transaction.set(eventRef, {
           ...cleanFirestoreData(publicEvent), id: runId, runId,
-          codeWord: deleteField(), codeWordSet: true,
+          codeWordSet: true,
           checkInOpensAt: Timestamp.fromDate(win.opensAt),
           checkInClosesAt: Timestamp.fromDate(win.closesAt),
-        }, { merge: true });
+        });
         if (!savedKey.exists()) transaction.set(keyRef, { runId, date: event.date });
         if (oldWord && oldDate) {
           const oldKey = await codeKeyFor(oldDate, oldWord);
           if (oldKey !== key) transaction.delete(doc(firestore, 'meetup_codes', oldKey));
         }
         if (word !== oldWord) transaction.set(secretRef, { codeWord: word });
-        if (details) transaction.update(doc(firestore, 'runs', runId), cleanFirestoreData(details));
+        if (run) {
+          for (const routeId of new Set([...(run.routeChoices || []).map((c) => c.routeId), ...(run.routeId ? [run.routeId] : [])]))
+            transaction.update(doc(firestore, 'routes', routeId), { referenced: true });
+        }
+        if (details) transaction.update(doc(firestore, 'runs', runId), { ...cleanFirestoreData(details), ...(!('specialEvent' in details) || details.specialEvent === undefined ? { specialEvent: deleteField() } : {}) });
       });
     } else if (meetupEvents.some((e) => e.id !== runId && e.date === event.date && (e.codeWord || '').toUpperCase() === word)) {
       throw duplicateError();

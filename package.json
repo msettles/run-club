@@ -1,7 +1,7 @@
 {
   "name": "woodland-woodchuckers-run-club",
   "private": true,
-  "version": "1.1.5",
+  "version": "1.2.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -14,7 +14,10 @@
     "test:watch": "vitest",
     "audit:dependencies": "npm audit --audit-level=low",
     "pack:resolver": "node scripts/pack-node-resolve-fork.mjs",
-    "test:resolver": "node --test tests/node-resolve-fork.test.mjs"
+    "test:resolver": "node --test tests/node-resolve-fork.test.mjs",
+    "test:integration": "firebase emulators:exec --only firestore --project demo-woodchuckers 'vitest run src/services/store/checkIn.integration.test.ts'",
+    "check:bundle": "node scripts/check-bundle.mjs",
+    "sync:reward-rules": "node scripts/update-reward-rules.mjs"
   },
   "dependencies": {
     "canvas-confetti": "^1.9.4",

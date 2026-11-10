@@ -13,6 +13,7 @@ import {
   query,
   where,
   writeBatch,
+  runTransaction,
   arrayRemove,
 } from 'firebase/firestore';
 import { memberKeyFor } from '../../utils/memberKey';
@@ -20,9 +21,8 @@ import { ADMIN_EMAILS } from '../../utils/roles';
 import { cleanFirestoreData, memberFromUser, toPublicMember } from './helpers';
 import type { StoreState } from './state';
 import type { createLegacyOps } from './legacy';
-import type { createPrivateSyncOps } from './privateSync';
 
-export function createMemberOps(ctx: StoreState & ReturnType<typeof createLegacyOps> & ReturnType<typeof createPrivateSyncOps>) {
+export function createMemberOps(ctx: StoreState & ReturnType<typeof createLegacyOps>) {
   const {
     setRuns,
     setMembers,
@@ -36,7 +36,6 @@ export function createMemberOps(ctx: StoreState & ReturnType<typeof createLegacy
     setMilestoneAlerts,
     claimLegacyProfile,
     refreshDerivedStats,
-    syncPrivateData,
   } = ctx;
 
   /**
@@ -56,6 +55,8 @@ export function createMemberOps(ctx: StoreState & ReturnType<typeof createLegacy
     },
     claimedLegacyIds: string[] = []
   ): Promise<UserProfile> => {
+    const session = ctx.privateSessionEpoch?.current;
+    const assertSession = () => { if (session !== ctx.privateSessionEpoch?.current) throw new Error('The signed-in account changed. Sign in again to continue.'); };
     const cleanEmail = profileData.email.trim().toLowerCase();
     const displayName = `${profileData.firstName.trim()} ${profileData.lastName.trim()}`;
 
@@ -95,25 +96,27 @@ export function createMemberOps(ctx: StoreState & ReturnType<typeof createLegacy
 
     const memberKey = await memberKeyFor(cleanEmail);
 
-    // Persist first so the UI never shows a profile the server rejected.
-    // users + members go in one batch: the rules require the public row to mirror the profile.
-    if (isFirebaseConfigured && db) {
-      const batch = writeBatch(db);
-      batch.set(doc(db, 'users', cleanEmail), cleanFirestoreData(newUser));
-      batch.set(doc(db, 'members', memberKey), toPublicMember(newUser, memberKey));
-      await batch.commit();
-    }
-
-    setUsers((prev) => [newUser, ...prev.filter((u) => u.email.toLowerCase() !== cleanEmail)]);
-    setMembers((prev) => [memberFromUser(newUser, memberKey), ...prev.filter((m) => m.id !== memberKey)]);
-
+    // Resuming setup never replaces a profile which another tab already created.
+    const firestore = db;
+    const registered = isFirebaseConfigured && firestore ? await runTransaction(firestore, async (tx) => {
+      const ref = doc(firestore, 'users', cleanEmail);
+      const saved = await tx.get(ref);
+      if (saved.exists()) return saved.data() as UserProfile;
+      tx.set(ref, cleanFirestoreData(newUser));
+      tx.set(doc(firestore, 'members', memberKey), toPublicMember(newUser, memberKey));
+      return newUser;
+    }) : newUser;
+    assertSession();
+    setUsers((prev) => [registered, ...prev.filter((u) => u.email.toLowerCase() !== cleanEmail)]);
+    setMembers((prev) => [memberFromUser(registered, memberKey), ...prev.filter((m) => m.id !== memberKey)]);
     setCurrentUserEmail(cleanEmail);
 
     // Claim the selected old profiles one by one; a name someone else grabbed
     // in the meantime is reported but doesn't undo the rest.
-    let finalUser = newUser;
+    let finalUser = registered;
     const failed: string[] = [];
     for (const id of claimedLegacyIds) {
+      assertSession();
       try {
         finalUser = await claimLegacyProfile(finalUser, id);
       } catch (err) {
@@ -129,11 +132,7 @@ export function createMemberOps(ctx: StoreState & ReturnType<typeof createLegacy
       }
     }
 
-    // New profiles never go through the returning-user path in App, so load
-    // private data here as well.
-    if (isFirebaseConfigured && db) {
-      syncPrivateData(cleanEmail, newUser.role === 'admin' || newUser.role === 'organizer', newUser.role === 'admin');
-    }
+    assertSession();
 
     if (failed.length) {
       throw Object.assign(
@@ -161,15 +160,22 @@ export function createMemberOps(ctx: StoreState & ReturnType<typeof createLegacy
 
     if (isFirebaseConfigured && db) {
       const currentDb = db;
+      await runTransaction(currentDb, async (tx) => {
+        const ref = doc(currentDb, 'users', cleanEmail);
+        const snap = await tx.get(ref);
+        if (snap.exists()) tx.update(ref, { deleting: true });
+      });
       type Op = (b: ReturnType<typeof writeBatch>) => void;
       const ops: Op[] = [];
       // Query the server too, so nothing is missed if local state is partial.
-      const [ciSnap, alertSnap, claimSnap, runsSnap] = await Promise.all([
+      const [ciSnap, alertSnap, claimSnap, runsSnap, proofSnap] = await Promise.all([
         getDocs(query(collection(currentDb, 'checkins'), where('userEmail', '==', cleanEmail))),
         getDocs(query(collection(currentDb, 'milestone_alerts'), where('userEmail', '==', cleanEmail))),
         getDocs(query(collection(currentDb, 'legacy_profiles'), where('claimedBy', '==', key))),
         getDocs(collection(currentDb, 'runs')),
+        getDocs(query(collection(currentDb, 'reward_proofs'), where('userEmail', '==', cleanEmail))),
       ]);
+      proofSnap.docs.forEach((d) => ops.push((b) => b.delete(d.ref)));
       ciSnap.docs.forEach((d) => ops.push((b) => b.delete(d.ref)));
       alertSnap.docs.forEach((d) => ops.push((b) => b.delete(d.ref)));
       claimSnap.docs.forEach((d) => legacyIds.add(d.id));

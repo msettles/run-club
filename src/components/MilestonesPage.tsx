@@ -1,7 +1,7 @@
 import { milestoneProgress } from '../utils/milestones';
 import React, { useState } from 'react';
 import { UserProfile, Badge } from '../types';
-import { CLUB_MILESTONES, INITIAL_BADGES } from '../data/initialData';
+import { CLUB_MILESTONES, INITIAL_BADGES } from '../data/catalog';
 import { CheckCircle, Gift, Sparkles, Beer, ArrowRight, Award, Lock } from 'lucide-react';
 
 interface MilestonesPageProps {

@@ -68,13 +68,15 @@ export default defineConfig({
     })
   ],
   build: {
+    manifest: true,
     chunkSizeWarningLimit: 600,
     rollupOptions: {
       output: {
-        manualChunks: {
-          'vendor-leaflet': ['leaflet'],
-          'vendor-firebase': ['firebase/app', 'firebase/auth', 'firebase/firestore'],
-          'vendor-confetti': ['canvas-confetti'],
+        manualChunks(id) {
+          if (id.includes('commonjsHelpers')) return 'vendor-interop';
+          if (id.includes('/node_modules/leaflet/')) return 'vendor-leaflet';
+          if (/\/node_modules\/(?:firebase\/(?:app|auth|firestore)\/|@firebase\/(?:app|auth|firestore|component|util|logger|app-check-interop|auth-interop)\/)/.test(id)) return 'vendor-firebase';
+          if (id.includes('/node_modules/canvas-confetti/')) return 'vendor-confetti';
         },
       },
     },

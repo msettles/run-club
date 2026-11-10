@@ -21,18 +21,18 @@ import {
   getDoc,
   setDoc,
   updateDoc,
-  deleteDoc,
   doc,
   query,
   where,
   writeBatch,
+  runTransaction,
   arrayUnion,
   arrayRemove,
   Timestamp,
 } from 'firebase/firestore';
 import { codeKeyFor, memberKeyFor } from '../../utils/memberKey';
 import { isAdminProfile } from '../../utils/roles';
-import { assertRouteFitsFirestore, cleanFirestoreData, formatRouteForFirestore, memberFromUser, toPublicMember } from './helpers';
+import { assertDocumentFitsFirestore, assertRouteFitsFirestore, cleanFirestoreData, formatRouteForFirestore, memberFromUser, toPublicMember } from './helpers';
 import type { StoreState } from './state';
 import type { createEventOps } from './events';
 import type { createLegacyOps } from './legacy';
@@ -66,6 +66,7 @@ export function createRunOps(ctx: StoreState & ReturnType<typeof createLegacyOps
     const run = runs.find((r) => r.id === runId);
     if (!run) return;
     const mineBefore = run.attendees.find((a) => a.memberId === currentMember.id);
+    if (mineBefore?.checkedIn) throw new Error('You are already checked in. Edit your check-in to change your run choices.');
     const mine = mineBefore || {
       memberId: currentMember.id,
       name: currentMember.name,
@@ -115,12 +116,15 @@ export function createRunOps(ctx: StoreState & ReturnType<typeof createLegacyOps
       checkInClosesAt: win.closesAt.toISOString(),
     };
 
+    assertDocumentFitsFirestore(event, 'This meetup');
     if (isFirebaseConfigured && db) {
       const key = await codeKeyFor(run.date, word);
       if ((await getDoc(doc(db, 'meetup_codes', key))).exists()) throw duplicateError();
       const { codeWord: _cw, checkInOpensAt: _o, checkInClosesAt: _c, ...publicEvent } = event;
       const batch = writeBatch(db);
       batch.set(doc(db, 'runs', id), cleanFirestoreData(run));
+      for (const routeId of new Set([...(run.routeChoices || []).map((c) => c.routeId), ...(run.routeId ? [run.routeId] : [])]))
+        batch.update(doc(db, 'routes', routeId), { referenced: true });
       batch.set(doc(db, 'meetup_events', id), {
         ...cleanFirestoreData(publicEvent),
         checkInOpensAt: Timestamp.fromDate(win.opensAt),
@@ -151,19 +155,22 @@ export function createRunOps(ctx: StoreState & ReturnType<typeof createLegacyOps
   /** Update an existing route (staff). Saves first; throws if the server refuses. */
   const updateRoute = async (routeId: string, updates: Partial<GPXRoute>): Promise<GPXRoute> => {
     const existing = routes.find((r) => r.id === routeId);
+    const nextId = `route-${crypto.randomUUID()}`;
     const updatedObj: GPXRoute = {
       ...(existing || ({} as GPXRoute)),
       ...updates,
-      id: routeId,
+      id: nextId,
+      referenced: false,
+      createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
     if (isFirebaseConfigured && db) {
       const formatted = formatRouteForFirestore(updatedObj);
       assertRouteFitsFirestore(formatted);
       // Replace the complete route so cleared links and old raw GPX fields disappear.
-      await setDoc(doc(db, 'routes', routeId), formatted);
+      await setDoc(doc(db, 'routes', nextId), formatted);
     }
-    setRoutes((prev) => prev.map((r) => (r.id === routeId ? updatedObj : r)));
+    setRoutes((prev) => [updatedObj, ...prev]);
     return updatedObj;
   };
 
@@ -171,9 +178,19 @@ export function createRunOps(ctx: StoreState & ReturnType<typeof createLegacyOps
    * Delete an existing route (Organizer / Admin)
    */
   const deleteRoute = async (routeId: string): Promise<void> => {
+    const referencedBy = (savedRuns: RunEvent[]) => savedRuns.some((r) => r.routeId === routeId || r.routeChoices?.some((c) => c.routeId === routeId));
+    const message = 'This route is used by a scheduled or historical run. Keep it so the run map and credited mileage stay consistent.';
     if (isFirebaseConfigured && db) {
-      await deleteDoc(doc(db, 'routes', routeId));
-    }
+      const firestore = db;
+      await runTransaction(firestore, async (tx) => {
+        const ref = doc(firestore, 'routes', routeId);
+        const saved = await tx.get(ref);
+        if (!saved.exists()) return;
+        const savedRuns = (await getDocs(collection(firestore, 'runs'))).docs.map((d) => d.data() as RunEvent);
+        if (saved.data().referenced || referencedBy(savedRuns)) throw new Error(message);
+        tx.delete(ref);
+      });
+    } else if (referencedBy(runs)) throw new Error(message);
     setRoutes((prev) => prev.filter((r) => r.id !== routeId));
   };
 
@@ -191,6 +208,7 @@ export function createRunOps(ctx: StoreState & ReturnType<typeof createLegacyOps
     const m = c.actualMiles || 0;
     return {
       ...u,
+      rewardEpoch: (u.rewardEpoch || 0) + 1,
       totalRuns: Math.max(0, u.totalRuns - 1),
       loggedRuns: Math.max(0, u.loggedRuns - 1),
       runCount: c.activity === 'running' ? Math.max(0, u.runCount - 1) : u.runCount,
@@ -224,6 +242,20 @@ export function createRunOps(ctx: StoreState & ReturnType<typeof createLegacyOps
 
     if (isFirebaseConfigured && db) {
       const currentDb = db;
+      // Fence first: subsequent participation writes are rejected by the rules.
+      const savedEvent = await runTransaction(currentDb, async (tx) => {
+        const ref = doc(currentDb, 'runs', runId);
+        const [snap, event, secret] = await Promise.all([tx.get(ref), tx.get(doc(currentDb, 'meetup_events', runId)), tx.get(doc(currentDb, 'meetup_secrets', runId))]);
+        const opens = event.data()?.checkInOpensAt;
+        if (!isAdminProfile(currentUser) && event.data()?.codeWordSet !== false && opens?.toMillis?.() <= Date.now())
+          throw Object.assign(new Error('Only an admin can delete a run after check-in opens.'), { code: 'needs-admin' });
+        if (!isAdminProfile(currentUser)) {
+          const existing = await getDocs(query(collection(currentDb, 'checkins'), where('runId', '==', runId)));
+          if (!existing.empty) throw Object.assign(new Error('This run has check-ins. Only an admin can delete it and adjust runner totals.'), { code: 'needs-admin' });
+        }
+        if (snap.exists()) tx.update(ref, { deleting: true });
+        return { date: event.data()?.date || ev?.date, codeWord: secret.data()?.codeWord || ev?.codeWord };
+      });
       const [ciSnap, alertSnap] = await Promise.all([
         getDocs(query(collection(currentDb, 'checkins'), where('runId', '==', runId))),
         getDocs(query(collection(currentDb, 'milestone_alerts'), where('runId', '==', runId))),
@@ -236,32 +268,39 @@ export function createRunOps(ctx: StoreState & ReturnType<typeof createLegacyOps
       }
 
       for (const cDoc of ciSnap.docs) {
-        const c = cDoc.data() as CheckInRecord;
-        const email = c.userEmail.toLowerCase();
-        const batch = writeBatch(currentDb);
-        batch.delete(cDoc.ref);
-        alertSnap.docs
-          .filter((a) => (a.data().userEmail || '').toLowerCase() === email && !a.data().fulfilled)
-          .forEach((a) => batch.delete(a.ref));
-
-        const userSnap = await getDoc(doc(currentDb, 'users', email));
-        if (userSnap.exists()) {
-          const rolled = rollBackCheckIn(userSnap.data() as UserProfile, c);
-          const legacy = await fetchLegacyEvents(rolled.linkedLegacyIds || []);
-          const remaining = (await fetchRunnerCheckins(email)).filter((x) => x.id !== c.id);
-          const final: UserProfile = { ...rolled, ...recomputeBadges(rolled, badges, datedEventsFrom(legacy, remaining, remainingEvents)), ...lastCheckInFields(remaining) };
-          const key = await memberKeyFor(email);
-          batch.set(doc(currentDb, 'users', email), cleanFirestoreData(final));
-          batch.set(doc(currentDb, 'members', key), toPublicMember(final, key));
-          touchedUsers.push(final);
-        }
-        await batch.commit();
+        const changed = await runTransaction(currentDb, async (tx) => {
+          const saved = await tx.get(cDoc.ref);
+          if (!saved.exists()) return undefined; // another deletion already processed it
+          const c = saved.data() as CheckInRecord;
+          const email = c.userEmail.toLowerCase();
+          const userRef = doc(currentDb, 'users', email);
+          const userSnap = await tx.get(userRef);
+          const candidateAlerts = alertSnap.docs.filter((a) => (a.data().userEmail || '').toLowerCase() === email);
+          const currentAlerts = await Promise.all(candidateAlerts.map((a) => tx.get(a.ref)));
+          let final: UserProfile | undefined;
+          let key: string | undefined;
+          if (userSnap.exists()) {
+            const rolled = rollBackCheckIn(userSnap.data() as UserProfile, c);
+            const legacy = await fetchLegacyEvents(rolled.linkedLegacyIds || []);
+            const remaining = (await fetchRunnerCheckins(email)).filter((x) => x.id !== c.id);
+            final = { ...rolled, ...recomputeBadges(rolled, badges, datedEventsFrom(legacy, remaining, remainingEvents)), ...lastCheckInFields(remaining) };
+            key = await memberKeyFor(email);
+          }
+          tx.delete(cDoc.ref);
+          currentAlerts.filter((a) => a.exists() && !a.data()!.fulfilled).forEach((a) => tx.delete(a.ref));
+          if (final && key) {
+            tx.set(userRef, cleanFirestoreData(final));
+            tx.set(doc(currentDb, 'members', key), toPublicMember(final, key));
+          }
+          return final;
+        });
+        if (changed) touchedUsers.push(changed);
       }
 
       const cleanup = writeBatch(currentDb);
       cleanup.delete(doc(currentDb, 'runs', runId));
       cleanup.delete(doc(currentDb, 'meetup_events', runId));
-      if (ev?.codeWord) cleanup.delete(doc(currentDb, 'meetup_codes', await codeKeyFor(ev.date, ev.codeWord)));
+      if (savedEvent.date && savedEvent.codeWord) cleanup.delete(doc(currentDb, 'meetup_codes', await codeKeyFor(savedEvent.date, savedEvent.codeWord)));
       if (isAdminProfile(currentUser)) cleanup.delete(doc(currentDb, 'meetup_secrets', runId));
       await cleanup.commit();
 

@@ -24,7 +24,7 @@ it('saves the run and new code word in one transaction without stale RSVPs', asy
   const ctx = context();
   await createEventOps(ctx as unknown as Parameters<typeof createEventOps>[0]).saveMeetupEvent(event, run);
   expect(api.runTransaction).toHaveBeenCalledOnce();
-  expect(api.update).toHaveBeenCalledWith('runs/run', { id: 'run', title: 'Updated' });
+  expect(api.update).toHaveBeenCalledWith('runs/run', { id: 'run', title: 'Updated', specialEvent: 'delete-field' });
   expect(api.set).toHaveBeenCalledWith('meetup_secrets/run', { codeWord: 'NEW' });
   expect(api.delete).toHaveBeenCalledWith(expect.stringMatching(/^meetup_codes\//));
   expect(ctx.setRuns).toHaveBeenCalledOnce();

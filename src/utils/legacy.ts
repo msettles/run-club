@@ -10,9 +10,10 @@ import { formatMiles } from './miles';
  * sign-in to the same event counts once, while two events on one day count twice.
  */
 import type { Badge, CheckInRecord, LegacyMember, MeetupEvent, UserProfile } from '../types';
-import { localYmd } from './dateUtils';
+import { clubYmd } from './dateUtils';
 
 export interface LegacyEvent {
+  legacyId?: string;
   d: string; // YYYY-MM-DD
   t: string; // HH:MM:SS
   c: string; // event code word (old events only; identifies the event)
@@ -252,7 +253,7 @@ const addWeeks = (week: string, n: number): string => {
  * Weekly streaks: consecutive calendar weeks with at least one event.
  * `current` is still alive if the last attended week is this week or last week.
  */
-export function computeStreaks(dates: string[], today = localYmd()): { current: number; longest: number } {
+export function computeStreaks(dates: string[], today = clubYmd()): { current: number; longest: number } {
   const weeks = [...new Set(dates.filter(Boolean).map(weekStart))].sort();
   if (!weeks.length) return { current: 0, longest: 0 };
   let longest = 1;
@@ -272,7 +273,11 @@ export function computeStreaks(dates: string[], today = localYmd()): { current: 
  * runner who stopped coming would otherwise keep showing it: once the last
  * check-in is older than last week, the streak is over.
  */
-export function liveStreak(streak: number, lastCheckInDate: string | undefined, today = localYmd()): number {
+export function liveStreak(streak: number, lastCheckInDate: string | undefined, today = clubYmd(), attendanceWeek?: number): number {
+  if (attendanceWeek !== undefined && attendanceWeek > 0) {
+    const currentWeek = Math.floor((Date.parse(`${today}T00:00:00Z`) + 259200000) / 604800000);
+    return attendanceWeek >= currentWeek - 1 && attendanceWeek <= currentWeek ? streak : 0;
+  }
   if (!lastCheckInDate || !streak) return streak || 0;
   return weekStart(lastCheckInDate) >= addWeeks(weekStart(today), -1) ? streak : 0;
 }
@@ -311,7 +316,7 @@ export function datedEventsFrom(
     ...legacyEvents.map((e) => ({ date: e.d, specialEventIds: specialEventIdsFor(e.c) })),
     ...appCheckins.map((c) => {
       const ev = c.runId ? byId.get(c.runId) : byDate.get(c.date);
-      return { date: c.date, specialEventIds: specialEventIdsFor(c.codeWord || '', ev?.title, ev?.specialEvent) };
+      return { date: c.date, specialEventIds: specialEventIdsFor(c.codeWord || '', c.eventTitle ?? ev?.title, c.eventSpecial ?? ev?.specialEvent) };
     }),
   ];
 }

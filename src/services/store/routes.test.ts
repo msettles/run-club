@@ -6,7 +6,7 @@ const api = vi.hoisted(() => ({ setDoc: vi.fn().mockResolvedValue(undefined) }))
 vi.mock('../firebase', () => ({ isFirebaseConfigured: true, db: {} }));
 vi.mock('firebase/firestore', () => ({
   doc: (_db: unknown, collection: string, id: string) => `${collection}/${id}`,
-  ...api, collection: vi.fn(), getDocs: vi.fn(), getDoc: vi.fn(), updateDoc: vi.fn(), deleteDoc: vi.fn(), query: vi.fn(), where: vi.fn(), writeBatch: vi.fn(), arrayUnion: vi.fn(), arrayRemove: vi.fn(), Timestamp: {},
+  ...api, collection: vi.fn(), getDocs: vi.fn().mockResolvedValue({ docs: [] }), getDoc: vi.fn(), updateDoc: vi.fn(), deleteDoc: vi.fn(), query: vi.fn(), where: vi.fn(), writeBatch: vi.fn(), arrayUnion: vi.fn(), arrayRemove: vi.fn(), Timestamp: {},
 }));
 
 it('removes cleared route links and old raw GPX instead of merging deleted fields back in', async () => {

@@ -3,7 +3,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 const sdk = vi.hoisted(() => ({
   loaded: vi.fn(), isSupported: vi.fn(), getMessaging: vi.fn(), getToken: vi.fn(), deleteToken: vi.fn(),
 }));
-vi.mock('./firebase', () => ({ app: {}, db: null, isFirebaseConfigured: true }));
+vi.mock('./firebase', () => ({ app: {}, db: null, auth: null, isFirebaseConfigured: true }));
 vi.mock('firebase/messaging', () => {
   sdk.loaded();
   return sdk;
@@ -14,7 +14,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.stubEnv('VITE_FIREBASE_VAPID_KEY', 'test-key');
   vi.stubGlobal('window', { Notification: {}, PushManager: {}, indexedDB: {}, matchMedia: () => ({ matches: false }) });
-  vi.stubGlobal('navigator', { userAgent: 'test desktop', serviceWorker: { register: vi.fn().mockResolvedValue({ scope: '/push/' }) } });
+  vi.stubGlobal('navigator', { userAgent: 'test desktop', serviceWorker: { register: vi.fn().mockResolvedValue({ scope: '/push/', pushManager: { getSubscription: vi.fn().mockResolvedValue(null) } }) } });
   vi.stubGlobal('Notification', { permission: 'default', requestPermission: vi.fn().mockResolvedValue('granted') });
   vi.stubGlobal('localStorage', { getItem: vi.fn().mockReturnValue(null), setItem: vi.fn(), removeItem: vi.fn() });
   sdk.isSupported.mockResolvedValue(true);
@@ -66,4 +66,25 @@ it('handles a non-browser environment without loading the SDK', async () => {
   const { getPushStatus } = await import('./push');
   expect(await getPushStatus()).toBe('unsupported');
   expect(sdk.loaded).not.toHaveBeenCalled();
+});
+
+it('preserves the enabled flag and reports an unsubscribe failure', async () => {
+  sdk.deleteToken.mockRejectedValue(new Error('offline'));
+  const { disablePushOnThisDevice } = await import('./push');
+  await expect(disablePushOnThisDevice()).rejects.toThrow('offline');
+  expect(localStorage.removeItem).not.toHaveBeenCalled();
+});
+
+it('checks the real subscription before reporting a cached On state', async () => {
+  vi.stubGlobal('Notification', { permission: 'granted' });
+  vi.mocked(localStorage.getItem).mockReturnValue('1');
+  const subscription = {};
+  const getRegistration = vi.fn().mockResolvedValue({ pushManager: { getSubscription: vi.fn().mockResolvedValue(subscription) } });
+  Object.assign(navigator.serviceWorker, { getRegistration });
+  const { getPushStatus } = await import('./push');
+  expect(await getPushStatus()).toBe('on');
+  expect(getRegistration).toHaveBeenCalledWith('/push/');
+  expect(sdk.loaded).not.toHaveBeenCalled();
+  getRegistration.mockResolvedValue(undefined);
+  expect(await getPushStatus()).toBe('off');
 });

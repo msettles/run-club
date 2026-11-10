@@ -1,4 +1,4 @@
-import { CLUB_MILESTONES } from '../data/initialData';
+import { CLUB_MILESTONES } from '../data/catalog';
 
 /** Progress within the current milestone interval, shared by both runner screens. */
 export function milestoneProgress(totalRuns: number) {

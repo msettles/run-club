@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { RunEvent, GPXRoute, PaceGroup, SpecialEventType, SpecialEventDefinition, RunRouteChoice } from '../types';
 import { RouteChoicesEditor } from './RouteChoicesEditor';
-import { getRunChoices, resolveChoices, deriveRunStats, deleteRunConfirmMessage } from '../utils/runChoices';
-import { INITIAL_SPECIAL_EVENTS } from '../data/initialData';
+import { getRunChoices, resolveChoices, routeChoiceError, deriveRunStats, deleteRunConfirmMessage } from '../utils/runChoices';
+import { INITIAL_SPECIAL_EVENTS } from '../data/catalog';
 import { X, Calendar, Clock, MapPin, Plus, Trash2, Sparkles, KeyRound } from 'lucide-react';
 
 interface EditRunModalProps {
@@ -59,11 +59,10 @@ export const EditRunModal: React.FC<EditRunModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSaving) return;
     const resolved = resolveChoices(routeChoices, routes);
-    if (resolved.length === 0) {
-      setFormError('Add at least one distance option with a route.');
-      return;
-    }
+    const routeError = routeChoiceError(resolved);
+    if (routeError) { setFormError(routeError); return; }
     if (!codeWord.trim()) {
       setFormError('Enter the check-in code word.');
       return;
@@ -152,6 +151,7 @@ export const EditRunModal: React.FC<EditRunModalProps> = ({
               <input
                 type="date"
                 required
+                disabled={Boolean(codeWordLockedSince) || isSaving}
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
                 className="w-full text-sm px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-woodland-500 focus:outline-none"
@@ -164,6 +164,7 @@ export const EditRunModal: React.FC<EditRunModalProps> = ({
               <input
                 type="text"
                 required
+                disabled={Boolean(codeWordLockedSince) || isSaving}
                 value={time}
                 onChange={(e) => setTime(e.target.value)}
                 className="w-full text-sm px-3 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-woodland-500 focus:outline-none"

@@ -33,6 +33,11 @@ export const RouteStudioModal: React.FC<RouteStudioModalProps> = ({
   onSaveRoute,
   onDeleteRoute,
 }) => {
+  const generation = useRef<AbortController | null>(null);
+  useEffect(() => {
+    if (!isOpen) generation.current?.abort();
+    return () => { generation.current?.abort(); };
+  }, [isOpen, existingRoute]);
   // Form fields
   const [name, setName] = useState<string>('');
   const [description, setDescription] = useState<string>('');
@@ -119,6 +124,8 @@ export const RouteStudioModal: React.FC<RouteStudioModalProps> = ({
       setGeoJson(null);
     }
     setErrorMsg(null);
+    setIsProcessing(false);
+    setProcessingStatus('');
     setSelectedStepIndex(null);
   }, [existingRoute, isOpen]);
 
@@ -178,40 +185,41 @@ export const RouteStudioModal: React.FC<RouteStudioModalProps> = ({
       return;
     }
 
+    generation.current?.abort();
+    const job = new AbortController();
+    generation.current = job;
     try {
       setErrorMsg(null);
       setIsProcessing(true);
-      setGpxFileName(file.name);
       setProcessingStatus('Reading GPX track file...');
 
       const text = await file.text();
-      setGpxXml(text);
+      if (job.signal.aborted) return;
 
       const parsed = parseGPX(text, file.name);
       if (!parsed.points || parsed.points.length < 2) {
         throw new Error('GPX file does not contain enough track points.');
       }
 
-      setPoints(parsed.points);
-      const mMiles = parsed.distanceMiles || 0;
-      setMeasuredMiles(mMiles);
-      setElevationGainFt(parsed.elevationGainFt || 0);
-
-      // Default Name from GPX if not already filled
-      if (!name) {
-        setName(parsed.name || file.name.replace(/\.gpx$/i, ''));
-      }
-
       // Run In-Browser Directions Engine!
       const result = await generateRouteDirectionsFromGpx(text, file.name, {
+        parsed, signal: job.signal,
         onProgress: (status) => setProcessingStatus(status),
       });
 
+      if (job.signal.aborted) return;
+      setGpxXml(text);
+      setGpxFileName(file.name);
+      setPoints(parsed.points!);
+      setMeasuredMiles(parsed.distanceMiles || 0);
+      setElevationGainFt(parsed.elevationGainFt || 0);
+      if (!name) setName(parsed.name || file.name.replace(/\.gpx$/i, ''));
       setDirections(result.directions);
       setGeoJson(result.geoJson);
       setIsProcessing(false);
       setProcessingStatus('');
     } catch (err: any) {
+      if (job.signal.aborted) return;
       console.error('GPX Processing Error:', err);
       setErrorMsg(err.message || 'Error processing GPX file.');
       setIsProcessing(false);
@@ -222,17 +230,22 @@ export const RouteStudioModal: React.FC<RouteStudioModalProps> = ({
   // Re-run Engine on current GPX
   const handleRegenerateDirections = async () => {
     if (!gpxXml) return;
+    generation.current?.abort();
+    const job = new AbortController();
+    generation.current = job;
     try {
       setErrorMsg(null);
       setIsProcessing(true);
       const result = await generateRouteDirectionsFromGpx(gpxXml, gpxFileName || 'route.gpx', {
-        name,
+        name, signal: job.signal,
         onProgress: (status) => setProcessingStatus(status),
       });
+      if (job.signal.aborted) return;
       setDirections(result.directions);
       setGeoJson(result.geoJson);
       setIsProcessing(false);
     } catch (err: any) {
+      if (job.signal.aborted) return;
       setErrorMsg(err.message || 'Error generating directions.');
       setIsProcessing(false);
     }
@@ -364,7 +377,7 @@ export const RouteStudioModal: React.FC<RouteStudioModalProps> = ({
             </div>
             <div>
               <h3 className="font-extrabold text-base sm:text-lg font-display tracking-wide uppercase">
-                {existingRoute ? 'Edit Route Studio' : 'Create & Upload Club Route'}
+                {existingRoute ? 'Save New Route Version' : 'Create & Upload Club Route'}
               </h3>
               <p className="text-xs text-woodland-200 font-sans">
                 Turn-by-turn cue generator • GeoJSON compiler • Strava &amp; Garmin links
@@ -857,7 +870,7 @@ export const RouteStudioModal: React.FC<RouteStudioModalProps> = ({
                 ) : (
                   <>
                     <Save className="w-4 h-4 text-amber-300" />
-                    <span>{existingRoute ? 'Save Route Changes' : 'Save Route to Library'}</span>
+                    <span>{existingRoute ? 'Save New Route Version' : 'Save Route to Library'}</span>
                   </>
                 )}
               </button>

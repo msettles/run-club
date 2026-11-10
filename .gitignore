@@ -34,7 +34,7 @@ dist-ssr
 .firebase
 
 # Real member data & one-off analysis scripts (never commit: public repo)
-data/
+/data/
 scratch/
 
 # Firebase emulator logs

@@ -17,6 +17,9 @@ describe('legacy parsing and attendance history', () => {
   it('expires a cached leaderboard streak only after a full missed week', () => {
     expect(liveStreak(3, '2026-11-04', '2026-11-11')).toBe(3);
     expect(liveStreak(3, '2026-11-04', '2026-11-18')).toBe(0);
+    const legacyWeek = Math.floor((Date.parse('2026-11-04T00:00:00Z') + 259200000) / 604800000);
+    expect(liveStreak(3, undefined, '2026-11-11', legacyWeek)).toBe(3);
+    expect(liveStreak(3, undefined, '2026-11-18', legacyWeek)).toBe(0);
   });
   it('matches special events by run ID when two runs share a date', () => {
     const checkin = { runId: 'normal', date: '2026-11-11', codeWord: 'ACORN' } as CheckInRecord;

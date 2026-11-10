@@ -39,6 +39,14 @@ export function resolveChoices(choices: RunRouteChoice[], routes: GPXRoute[]): R
   return resolved.sort((a, b) => a.actualMiles - b.actualMiles);
 }
 
+/** Shared scheduling bounds, matched to the Firestore route/run limits. */
+export function routeChoiceError(choices: ResolvedChoice[]): string | null {
+  if (!choices.length) return 'Add at least one distance option with a route.';
+  if (choices.length > 20 || choices.some((choice) => !Number.isFinite(choice.actualMiles) || choice.actualMiles <= 0 || choice.actualMiles > 500))
+    return 'Choose at most 20 routes, each with a positive measured distance of no more than 500 miles.';
+  return null;
+}
+
 /** Distance, elevation and surface for the event, derived from its routes (never typed in). */
 export function deriveRunStats(resolved: ResolvedChoice[]): {
   distanceMiles: number;
@@ -64,7 +72,7 @@ export function routeOptionFromRoute(route: GPXRoute): RouteOption {
     isLoop: Boolean(route.isLoop),
     maxLoops: route.maxLoops || 4,
     externalLinks: route.externalLinks,
-    directionsList: route.directions,
+
     // No geoJson here: its coordinates are nested arrays, which Firestore refuses,
     // and nothing reads it from the check-in event (maps use the route library).
     directions: route.description || undefined,
@@ -90,9 +98,6 @@ export function buildMeetupFromRun(
     const routeOption = routeOptionFromRoute(c.route);
     // Key by route ID
     routeMap[c.route.id] = routeOption;
-    // Also key by rounded distance (e.g. "1.2", "3.1", "5.2") for easy lookup
-    routeMap[c.miles.toFixed(1)] = routeOption;
-    routeMap[String(c.miles)] = routeOption;
     activeKeys.push(c.route.id);
   });
 
@@ -122,4 +127,12 @@ export function deleteRunConfirmMessage(title: string, checkInCount: number): st
     `Gear alerts from this run that haven't been handed out yet are removed.\n\n` +
     `This can't be undone.`
   );
+}
+
+/** Distinguish immutable route edits when two library versions share a name. */
+export function routeVersionLabel(route: Pick<GPXRoute, 'updatedAt'>): string {
+  if (!route.updatedAt) return '';
+  const date = new Date(route.updatedAt);
+  if (!Number.isFinite(date.getTime())) return '';
+  return `Updated ${date.toLocaleString('en-US', { timeZone: 'America/Los_Angeles', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', second: '2-digit' })}`;
 }

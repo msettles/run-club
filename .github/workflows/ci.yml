@@ -55,5 +55,11 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Lazy bundle boundaries
+        run: npm run check:bundle
+
+      - name: Store transaction integration
+        run: npm run test:integration
+
       - name: Firestore rules tests
         run: npm run test:rules

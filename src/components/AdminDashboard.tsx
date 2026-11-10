@@ -12,7 +12,7 @@ import {
   BadgeCategory,
   BadgeTriggerConfig,
 } from '../types';
-import { INITIAL_BADGES } from '../data/initialData';
+import { INITIAL_BADGES } from '../data/catalog';
 import { ClubNotification } from '../services/notifications';
 import { isLegacyClaimed } from '../utils/legacy';
 import { type AssignableRole } from './admin/shared';
