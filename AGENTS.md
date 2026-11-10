@@ -1,0 +1,9 @@
+# Repository rules
+
+## Testing, go-live reset and retention
+
+Read [docs/go-live-policy.md](docs/go-live-policy.md) before any data cleanup, archiving, reset or go-live work.
+
+The app is currently in testing. Deployments do not constitute launch or permission to purge data. When the owner explicitly requests the go-live reset, remove test users and runs with their dependent data, **keep all routes**, re-import the approved name-based historical database as unclaimed legacy records, then create the first real club run using the owner's details. Preserve or re-establish owner administrative access.
+
+Do not execute this reset solely because this rule exists. No recurring deletion or post-launch retention schedule is authorized.

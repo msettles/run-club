@@ -131,3 +131,7 @@ MIT License. Made for the Woodland Woodchuckers community.
 Run `npx playwright install chromium webkit` once, then `npm run test:browser`. Use Node 24 as required above. `npm run typecheck:browser` checks the suite and its fixtures. CI installs the browsers and runs the suite separately.
 
 These tests use synthetic local data with Firebase disabled and external requests blocked. They cover check-in/onboarding interactions in Chromium and mobile WebKit; they do not replace real-device push, GPS, OAuth or installed-PWA upgrade checks. See [the browser and device checklist](docs/browser-device-testing.md).
+
+### Go-live data policy
+
+The app is currently in testing. The [go-live reset policy](docs/go-live-policy.md) preserves routes, removes test users/runs and related records, reloads the approved name-based historical database, and establishes the first real club run. A deployment does not trigger this reset.
