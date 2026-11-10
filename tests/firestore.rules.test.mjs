@@ -9,7 +9,7 @@ import {
   assertSucceeds,
 } from '@firebase/rules-unit-testing';
 import {
-  doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, collection, query, where, writeBatch, Timestamp, arrayUnion,
+  doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, collection, query, where, writeBatch, Timestamp, arrayUnion, arrayRemove,
 } from 'firebase/firestore';
 
 const memberKeyFor = (email) =>
@@ -136,7 +136,7 @@ function checkInBatch(db, email, { codeWord = 'ACORN', bump = 1, milestone = fal
     batch.update(doc(db, 'runs', RUN), { attendees: arrayUnion({
       memberId: memberKeyFor(email), name: user.displayName,
       checkedIn: false, rsvpDate: '2026-11-11T18:05:00.000Z',
-    }) });
+    }), attendeeIds: arrayUnion(memberKeyFor(email)) });
   }
   if (milestone) {
     batch.set(doc(db, 'milestone_alerts', `m${updated.totalRuns}_${email}`), {
@@ -284,8 +284,23 @@ test('runner can toggle only their own RSVP', async () => {
   const bobs = { memberId: memberKeyFor(BOB), name: 'Bob', checkedIn: false, rsvpDate: '2026-11-10' };
   await assertFails(updateDoc(doc(alice, 'runs', 'run-1'), { attendees: [bobs] }));
   await assertFails(updateDoc(doc(alice, 'runs', 'run-1'), { title: 'Hacked' }));
-  await assertSucceeds(updateDoc(doc(alice, 'runs', 'run-1'), { attendees: [mine] }));
-  await assertSucceeds(updateDoc(doc(alice, 'runs', 'run-1'), { attendees: [] }));
+  const key = memberKeyFor(ALICE);
+  // An RSVP must also record the runner in attendeeIds...
+  await assertFails(updateDoc(doc(alice, 'runs', 'run-1'), { attendees: [mine] }));
+  await assertFails(updateDoc(doc(alice, 'runs', 'run-1'), { attendees: [mine], attendeeIds: [memberKeyFor(BOB)] }));
+  await assertSucceeds(updateDoc(doc(alice, 'runs', 'run-1'), { attendees: [mine], attendeeIds: [key] }));
+  // ...so a second entry for the same runner is refused, however it is dressed up.
+  const again = { ...mine, rsvpDate: '2026-11-11' };
+  await assertFails(updateDoc(doc(alice, 'runs', 'run-1'), { attendees: [mine, again] }));
+  await assertFails(updateDoc(doc(alice, 'runs', 'run-1'), { attendees: [mine, again], attendeeIds: [key, key] }));
+  await assertFails(updateDoc(doc(alice, 'runs', 'run-1'), { attendees: [mine, again], attendeeIds: [] }));
+  // Leaving must clear the record too, and then the runner can RSVP again.
+  await assertFails(updateDoc(doc(alice, 'runs', 'run-1'), { attendees: [] }));
+  await assertSucceeds(updateDoc(doc(alice, 'runs', 'run-1'), { attendees: [], attendeeIds: [] }));
+  await assertSucceeds(updateDoc(doc(alice, 'runs', 'run-1'), { attendees: arrayUnion(again), attendeeIds: arrayUnion(key) }));
+  // Bob's RSVP is independent of Alice's.
+  await assertSucceeds(updateDoc(doc(ctx(BOB), 'runs', 'run-1'), { attendees: arrayUnion(bobs), attendeeIds: arrayUnion(memberKeyFor(BOB)) }));
+  await assertFails(updateDoc(doc(alice, 'runs', 'run-1'), { attendees: arrayRemove(bobs), attendeeIds: arrayRemove(memberKeyFor(BOB)) }));
   await assertFails(setDoc(doc(alice, 'runs', 'run-2'), { ...run, id: 'run-2' }));
 });
 
@@ -828,9 +843,9 @@ test('an opened event cannot be rescheduled to unlock its code word', async () =
   }));
 });
 
-test('a loop route can credit 20 laps, but fractional-cent mileage cannot accumulate', async () => {
+test('a loop route can credit up to its loop limit, but fractional-cent mileage cannot accumulate', async () => {
   await env.withSecurityRulesDisabled(async (c) => {
-    await updateDoc(doc(c.firestore(), 'meetup_events', RUN), { 'routes.route-3.isLoop': true });
+    await updateDoc(doc(c.firestore(), 'meetup_events', RUN), { 'routes.route-3.isLoop': true, 'routes.route-3.maxLoops': 20 });
   });
   const alice = ctx(ALICE);
   const c = checkIn(ALICE, { actualMiles: 62, loops: 20 });
@@ -845,4 +860,32 @@ test('a loop route can credit 20 laps, but fractional-cent mileage cannot accumu
   edit.update(doc(alice, 'checkins', c.id), { actualMiles: 62.004, updatedAt: '2026-11-11T19:00:00Z' });
   edit.update(doc(alice, 'users', ALICE), { totalMiles: 74.004, lastCheckInUpdatedAt: '2026-11-11T19:00:00Z' });
   await assertFails(edit.commit());
+});
+
+test('the loop setting on a loop route caps what a runner can log', async () => {
+  const attempt = async (loops, maxLoops) => {
+    await env.clearFirestore();
+    await seed();
+    await env.withSecurityRulesDisabled(async (c) => {
+      await updateDoc(doc(c.firestore(), 'meetup_events', RUN), { 'routes.route-3.isLoop': true, ...(maxLoops ? { 'routes.route-3.maxLoops': maxLoops } : {}) });
+    });
+    const alice = ctx(ALICE);
+    const miles = Math.round(3.1 * loops * 100) / 100;
+    const c = checkIn(ALICE, { actualMiles: miles, loops });
+    const label = miles.toFixed(1);
+    const u = { ...baseUser(ALICE), totalRuns: 5, loggedRuns: 5, runCount: 5, totalMiles: 12 + miles,
+      lastCheckInDate: DATE, lastCheckInRunId: RUN, lastCheckInUpdatedAt: c.updatedAt,
+      distanceCounts: { [miles <= 2 ? '1' : miles <= 4 ? '3' : '5']: 1, [label]: 1, [`${label} mi`]: 1 } };
+    const batch = writeBatch(alice);
+    batch.set(doc(alice, 'checkins', c.id), c);
+    batch.set(doc(alice, 'users', ALICE), u);
+    return batch.commit();
+  };
+  await assertSucceeds(attempt(3, 3));
+  await assertFails(attempt(4, 3));
+  await assertSucceeds(attempt(6, 6));
+  await assertFails(attempt(7, 6));
+  // A route saved without a setting allows the default of 4.
+  await assertSucceeds(attempt(4));
+  await assertFails(attempt(5));
 });

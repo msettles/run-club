@@ -1,4 +1,4 @@
-import { test, expect, STORAGE_KEYS, email, run } from './fixtures';
+import { test, expect, STORAGE_KEYS, email, run, event, route } from './fixtures';
 
 async function stored(page: import('@playwright/test').Page, key: string) {
   return page.evaluate((key) => JSON.parse(localStorage.getItem(key) || 'null'), key);
@@ -68,4 +68,21 @@ test('sign-in dialog traps keyboard focus and restores its opener with Escape', 
   await expect(dialog).toHaveCount(0);
   await expect(opener).toBeFocused();
   expect(await page.evaluate(() => document.body.style.overflow)).toBe('');
+});
+
+test('a loop route offers exactly its allowed loop counts and credits the chosen one', async ({ page }) => {
+  const loopEvent = { ...event, routes: { [route.id]: { ...event.routes[route.id], isLoop: true, baseMiles: 3, maxLoops: 3 } } };
+  await page.addInitScript(({ key, events }) => {
+    if (!localStorage.getItem('loop-fixture-ready')) localStorage.setItem(key, JSON.stringify(events));
+    localStorage.setItem('loop-fixture-ready', 'true');
+  }, { key: STORAGE_KEYS.MEETUP_EVENTS, events: [loopEvent] });
+  const dialog = await openCheckIn(page);
+  await expect(dialog.getByRole('button', { name: /^\d+\s*\(.*m\)$/ })).toHaveCount(3);
+  await expect(dialog.getByTitle('More loops')).toHaveCount(0);
+  await dialog.getByRole('button', { name: /^3\s*\(9/ }).click();
+  await dialog.getByPlaceholder(/Enter today's code word/).fill('ACORN');
+  await dialog.getByRole('button', { name: /Check In for 3 Loops \(9\.0 mi\)/ }).click();
+  await expect(dialog.getByText('Your check-in is saved.', { exact: false })).toBeVisible();
+  const records = await stored(page, STORAGE_KEYS.CHECKINS);
+  expect(records.find((record: { userEmail: string }) => record.userEmail === email)).toMatchObject({ actualMiles: 9, loops: 3 });
 });

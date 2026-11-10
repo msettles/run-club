@@ -76,7 +76,10 @@ export function createRunOps(ctx: StoreState & ReturnType<typeof createLegacyOps
     };
     if (isFirebaseConfigured && db) {
       // Only touch our own attendee entry (rules reject any other change by runners).
-      await updateDoc(doc(db, 'runs', runId), { attendees: mineBefore ? arrayRemove(mine) : arrayUnion(mine) });
+      await updateDoc(doc(db, 'runs', runId), {
+        attendees: mineBefore ? arrayRemove(mine) : arrayUnion(mine),
+        attendeeIds: mineBefore ? arrayRemove(currentMember.id) : arrayUnion(currentMember.id),
+      });
     }
     setRuns((prev) =>
       prev.map((r) =>

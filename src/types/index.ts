@@ -98,6 +98,8 @@ export interface RunEvent {
   routeChoices?: RunRouteChoice[]; // Distance options runners pick from at check-in
   paceGroups: PaceGroup[];
   attendees: Attendee[];
+  /** Member keys with an entry in attendees. The rules use it to refuse a second entry for the same runner. */
+  attendeeIds?: string[];
   organizerName: string;
   completed?: boolean;
   specialEvent?: SpecialEventType;

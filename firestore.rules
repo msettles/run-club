@@ -169,7 +169,8 @@ service cloud.firestore {
       let route = ev.routes.get(key, null);
       let loops = c.get('loops', 1);
       return route is map && key in ev.activeDistances && loops is int && loops >= 1 && loops <= 20 &&
-        (route.get('isLoop', false) || loops == 1) &&
+        // A loop route's maxLoops is the most a runner can log (4 when the route has none saved).
+        (route.get('isLoop', false) ? loops <= route.get('maxLoops', 4) : loops == 1) &&
         math.abs(c.actualMiles * 100 - math.round(c.actualMiles * 100)) < 0.000001 &&
         math.round(c.actualMiles * 100) == math.round((loops > 1 ? route.get('baseMiles', route.actualMiles) : route.actualMiles) * loops * 100);
     }
@@ -228,7 +229,7 @@ service cloud.firestore {
                'id', 'title', 'date', 'time', 'locationName', 'meetingCoordinates',
                'address', 'distanceMiles', 'surface', 'elevationGainFt', 'description',
                'routeId', 'routeChoices', 'paceGroups', 'attendees', 'organizerName',
-               'completed', 'specialEvent', 'deleting'
+               'completed', 'specialEvent', 'deleting', 'attendeeIds'
              ]) &&
              data.keys().hasAll([
                'id', 'title', 'date', 'time', 'locationName', 'address',
@@ -253,28 +254,35 @@ service cloud.firestore {
              (!('completed' in data) || (data.completed is bool)) &&
              (!('specialEvent' in data) || (data.specialEvent is string && data.specialEvent.size() <= 50)) &&
              (!('deleting' in data) || data.deleting is bool) &&
+             (!('attendeeIds' in data) || (data.attendeeIds is list && data.attendeeIds.size() <= 500)) &&
              (!('meetingCoordinates' in data) || isValidCoordinates(data.meetingCoordinates));
     }
 
     // A runner may only add or remove their own RSVP entry; nothing else on the run changes.
+    // attendeeIds lists who has an entry (rules cannot search inside the attendee
+    // maps), so a runner already on the list cannot add a second entry.
     function isOwnRsvpToggle(runId) {
       let before = resource.data.attendees;
       let after = request.resource.data.attendees;
       let added = after.removeAll(before);
       let removed = before.removeAll(after);
       let myKey = memberKeyFor(tokenEmail());
+      let idsBefore = resource.data.get('attendeeIds', []);
+      let idsAfter = request.resource.data.get('attendeeIds', []);
+      let joined = !(myKey in idsBefore) && idsAfter == idsBefore.concat([myKey]);
       return hasVerifiedEmail() && after is list && after.size() <= 500 && !resource.data.get('deleting', false) && !get(userPath(tokenEmail())).data.get('deleting', false) &&
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['attendees']) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['attendees', 'attendeeIds']) &&
         (
           (added.size() == 1 && removed.size() == 0 &&
            after.size() == before.size() + 1 &&
-           isValidAttendee(added[0]) && added[0].memberId == myKey && (added[0].checkedIn == false || existsAfter(checkinPath(runId, tokenEmail())))) ||
+           isValidAttendee(added[0]) && added[0].memberId == myKey && joined && (added[0].checkedIn == false || existsAfter(checkinPath(runId, tokenEmail())))) ||
           (removed.size() == 1 && added.size() == 0 &&
            after.size() == before.size() - 1 &&
-           removed[0].memberId == myKey && !existsAfter(checkinPath(runId, tokenEmail()))) ||
+           removed[0].memberId == myKey && idsAfter == idsBefore.removeAll([myKey]) && !existsAfter(checkinPath(runId, tokenEmail()))) ||
           (added.size() == 1 && removed.size() == 1 && after.size() == before.size() &&
            added[0].memberId == myKey && removed[0].memberId == myKey &&
-           isValidAttendee(added[0]) && added[0].checkedIn == true && existsAfter(checkinPath(runId, tokenEmail())))
+           isValidAttendee(added[0]) && added[0].checkedIn == true && (idsAfter == idsBefore || joined) &&
+           existsAfter(checkinPath(runId, tokenEmail())))
         );
     }
 
@@ -734,7 +742,7 @@ service cloud.firestore {
                        request.resource.data.id == runId &&
                        (isOwnRsvpToggle(runId) || (isStaff() && isValidRun(request.resource.data) &&
                          (!runIsOver(runId) ||
-                          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['attendees', 'deleting']))));
+                          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['attendees', 'attendeeIds', 'deleting']))));
 
       allow delete: if isStaff();
     }

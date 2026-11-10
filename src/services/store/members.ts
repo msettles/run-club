@@ -185,9 +185,10 @@ export function createMemberOps(ctx: StoreState & ReturnType<typeof createLegacy
       );
       for (const runDoc of runsSnap.docs) {
         const run = runDoc.data() as RunEvent;
-        if (run.attendees.some((a) => a.memberId === key)) {
+        const entries = run.attendees.filter((a) => a.memberId === key);
+        if (entries.length || run.attendeeIds?.includes(key)) {
           ops.push((b) =>
-            b.update(doc(currentDb, 'runs', run.id), { attendees: arrayRemove(...run.attendees.filter((a) => a.memberId === key)) })
+            b.update(doc(currentDb, 'runs', run.id), { ...(entries.length ? { attendees: arrayRemove(...entries) } : {}), attendeeIds: arrayRemove(key) })
           );
         }
       }
