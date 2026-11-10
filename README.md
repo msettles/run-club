@@ -125,3 +125,9 @@ Sending straight from **Post Announcement** needs Cloud Functions (Blaze plan, e
 - [`docs/route-creation-architecture-plan.md`](docs/route-creation-architecture-plan.md): route engine design. The original Python prototype has been removed; `src/utils/routeEngine/` is the source of truth.
 
 MIT License. Made for the Woodland Woodchuckers community.
+
+### Browser regression tests
+
+Run `npx playwright install chromium webkit` once, then `npm run test:browser`. Use Node 24 as required above. `npm run typecheck:browser` checks the suite and its fixtures. CI installs the browsers and runs the suite separately.
+
+These tests use synthetic local data with Firebase disabled and external requests blocked. They cover check-in/onboarding interactions in Chromium and mobile WebKit; they do not replace real-device push, GPS, OAuth or installed-PWA upgrade checks. See [the browser and device checklist](docs/browser-device-testing.md).

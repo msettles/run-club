@@ -1,5 +1,5 @@
 import { Modal } from './Modal';
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useId } from 'react';
 import { X, CheckCircle, ShieldCheck, Sparkles, Search, AlertCircle, RefreshCw } from 'lucide-react';
 import { LegacyMember, UserProfile } from '../types';
 import { calculateAge, localYmd } from '../utils/dateUtils';
@@ -37,6 +37,7 @@ export const NewUserModal: React.FC<NewUserModalProps> = ({
   onRegisterUser,
   onSuccess,
 }) => {
+  const fieldId = useId();
   // Parse initial names from displayName
   const parsedNames = useMemo(() => {
     const parts = (initialDisplayName || '').trim().split(/\s+/);
@@ -171,7 +172,7 @@ export const NewUserModal: React.FC<NewUserModalProps> = ({
         {/* Form Body */}
         <form onSubmit={handleSubmit} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
           {errorMsg && (
-            <div className="flex items-start gap-2.5 p-3 bg-red-50 border border-red-200 text-red-800 rounded-xl text-xs">
+            <div role="alert" className="flex items-start gap-2.5 p-3 bg-red-50 border border-red-200 text-red-800 rounded-xl text-xs">
               <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-red-600" />
               <span>{errorMsg}</span>
             </div>
@@ -198,8 +199,8 @@ export const NewUserModal: React.FC<NewUserModalProps> = ({
           {/* First & Last Name */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-bold text-stone-700 mb-1">First Name *</label>
-              <input
+              <label htmlFor={`${fieldId}-firstName`} className="block text-xs font-bold text-stone-700 mb-1">First Name *</label>
+              <input id={`${fieldId}-firstName`}
                 type="text"
                 required
                 value={firstName}
@@ -209,8 +210,8 @@ export const NewUserModal: React.FC<NewUserModalProps> = ({
               />
             </div>
             <div>
-              <label className="block text-xs font-bold text-stone-700 mb-1">Last Name *</label>
-              <input
+              <label htmlFor={`${fieldId}-lastName`} className="block text-xs font-bold text-stone-700 mb-1">Last Name *</label>
+              <input id={`${fieldId}-lastName`}
                 type="text"
                 required
                 value={lastName}
@@ -224,8 +225,8 @@ export const NewUserModal: React.FC<NewUserModalProps> = ({
           {/* Shirt Size & Pace Preference */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-bold text-stone-700 mb-1">Shirt Size (Milestones) *</label>
-              <select
+              <label htmlFor={`${fieldId}-shirtSize`} className="block text-xs font-bold text-stone-700 mb-1">Shirt Size (Milestones) *</label>
+              <select id={`${fieldId}-shirtSize`}
                 value={shirtSize}
                 onChange={(e) => setShirtSize(e.target.value)}
                 className="w-full px-3 py-2 text-sm rounded-xl border border-stone-300 focus:ring-2 focus:ring-amber-500 outline-none bg-white font-bold"
@@ -240,8 +241,8 @@ export const NewUserModal: React.FC<NewUserModalProps> = ({
               </select>
             </div>
             <div>
-              <label className="block text-xs font-bold text-stone-700 mb-1">Preferred Pace</label>
-              <select
+              <label htmlFor={`${fieldId}-preferredPace`} className="block text-xs font-bold text-stone-700 mb-1">Preferred Pace</label>
+              <select id={`${fieldId}-preferredPace`}
                 value={preferredPace}
                 onChange={(e) => setPreferredPace(e.target.value)}
                 className="w-full px-3 py-2 text-sm rounded-xl border border-stone-300 focus:ring-2 focus:ring-amber-500 outline-none bg-white font-bold"
@@ -257,14 +258,14 @@ export const NewUserModal: React.FC<NewUserModalProps> = ({
           <div className="grid grid-cols-2 gap-3">
             <div>
               <div className="flex items-center justify-between mb-1">
-                <label className="text-xs font-bold text-stone-700">Birthday (Optional)</label>
+                <label htmlFor={`${fieldId}-birthday`} className="text-xs font-bold text-stone-700">Birthday (Optional)</label>
                 {computedAge !== undefined && (
                   <span className="text-[10px] font-bold bg-amber-100 text-amber-900 px-1.5 py-0.5 rounded font-mono">
                     Age: {computedAge}
                   </span>
                 )}
               </div>
-              <input
+              <input id={`${fieldId}-birthday`}
                 type="date"
                 value={birthday}
                 onChange={(e) => setBirthday(e.target.value)}
@@ -273,8 +274,8 @@ export const NewUserModal: React.FC<NewUserModalProps> = ({
               />
             </div>
             <div>
-              <label className="block text-xs font-bold text-stone-700 mb-1">Zip Code</label>
-              <input
+              <label htmlFor={`${fieldId}-zipCode`} className="block text-xs font-bold text-stone-700 mb-1">Zip Code</label>
+              <input id={`${fieldId}-zipCode`}
                 type="text"
                 value={zipCode}
                 onChange={(e) => setZipCode(e.target.value)}
@@ -341,14 +342,14 @@ export const NewUserModal: React.FC<NewUserModalProps> = ({
 
             {/* Search Input for Historical Records */}
             <div>
-              <label className="block text-[11px] font-bold text-stone-600 uppercase tracking-wider mb-1">
+              <label htmlFor={`${fieldId}-search`} className="block text-[11px] font-bold text-stone-600 uppercase tracking-wider mb-1">
                 Search Historical Names Pool
               </label>
               <div className="relative">
                 <Search className="w-4 h-4 text-stone-400 absolute left-3 top-2.5" />
                 <input
                   type="text"
-                  value={searchQuery}
+                  id={`${fieldId}-search`} value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Type your name or variations (e.g. Settles, Matt)..."
                   className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-stone-300 focus:ring-2 focus:ring-amber-500 outline-none bg-white font-medium"
