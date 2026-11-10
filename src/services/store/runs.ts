@@ -157,26 +157,43 @@ export function createRunOps(ctx: StoreState & ReturnType<typeof createLegacyOps
     return newRoute;
   };
 
-  /** Update an existing route (staff). Saves first; throws if the server refuses. */
+  /**
+   * Update an existing route (staff). Saves first; throws if the server refuses.
+   * A route no run has used is edited in place. Once a run uses it, the saved
+   * route is left as it is and the edit becomes a new library version, so that
+   * run's map and credited mileage never change.
+   */
   const updateRoute = async (routeId: string, updates: Partial<GPXRoute>): Promise<GPXRoute> => {
     const existing = routes.find((r) => r.id === routeId);
-    const nextId = `route-${crypto.randomUUID()}`;
-    const updatedObj: GPXRoute = {
+    const usedByLoadedRun = runs.some((r) => r.routeId === routeId || r.routeChoices?.some((c) => c.routeId === routeId));
+    const now = new Date().toISOString();
+    const build = (inPlace: boolean, createdAt?: string): GPXRoute => ({
       ...(existing || ({} as GPXRoute)),
       ...updates,
-      id: nextId,
+      id: inPlace ? routeId : `route-${crypto.randomUUID()}`,
       referenced: false,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
+      createdAt: inPlace && createdAt ? createdAt : now,
+      updatedAt: now,
+    });
+    let updatedObj: GPXRoute;
     if (isFirebaseConfigured && db) {
-      const formatted = formatRouteForFirestore(updatedObj);
-      assertRouteFitsFirestore(formatted);
-      // Replace the complete route so cleared links and old raw GPX fields disappear.
-      await setDoc(doc(db, 'routes', nextId), formatted);
-    }
+      const firestore = db;
+      updatedObj = await runTransaction(firestore, async (tx) => {
+        const saved = await tx.get(doc(firestore, 'routes', routeId));
+        const next = build(saved.exists() && !saved.data().referenced && !usedByLoadedRun, saved.data()?.createdAt);
+        const formatted = formatRouteForFirestore(next);
+        assertRouteFitsFirestore(formatted);
+        // Replace the complete route so cleared links and old raw GPX fields disappear.
+        tx.set(doc(firestore, 'routes', next.id), formatted);
+        return next;
+      });
+    } else updatedObj = build(Boolean(existing) && !existing!.referenced && !usedByLoadedRun, existing?.createdAt);
+    const shown = isFirebaseConfigured ? routeSummary(updatedObj) : updatedObj;
+    if (updatedObj.id === routeId) {
+      ctx.routeDetailsCache?.forget(routeId);
+      setRoutes((prev) => prev.map((r) => (r.id === routeId ? shown : r)));
+    } else setRoutes((prev) => [shown, ...prev]);
     ctx.routeDetailsCache?.prime(updatedObj);
-    setRoutes((prev) => [isFirebaseConfigured ? routeSummary(updatedObj) : updatedObj, ...prev]);
     return updatedObj;
   };
 

@@ -25,3 +25,11 @@ Historical pages are snapshots rather than live subscriptions. Opening the Membe
 - 55 Firestore rules tests and seven resolver tests pass.
 - Type checking, production build and bundle limits pass. ESLint reports zero errors and 48 existing warnings.
 - Read-only browser smoke checks verified deferred map and prior-run loading. No production data was written and no deployment was performed.
+
+## Rewards, routes and caching (2026-11-10)
+
+- **Reward refresh on sign-in.** Badges and streaks are recalculated from a runner's whole history, which reads every check-in, claimed historical record and attendance proof. Each device now remembers a hash of the profile state and badge catalog its last refresh ran against (`src/services/store/rewardSync.ts`) and skips the refresh while they are unchanged. A new device, a check-in, a claim, an attendance correction, a badge catalog change or a lapsed streak each trigger one refresh.
+- **Attendance proofs.** Only proofs for the runner's current reward epoch are read. Proofs from earlier epochs are superseded and stay stored, in line with the retention policy, but cost nothing. On a first sync, separate streaks are written six at a time; weeks inside one streak are still written in order because each proof builds on the previous week's.
+- **Route edits.** A route no run has used is edited in place. Once a run uses it (the `referenced` flag, or a loaded run that lists it), an edit still saves a new library version so that run's map and credited mileage never change.
+- **Offline cache.** Staff-only screens, the route generator and local-mode sample data are no longer downloaded for every visitor; they are cached the first time they are opened. Hosting serves `/assets/**` as immutable and the app shell and service workers as `no-cache`, and a missing build file now returns 404 rather than the app shell.
+

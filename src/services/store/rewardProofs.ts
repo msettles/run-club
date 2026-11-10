@@ -4,6 +4,8 @@ import type { CheckInRecord, MeetupEvent, UserProfile } from '../../types';
 import { specialEventIdsFor, type LegacyEvent } from '../../utils/legacy';
 
 export const attendanceWeek = (date: string): number => Math.floor(Date.parse(`${date}T00:00:00Z`) / 604800000 + 3 / 7);
+/** How many separate streaks are written at once on a first sync. */
+const STREAK_WRITERS = 6;
 export interface RewardSource { checkinId?: string; legacyId?: string; event?: { d: string; t: string; c: string } }
 interface Attendance { date: string; source: RewardSource; id: string; specialIds: string[] }
 export function rewardProofId(email: string, epoch: number, kind: string, key: string | number): string { return `${email}_${epoch}_${kind}_${key}`; }
@@ -24,25 +26,38 @@ export async function prepareRewardProofs(db: Firestore, user: UserProfile, chec
   ];
   const weeks = new Map<number, Attendance>();
   attendance.forEach((a) => { const week = attendanceWeek(a.date); if (Number.isFinite(week)) weeks.set(week, a); });
-  const saved = await getDocs(query(collection(db, 'reward_proofs'), where('userEmail', '==', email)));
-  const existing = new Map(saved.docs.filter((d) => d.data().epoch === epoch).map((d) => [d.id, d.data()]));
+  // Proofs from earlier epochs are superseded; do not pay to read them.
+  const saved = await getDocs(query(collection(db, 'reward_proofs'), where('userEmail', '==', email), where('epoch', '==', epoch)));
+  const existing = new Map(saved.docs.map((d) => [d.id, d.data()]));
   let longestWeek = 0;
   let longest = 0;
   let lastWeek = 0;
   let lastCount = 0;
+  // A week's proof builds on the previous week's, so each unbroken streak is written
+  // in order. Separate streaks do not depend on each other and are written side by side.
+  const streaks: Array<Array<{ week: number; count: number; source: RewardSource }>> = [];
   for (const [week, a] of [...weeks].sort(([a], [b]) => a - b)) {
     const count = lastWeek === week - 1 ? lastCount + 1 : 1;
-    const id = rewardProofId(email, epoch, 'week', week);
-    if (existing.get(id)?.count !== count) {
-      await runTransaction(db, async (tx) => {
-        const owner = await tx.get(doc(db, 'users', email));
-        if (!owner.exists() || owner.data().deleting || (owner.data().rewardEpoch || 0) !== epoch) throw new Error('Attendance changed. Please refresh your rewards.');
-        tx.set(doc(db, 'reward_proofs', id), { userEmail: email, epoch, kind: 'week', week, count, source: a.source });
-      });
-    }
+    if (count === 1) streaks.push([]);
+    streaks[streaks.length - 1].push({ week, count, source: a.source });
     lastWeek = week; lastCount = count;
     if (count > longest) { longest = count; longestWeek = week; }
   }
+  const writeStreak = async (streak: (typeof streaks)[number]) => {
+    for (const { week, count, source } of streak) {
+      const id = rewardProofId(email, epoch, 'week', week);
+      if (existing.get(id)?.count === count) continue;
+      await runTransaction(db, async (tx) => {
+        const owner = await tx.get(doc(db, 'users', email));
+        if (!owner.exists() || owner.data().deleting || (owner.data().rewardEpoch || 0) !== epoch) throw new Error('Attendance changed. Please refresh your rewards.');
+        tx.set(doc(db, 'reward_proofs', id), { userEmail: email, epoch, kind: 'week', week, count, source });
+      });
+    }
+  };
+  const queue = streaks.filter((streak) => streak.some(({ week, count }) => existing.get(rewardProofId(email, epoch, 'week', week))?.count !== count));
+  await Promise.all(Array.from({ length: Math.min(STREAK_WRITERS, queue.length) }, async () => {
+    for (let streak = queue.shift(); streak; streak = queue.shift()) await writeStreak(streak);
+  }));
   for (const a of attendance) for (const specialId of a.specialIds) {
     const id = rewardProofId(email, epoch, 'special', specialId);
     if (existing.get(id)?.sources?.includes(a.id)) continue;

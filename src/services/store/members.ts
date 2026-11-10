@@ -201,7 +201,9 @@ export function createMemberOps(ctx: StoreState & ReturnType<typeof createLegacy
       }
     }
 
-    if (ctx.staffSearchCache) ctx.staffSearchCache.current = { expires: 0 };
+    // Keep the loaded roster and drop this runner from it, rather than re-reading everyone.
+    const roster = ctx.staffSearchCache?.current;
+    if (roster?.rows) roster.rows = roster.rows.filter((u) => u.email.toLowerCase() !== cleanEmail);
     setUsers((prev) => prev.filter((u) => u.email.toLowerCase() !== cleanEmail));
     setMembers((prev) => prev.filter((m) => m.id !== key));
     setCheckins((prev) => prev.filter((c) => c.userEmail.toLowerCase() !== cleanEmail));
@@ -221,7 +223,8 @@ export function createMemberOps(ctx: StoreState & ReturnType<typeof createLegacy
     if (isFirebaseConfigured && db) {
       await updateDoc(doc(db, 'users', cleanEmail), { role });
     }
-    if (ctx.staffSearchCache) ctx.staffSearchCache.current = { expires: 0 };
+    const roster = ctx.staffSearchCache?.current;
+    if (roster?.rows) roster.rows = roster.rows.map((u) => (u.email.toLowerCase() === cleanEmail ? { ...u, role } : u));
     setUsers((prev) => prev.map((u) => (u.email.toLowerCase() === cleanEmail ? { ...u, role } : u)));
   };
 

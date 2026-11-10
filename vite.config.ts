@@ -44,6 +44,19 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
+      workbox: {
+        // Staff-only screens, the route generator and local-mode sample data are
+        // not downloaded for every visitor. They are cached when first opened.
+        globIgnores: ['**/node_modules/**/*', 'sw.js', 'workbox-*.js'].concat(
+          ['AdminDashboard', 'RouteStudioModal', 'RouteChoicesEditor', 'NewRunModal', 'EditRunModal', 'BrandAssetsModal', 'FirebaseSetupGuide', 'initialData', 'worker']
+            .map((name) => `assets/${name}-*.js`)),
+        runtimeCaching: [{
+          // Build output names contain a content hash, so a cached copy never goes stale.
+          urlPattern: ({ url, sameOrigin }) => sameOrigin && url.pathname.startsWith('/assets/'),
+          handler: 'CacheFirst',
+          options: { cacheName: 'on-demand-assets', expiration: { maxEntries: 40 }, cacheableResponse: { statuses: [200] } },
+        }],
+      },
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'woodchuck.svg', 'Woodchucker2.jpg', 'Woodchucker2026.png'],
       manifest: {
         name: 'Woodland Woodchuckers Run Club',

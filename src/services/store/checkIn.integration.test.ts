@@ -137,6 +137,31 @@ it.skipIf(!enabled)('attendance-backed rewards work and arbitrary badge/streak g
   await expect(updateDoc(doc(backend.current!, 'users', email), { unlockedBadgeIds: [...refreshed.unlockedBadgeIds, 'milestone-200'], badgeCounts: { ...refreshed.badgeCounts, 'milestone-200': 100 }, rewardChanges: ['milestone-200'] })).rejects.toHaveProperty('code', 'permission-denied');
 });
 
+it.skipIf(!enabled)('a first reward sync proves several separate streaks, ignores superseded proofs and writes nothing the second time', async () => {
+  const key = await memberKeyFor(email);
+  const dates = ['2024-01-03', '2024-01-10', '2024-01-17', '2024-02-07', '2024-02-14', '2024-03-06', '2024-04-03'];
+  await env.withSecurityRulesDisabled(async (context) => {
+    const db = context.firestore() as unknown as Firestore;
+    await setDoc(doc(db, 'users', email), { ...user, rewardEpoch: 1, totalRuns: 7, legacyEventRuns: 7, linkedLegacyIds: ['old-name'], linkedLegacyNames: ['OLD NAME'] });
+    await setDoc(doc(db, 'legacy_profiles', 'old-name'), { id: 'old-name', name: 'OLD NAME', oldCount: 0, newCount: 7, totalRuns: 7, claimedBy: key, claimedAt: date });
+    await setDoc(doc(db, 'legacy_history', 'old-name'), { id: 'old-name', events: dates.map((d) => ({ d, t: '18:00', c: 'ACORN' })) });
+    // Left over from before an attendance change: a different epoch, never read again.
+    await setDoc(doc(db, 'reward_proofs', `${email}_0_week_1`), { userEmail: email, epoch: 0, kind: 'week', week: 1, count: 99, source: {} });
+  });
+  const ctx = { privateSyncEpoch: { current: 0 }, currentUserEmail: email, meetupEvents: events, badges: INITIAL_BADGES, checkins: [],
+    setOwnLegacyEvents: vi.fn(), setUsers: vi.fn(), setMembers: vi.fn(), setMeetupEvents: vi.fn() };
+  const ops = createLegacyOps(ctx as unknown as Parameters<typeof createLegacyOps>[0]);
+  const profile = async () => (await getDoc(doc(backend.current!, 'users', email))).data() as UserProfile;
+  const refreshed = await ops.refreshDerivedStats(await profile());
+  expect(refreshed).toMatchObject({ longestStreakWeeks: 3, currentStreakWeeks: 0 });
+  expect(refreshed.badgeCounts).toMatchObject({ 'first-chuck': 1, 'milestone-5': 1 });
+  const proofs = async () => (await getDocs(query(collection(backend.current!, 'reward_proofs'), where('userEmail', '==', email), where('epoch', '==', 1)))).docs.map((d) => d.data());
+  expect((await proofs()).filter((proof) => proof.kind === 'week').map((proof) => proof.count).sort()).toEqual([1, 1, 1, 1, 2, 2, 3]);
+  const before = JSON.stringify(await proofs());
+  expect(await ops.refreshDerivedStats(await profile())).toMatchObject({ longestStreakWeeks: 3 });
+  expect(JSON.stringify(await proofs())).toBe(before);
+});
+
 it.skipIf(!enabled)('two administrators deleting the same run subtract its attendance once', async () => {
   const checked = await Promise.all(events.map((event) => operations().checkInRunner({ eventId: event.id, userEmail: email, codeWordEntered: event.codeWord, activity: 'running', distanceChoice: 'route' })));
   expect(checked.every((result) => result.success)).toBe(true);
