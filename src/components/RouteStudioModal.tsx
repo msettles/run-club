@@ -574,7 +574,7 @@ export const RouteStudioModal: React.FC<RouteStudioModalProps> = ({
                     </span>
                   </div>
                   <p className="text-[11px] text-stone-600 leading-relaxed mt-0.5">
-                    Runners can choose to run 1, 2, 3, 4+ loops of this course. The check-in screen will offer an interactive loop selector and automatically multiply their credited mileage.
+                    Runners choose how many loops of this course they ran, up to the limit below. The check-in screen multiplies their credited mileage to match.
                   </p>
                 </div>
               </label>
@@ -582,7 +582,7 @@ export const RouteStudioModal: React.FC<RouteStudioModalProps> = ({
               {isLoop && (
                 <div className="pl-6.5 pt-1 flex items-center gap-3 flex-wrap">
                   <label className="text-xs font-semibold text-stone-700">
-                    Preset loop options at check-in:
+                    Most loops a runner can log at check-in:
                   </label>
                   <select
                     value={maxLoops}
@@ -590,7 +590,7 @@ export const RouteStudioModal: React.FC<RouteStudioModalProps> = ({
                     className="px-2.5 py-1 text-xs border rounded-lg bg-white font-bold text-stone-800"
                   >
                     <option value={3}>1 to 3 Loops</option>
-                    <option value={4}>1 to 4 Loops (Recommended: 1, 2, 3, 4)</option>
+                    <option value={4}>1 to 4 Loops (Recommended)</option>
                     <option value={5}>1 to 5 Loops</option>
                     <option value={6}>1 to 6 Loops</option>
                   </select>

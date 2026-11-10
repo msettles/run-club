@@ -48,12 +48,20 @@ it('persists check-in, totals, milestone and automatic RSVP before returning suc
   expect(result.checkIn?.runId).toBe('run');
 });
 
+it('refuses more loops than the route allows', async () => {
+  Object.assign((firestore.docs['meetup_events/run'] as { routes: { short: object } }).routes.short, { isLoop: true, maxLoops: 3, baseMiles: 3.1 });
+  const ops = createCheckInOps(context() as unknown as Parameters<typeof createCheckInOps>[0]);
+  expect(await ops.checkInRunner({ ...params, loops: 4 })).toMatchObject({ success: false, message: 'This route allows up to 3 loops. Please choose again.' });
+  const allowed = await ops.checkInRunner({ ...params, loops: 3 });
+  expect(allowed.checkIn).toMatchObject({ loops: 3, actualMiles: 9.3 });
+});
+
 it('preserves an existing RSVP instead of duplicating it', async () => {
   const { memberKeyFor } = await import('../../utils/memberKey');
   firestore.attendees = [{ memberId: await memberKeyFor(params.userEmail), name: 'Alice', checkedIn: false, rsvpDate: 'original' }];
   const ops = createCheckInOps(context() as unknown as Parameters<typeof createCheckInOps>[0]);
   expect((await ops.checkInRunner(params)).success).toBe(true);
-  expect(firestore.update).toHaveBeenCalledWith('runs/run', { attendees: [expect.objectContaining({ rsvpDate: 'original', checkedIn: true })] });
+  expect(firestore.update).toHaveBeenCalledWith('runs/run', { attendees: [expect.objectContaining({ rsvpDate: 'original', checkedIn: true })], attendeeIds: [await memberKeyFor(params.userEmail)] });
 });
 
 it('does not show success or mutate local data when the server rejects the save', async () => {

@@ -95,6 +95,25 @@ it.skipIf(!enabled)('a member can edit their own check-in, alone or among other 
   expect((await getDoc(doc(backend.current!, 'users', email))).data()).toMatchObject({ totalRuns: 1, totalMiles: 3.1, runCount: 0, walkCount: 1 });
 });
 
+it.skipIf(!enabled)('an RSVP, the check-in that follows and leaving all keep one entry per runner', async () => {
+  const key = await memberKeyFor(email);
+  const runOps = (attendees: unknown[]) => createRunOps({ runs: [{ id: 'second', attendees }], currentUserEmail: email, currentMember: { id: key, name: user.displayName },
+    setRuns: vi.fn(), meetupEvents: events, routes: [] } as unknown as Parameters<typeof createRunOps>[0]);
+  const saved = async () => (await getDoc(doc(backend.current!, 'runs', 'second'))).data()!;
+  await runOps([]).toggleRSVP('second');
+  expect(await saved()).toMatchObject({ attendees: [expect.objectContaining({ memberId: key, checkedIn: false })], attendeeIds: [key] });
+  // A hand-made second entry is refused.
+  const extra = { memberId: key, name: 'Again', checkedIn: false, rsvpDate: 'later' };
+  await expect(updateDoc(doc(backend.current!, 'runs', 'second'), { attendees: [...(await saved()).attendees, extra], attendeeIds: [key, key] })).rejects.toHaveProperty('code', 'permission-denied');
+  await runOps((await saved()).attendees).toggleRSVP('second');
+  expect(await saved()).toMatchObject({ attendees: [], attendeeIds: [] });
+  await runOps([]).toggleRSVP('second');
+  const checked = await operations().checkInRunner({ eventId: 'second', userEmail: email, codeWordEntered: 'SECOND', activity: 'running', distanceChoice: 'route' });
+  expect(checked.success).toBe(true);
+  await checked.rewardsReady;
+  expect(await saved()).toMatchObject({ attendees: [expect.objectContaining({ memberId: key, checkedIn: true })], attendeeIds: [key] });
+});
+
 it.skipIf(!enabled)('attendance-backed rewards work and arbitrary badge/streak grants fail', async () => {
   const checkin = await operations().checkInRunner({ eventId: 'first', userEmail: email, codeWordEntered: 'FIRST', activity: 'running', distanceChoice: 'route' });
   expect(checkin.success).toBe(true);

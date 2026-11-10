@@ -968,7 +968,8 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
                     const optBaseMiles = opt.route.baseMiles || opt.route.actualMiles;
                     const optTotalMiles = opt.route.isLoop ? (optBaseMiles * optLoops) : opt.route.actualMiles;
                     const optFormattedMiles = formatMiles(optTotalMiles);
-                    const maxPresets = Math.min(20, Math.max(opt.route.maxLoops || 4, 4));
+                    // The route's loop setting is the most a runner can log (the rules enforce it).
+                    const maxPresets = Math.min(20, Math.max(1, opt.route.maxLoops || 4));
 
                     return (
                       <div
@@ -1023,7 +1024,7 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
                               </span>
                             </div>
 
-                            {/* Quick presets (1, 2, 3, 4) + Stepper for 5, 6, etc. */}
+                            {/* One button per allowed loop count */}
                             <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
                               {Array.from({ length: maxPresets }, (_, i) => i + 1).map((n) => {
                                 const loopMiles = formatMiles(optBaseMiles * n);
@@ -1050,36 +1051,6 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
                                 );
                               })}
 
-                              {/* Stepper for ambitious runners (5, 6, etc.) */}
-                              <div className="flex items-center border border-stone-300 rounded-lg overflow-hidden bg-white ml-auto">
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const next = Math.max(1, optLoops - 1);
-                                    setLoopSelections((prev) => ({ ...prev, [opt.key]: next }));
-                                    setSelectedOptionKey(opt.key);
-                                  }}
-                                  disabled={optLoops <= 1}
-                                  className="px-2 py-0.5 text-xs font-bold text-stone-600 hover:bg-stone-100 disabled:opacity-30"
-                                  title="Fewer loops"
-                                >
-                                  −
-                                </button>
-                                <span className="px-1.5 text-xs font-mono font-black text-stone-900">{optLoops}</span>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const next = Math.min(20, optLoops + 1);
-                                    setLoopSelections((prev) => ({ ...prev, [opt.key]: next }));
-                                    setSelectedOptionKey(opt.key);
-                                  }}
-                                  className="px-2 py-0.5 text-xs font-bold text-stone-600 hover:bg-stone-100"
-                                  disabled={optLoops >= 20}
-                                  title="More loops"
-                                >
-                                  +
-                                </button>
-                              </div>
                             </div>
                           </div>
                         )}

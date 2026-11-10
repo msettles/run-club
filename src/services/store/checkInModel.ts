@@ -13,6 +13,9 @@ export function calculateCheckIn(params: CheckInParams, u: UserProfile, event: M
   if (!routeOption || (event.activeDistances && !event.activeDistances.includes(String(distanceChoice)))) throw new Error('This route is no longer available. Please reopen check-in.');
   if (u.deleting || event.deleting) throw new Error('This run or profile is being removed.');
   if (loops !== undefined && (!Number.isInteger(loops) || loops < 1 || loops > 20)) throw new Error('Choose between 1 and 20 loops.');
+  // The route's loop setting is a hard limit; the rules refuse anything above it.
+  const loopLimit = Math.min(20, routeOption.maxLoops || 4);
+  if (routeOption.isLoop && loops !== undefined && loops > loopLimit) throw new Error(`This route allows up to ${loopLimit} loop${loopLimit === 1 ? '' : 's'}. Please choose again.`);
   const isUpdate = Boolean(existingCheckIn);
     // 3b. Compute effective loops and actual credited mileage
     const effectiveLoops = routeOption.isLoop && loops && Number.isInteger(loops) && loops > 0 ? loops : 1;

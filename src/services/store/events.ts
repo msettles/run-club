@@ -36,7 +36,7 @@ export function createEventOps(ctx: StoreState) {
     const previous = meetupEvents.find((e) => e.id === runId);
     let word = (event.codeWord || previous?.codeWord || '').trim().toUpperCase();
     if (!word) throw new Error('Enter the check-in code word.');
-    const details = run ? (({ attendees: _attendees, ...rest }) => rest)(run) : undefined;
+    const details = run ? (({ attendees: _attendees, attendeeIds: _attendeeIds, ...rest }) => rest)(run) : undefined;
     const duplicateError = () => Object.assign(
       new Error(`The code word ${word} is already used by another run on ${event.date}. Pick a different word.`),
       { code: 'duplicate-code-word' }

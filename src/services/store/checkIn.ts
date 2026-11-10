@@ -62,7 +62,8 @@ export function createCheckInOps(ctx: StoreState & ReturnType<typeof createLegac
           const next = unchanged ? current : previous && others.length === current.length - 1
             ? current.map((a) => (a.memberId === key ? entry : a))
             : [...others, entry];
-          if (!unchanged) tx.update(runRef, { attendees: next });
+          const ids = (run.data().attendeeIds || []) as string[];
+          if (!unchanged) tx.update(runRef, { attendees: next, ...(ids.includes(key) ? {} : { attendeeIds: [...ids, key] }) });
           tx.set(ciRef, cleanFirestoreData(computed.newCheckIn));
           tx.set(userRef, cleanFirestoreData(persistedUser));
           if (alert) tx.set(doc(firestore, 'milestone_alerts', alert.id), cleanFirestoreData(alert));
