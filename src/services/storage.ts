@@ -1,3 +1,4 @@
+import { createStaffLoadingOps } from './store/staffLoading';
 import { useEffect } from 'react';
 import { RunEvent, Badge, SpecialEventDefinition } from '../types';
 import { INITIAL_BADGES, INITIAL_SPECIAL_EVENTS } from '../data/catalog';
@@ -39,7 +40,7 @@ export function useClubStore({ loadLeaderboard = true } = {}) {
 
   // Each group of operations can use the state and every group created before it.
   // Extend one context in dependency order; each operation sees current render state.
-  const c0 = Object.assign(s, createRouteLoadingOps(s), createScheduleLoadingOps(s));
+  const c0 = Object.assign(s, createRouteLoadingOps(s), createScheduleLoadingOps(s), createStaffLoadingOps(s));
   const c1 = Object.assign(c0, createLegacyOps(c0));
   const c2 = Object.assign(c1, createPrivateSyncOps(c1));
   const c3 = Object.assign(c2, createMemberOps(c2));
@@ -174,6 +175,11 @@ export function useClubStore({ loadLeaderboard = true } = {}) {
     notifications: store.notifications,
     bellItems: store.bellItems,
     users: store.users,
+    staffRosterLoaded: Boolean(store.staffRosterPage.current.cursor || store.staffRosterPage.current.complete),
+    refreshStaffUsers: store.refreshStaffUsers, refreshGearHistory: store.refreshGearHistory,
+    loadMoreStaffUsers: store.loadMoreStaffUsers, findStaffUser: store.findStaffUser, exportStaffUsers: store.exportStaffUsers,
+    staffRosterLoading: store.staffRosterLoading, staffRosterError: store.staffRosterError, hasMoreStaffUsers: store.hasMoreStaffUsers,
+    loadMoreGearHistory: store.loadMoreGearHistory, gearHistoryLoading: store.gearHistoryLoading, gearHistoryError: store.gearHistoryError, hasMoreGearHistory: store.hasMoreGearHistory,
     setUsers: store.setUsers,
     meetupEvents: store.meetupEvents,
     checkins: store.checkins,

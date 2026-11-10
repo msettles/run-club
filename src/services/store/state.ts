@@ -1,3 +1,4 @@
+import { newStaffPage } from './staffLoading';
 /** All club-store state (React state, browser persistence, derived current user). */
 import { useState, useEffect, useMemo, useRef } from 'react';
 import {
@@ -91,6 +92,14 @@ export function useStoreState() {
   const [routeCatalogError, setRouteCatalogError] = useState<string | null>(null);
   const [leaderboardLoaded, setLeaderboardLoaded] = useState(LOCAL_MODE);
   const [leaderboardError, setLeaderboardError] = useState<string | null>(null);
+  const staffRosterPage = useRef(newStaffPage(LOCAL_MODE));
+  const gearHistoryPage = useRef(newStaffPage(LOCAL_MODE));
+  const [staffRosterLoading, setStaffRosterLoading] = useState(false);
+  const [staffRosterError, setStaffRosterError] = useState<string | null>(null);
+  const [hasMoreStaffUsers, setHasMoreStaffUsers] = useState(!LOCAL_MODE);
+  const [gearHistoryLoading, setGearHistoryLoading] = useState(false);
+  const [gearHistoryError, setGearHistoryError] = useState<string | null>(null);
+  const [hasMoreGearHistory, setHasMoreGearHistory] = useState(!LOCAL_MODE);
   const [members, setMembers] = useState<Member[]>(() => (LOCAL_MODE ? loadMerged<Member>(STORAGE_KEYS.MEMBERS, [], emailOf) : []));
   // The built-in badge catalog is part of the app; admin-made badges come from Firestore.
   const [badges, setBadges] = useState<Badge[]>(() => (LOCAL_MODE ? loadMerged(STORAGE_KEYS.BADGES, INITIAL_BADGES, idOf) : INITIAL_BADGES));
@@ -272,6 +281,8 @@ export function useStoreState() {
     setIsSyncing,
     users,
     setUsers,
+    staffRosterPage, gearHistoryPage, staffRosterLoading, setStaffRosterLoading, staffRosterError, setStaffRosterError,
+    hasMoreStaffUsers, setHasMoreStaffUsers, gearHistoryLoading, setGearHistoryLoading, gearHistoryError, setGearHistoryError, hasMoreGearHistory, setHasMoreGearHistory,
     meetupEvents: loadedMeetups,
     setMeetupEvents,
     staffCodeWords,
