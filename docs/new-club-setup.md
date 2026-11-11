@@ -121,6 +121,10 @@ npm run build && npx firebase deploy --only firestore:rules,hosting --project YO
 5. On a phone, install the app from the banner and check the name and icon are yours.
 6. Phone notifications are sent from **Firebase console → Messaging**; see the README's push section.
 
+## 7. Backups (optional, and not free)
+
+**FYI: a new club has no database backups.** Firestore's scheduled backups and point-in-time recovery need the Blaze plan and **bill for storage**. For a club-sized database that is cents a month, but it is not zero, so they are off until you choose to turn them on. If losing data would hurt, turn them on and set a small budget alert; [backup-and-restore.md](backup-and-restore.md) has the steps, the restore commands, and what to check first. The free alternative for moving or keeping your own copy of records is the CSV formats in [import-format.md](import-format.md).
+
 ## Keeping up with the platform
 
 Add the platform repository as a second remote and merge its `main` into your fork when you want updates. Until the extraction plan is finished your club edits are spread across platform files, so expect merge conflicts; afterwards the only differences are in `club/` and merges are clean.
