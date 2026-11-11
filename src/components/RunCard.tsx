@@ -141,7 +141,7 @@ export const RunCard: React.FC<RunCardProps> = ({
                   title={`${c.route.name} • ${c.route.distanceMiles} mi`}
                 >
                   {c.route.isLoop
-                    ? `${c.miles.toFixed(1)} mi (${c.route.maxLoops || 4} loops)`
+                    ? `${c.miles.toFixed(1)} mi (${c.maxLoops || c.route.maxLoops || 4} loops)`
                     : `${c.miles.toFixed(1)} mi`}
                 </span>
               ))
@@ -220,7 +220,7 @@ export const RunCard: React.FC<RunCardProps> = ({
                       )}
                       {choice.route.isLoop && (
                         <span className="text-woodland-700 font-semibold">
-                          • {choice.route.maxLoops ? `1–${choice.route.maxLoops} loops` : 'Repeatable Loop'}
+                          • {`1–${choice.maxLoops || choice.route.maxLoops || 4} loops`}
                         </span>
                       )}
                     </div>

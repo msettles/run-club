@@ -22,6 +22,7 @@ export function defaultChoices(routes: GPXRoute[]): RunRouteChoice[] {
   // Pick distinct routes, e.g. up to 3 default routes
   return sorted.slice(0, 3).map((r) => ({
     routeId: r.id,
+    ...(r.isLoop ? { maxLoops: 4 } : {}),
   }));
 }
 
@@ -41,7 +42,7 @@ export const RouteChoicesEditor: React.FC<RouteChoicesEditorProps> = ({ routes, 
     const usedRouteIds = new Set(choices.map((c) => c.routeId));
     const nextRoute = routes.find((r) => !usedRouteIds.has(r.id));
     if (!nextRoute) return;
-    onChange([...choices, { routeId: nextRoute.id }]);
+    onChange([...choices, { routeId: nextRoute.id, ...(nextRoute.isLoop ? { maxLoops: 4 } : {}) }]);
   };
 
   const remove = (idx: number) => onChange(choices.filter((_, i) => i !== idx));
@@ -103,7 +104,7 @@ export const RouteChoicesEditor: React.FC<RouteChoicesEditorProps> = ({ routes, 
 
                 <select
                   value={c.routeId}
-                  onChange={(e) => update(idx, { routeId: e.target.value })}
+                  onChange={(e) => update(idx, { routeId: e.target.value, maxLoops: routes.find((route) => route.id === e.target.value)?.isLoop ? 4 : undefined })}
                   className="flex-1 min-w-0 text-xs px-2.5 py-2 border border-stone-300 rounded-lg bg-white font-semibold text-stone-900 focus:outline-none focus:ring-1 focus:ring-woodland-600"
                   aria-label="Route choice"
                 >
@@ -125,6 +126,14 @@ export const RouteChoicesEditor: React.FC<RouteChoicesEditorProps> = ({ routes, 
                   <Trash2 className="w-4 h-4" />
                 </button>
               </div>
+
+              {r?.isLoop && <label className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm font-bold text-stone-900">
+                <span>Loop choices for this run</span>
+                <select aria-label={`Loop choices for ${r.name}`} value={c.maxLoops ?? r.maxLoops ?? 4} onChange={(event) => update(idx, { maxLoops: Number(event.target.value) })} className="rounded-lg border border-stone-300 bg-white px-3 py-2 font-bold">
+                  {Array.from({ length: 20 }, (_, index) => index + 1).map((count) => <option key={count} value={count}>{count} {count === 1 ? 'choice' : 'choices'} (1{count > 1 ? `–${count}` : ''} {count === 1 ? 'loop' : 'loops'})</option>)}
+                </select>
+                <span className="w-full text-xs font-normal text-stone-600">Controls the loop buttons runners see at check-in for this run only.</span>
+              </label>}
 
               {/* Route details automatically derived from the selected route */}
               {r && (

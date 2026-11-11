@@ -47,7 +47,6 @@ export const RouteStudioModal: React.FC<RouteStudioModalProps> = ({
   const [difficulty, setDifficulty] = useState<DifficultyType>('Easy');
   const [customDistanceLabel, setCustomDistanceLabel] = useState<string>('');
   const [isLoop, setIsLoop] = useState<boolean>(false);
-  const [maxLoops, setMaxLoops] = useState<number>(4);
 
   // External URLs
   const [stravaUrl, setStravaUrl] = useState<string>('');
@@ -98,7 +97,6 @@ export const RouteStudioModal: React.FC<RouteStudioModalProps> = ({
       setGeoJson(existingRoute.geoJson || null);
       setCustomDistanceLabel(existingRoute.customDistanceLabel || (existingRoute as any).targetDistanceTier || '');
       setIsLoop(existingRoute.isLoop === true);
-      setMaxLoops(existingRoute.maxLoops || 4);
 
       setStravaUrl(existingRoute.externalLinks?.stravaUrl || '');
       setGarminUrl(existingRoute.externalLinks?.garminUrl || '');
@@ -112,7 +110,6 @@ export const RouteStudioModal: React.FC<RouteStudioModalProps> = ({
       setDifficulty('Easy');
       setCustomDistanceLabel('');
       setIsLoop(false);
-      setMaxLoops(4);
       setStravaUrl('');
       setGarminUrl('');
       setRungoUrl('');
@@ -338,7 +335,7 @@ export const RouteStudioModal: React.FC<RouteStudioModalProps> = ({
         surface,
         difficulty,
         isLoop: Boolean(isLoop),
-        maxLoops: isLoop ? (maxLoops || 4) : 4,
+        ...(existingRoute?.maxLoops ? { maxLoops: existingRoute.maxLoops } : {}),
         distanceMiles: measuredMiles || 3.0,
         elevationGainFt: elevationGainFt || 0,
         points,
@@ -568,34 +565,10 @@ export const RouteStudioModal: React.FC<RouteStudioModalProps> = ({
                 />
                 <div className="flex-1">
                   <div className="text-xs font-bold text-stone-900 flex items-center gap-1.5">
-                    <span>🔄 Multi-Lap / Loop Route</span>
-                    <span className="text-[10px] bg-amber-200/90 text-amber-950 px-1.5 py-0.2 rounded font-black">
-                      e.g. The 1, 2, 3
-                    </span>
+                    <span>🔄 Loop route</span>
                   </div>
-                  <p className="text-[11px] text-stone-600 leading-relaxed mt-0.5">
-                    Runners choose how many loops of this course they ran, up to the limit below. The check-in screen multiplies their credited mileage to match.
-                  </p>
                 </div>
               </label>
-
-              {isLoop && (
-                <div className="pl-6.5 pt-1 flex items-center gap-3 flex-wrap">
-                  <label className="text-xs font-semibold text-stone-700">
-                    Most loops a runner can log at check-in:
-                  </label>
-                  <select
-                    value={maxLoops}
-                    onChange={(e) => setMaxLoops(Number(e.target.value))}
-                    className="px-2.5 py-1 text-xs border rounded-lg bg-white font-bold text-stone-800"
-                  >
-                    <option value={3}>1 to 3 Loops</option>
-                    <option value={4}>1 to 4 Loops (Recommended)</option>
-                    <option value={5}>1 to 5 Loops</option>
-                    <option value={6}>1 to 6 Loops</option>
-                  </select>
-                </div>
-              )}
             </div>
 
             {/* Route Description */}

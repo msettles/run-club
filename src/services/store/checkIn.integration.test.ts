@@ -1,3 +1,5 @@
+import { cleanFirestoreData } from './helpers';
+import { buildMeetupFromRun } from '../../utils/runChoices';
 import { afterAll, beforeAll, beforeEach, expect, it, vi } from 'vitest';
 import { initializeTestEnvironment, type RulesTestEnvironment } from '@firebase/rules-unit-testing';
 import { readFileSync } from 'node:fs';
@@ -9,7 +11,7 @@ import { createMemberOps } from './members';
 import { createRunOps } from './runs';
 import { createLegacyOps } from './legacy';
 import { createCheckInOps } from './checkIn';
-import type { CheckInRecord, MeetupEvent, UserProfile } from '../../types';
+import type { CheckInRecord, MeetupEvent, UserProfile, GPXRoute } from '../../types';
 
 const backend = vi.hoisted(() => ({ current: null as Firestore | null }));
 vi.mock('../firebase', () => ({ isFirebaseConfigured: true, get db() { return backend.current; } }));
@@ -265,4 +267,26 @@ it.skipIf(!enabled)('a full fifth check-in creates gear once and preserves fulfi
   expect(second.success).toBe(true);
   await second.rewardsReady;
   expect((await getDoc(doc(backend.current!, 'milestone_alerts', alertId))).data()).toMatchObject({ fulfilled: true, fulfilledBy: 'Organizer' });
+});
+
+it.skipIf(!enabled)('credits each run using its own loop-choice limit rather than the library default', async () => {
+  const loop: GPXRoute = { id: 'route', name: 'Club loop', description: '', distanceMiles: 1.2, elevationGainFt: 0, surface: 'Pavement', difficulty: 'Easy', points: [], isLoop: true, maxLoops: 4, createdAt: '' };
+  await env.withSecurityRulesDisabled(async (context) => {
+    const db = context.firestore() as unknown as Firestore;
+    await setDoc(doc(db, 'routes', loop.id), loop);
+    for (const [index, event] of events.entries()) {
+      const choices = [{ routeId: loop.id, maxLoops: index === 0 ? 3 : 5 }];
+      const { codeWord: _word, ...meetup } = buildMeetupFromRun({ ...event, time: event.time || '18:00', routeChoices: choices }, [loop], event.codeWord);
+      await updateDoc(doc(db, 'runs', event.id), { routeChoices: choices, distanceMiles: 1.2 });
+      await setDoc(doc(db, 'meetup_events', event.id), { ...cleanFirestoreData(meetup), checkInOpensAt: Timestamp.fromMillis(Date.now() - 3600000), checkInClosesAt: Timestamp.fromMillis(Date.now() + 3600000) });
+    }
+  });
+  for (const [index, event] of events.entries()) {
+    const result = await operations().checkInRunner({ eventId: event.id, userEmail: email, codeWordEntered: event.codeWord, activity: 'running', distanceChoice: 'route', loops: index === 0 ? 3 : 5 });
+    expect(result.success, `${event.id}: ${result.message || ""}`).toBe(true);
+    expect(result.checkIn?.actualMiles).toBe(index === 0 ? 3.6 : 6);
+    await result.rewardsReady;
+  }
+  expect((await getDoc(doc(backend.current!, 'users', email))).data()?.totalMiles).toBe(9.6);
+  expect((await getDoc(doc(backend.current!, 'routes', loop.id))).data()?.maxLoops).toBe(4);
 });

@@ -1010,49 +1010,43 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
 
                         {/* Interactive Loop Selector if this is a multi-lap loop course */}
                         {opt.route.isLoop && (
-                          <div
-                            className="mt-2.5 pt-2 border-t border-stone-200/80 space-y-1.5"
+                          <fieldset
+                            className={`mt-4 rounded-xl border-2 p-3 ${isSelected ? 'border-amber-400 bg-amber-50' : 'border-stone-200 bg-stone-50'}`}
                             onClick={(e) => e.stopPropagation()}
                           >
-                            <div className="flex items-center justify-between text-[11px]">
-                              <span className="font-bold text-stone-800 flex items-center gap-1">
-                                <span>🔄 Loops tonight:</span>
-                                <span className="font-mono font-black text-woodland-900">{optLoops}x</span>
-                              </span>
-                              <span className="text-stone-500 font-medium text-[10px]">
-                                ~{formatMiles(optBaseMiles)} mi/loop
-                              </span>
-                            </div>
-
-                            {/* One button per allowed loop count */}
-                            <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                            <legend className="px-1 text-sm font-black text-stone-950">How many loops are you doing?</legend>
+                            <p className="mb-3 text-xs text-stone-600">Choose below · {formatMiles(optBaseMiles)} mi per loop</p>
+                            <div className={`grid gap-2 ${maxPresets === 1 ? 'grid-cols-1' : 'grid-cols-2'}`}>
                               {Array.from({ length: maxPresets }, (_, i) => i + 1).map((n) => {
                                 const loopMiles = formatMiles(optBaseMiles * n);
-                                const isActive = optLoops === n;
+                                const isActive = isSelected && optLoops === n;
                                 return (
                                   <button
                                     key={n}
                                     type="button"
+                                    aria-pressed={isActive}
+                                    aria-label={`${n} ${n === 1 ? 'loop' : 'loops'}, ${loopMiles} miles total for ${opt.route.name}`}
                                     onClick={() => {
                                       setLoopSelections((prev) => ({ ...prev, [opt.key]: n }));
                                       setSelectedOptionKey(opt.key);
                                     }}
-                                    className={`px-2 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1 ${
+                                    className={`${maxPresets > 1 && maxPresets % 2 === 1 && n === maxPresets ? 'col-span-2' : ''} min-h-[76px] rounded-xl border-2 px-3 py-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 focus-visible:ring-offset-2 ${
                                       isActive
-                                        ? 'bg-woodland-900 text-white shadow-xs'
-                                        : 'bg-stone-100 text-stone-700 hover:bg-stone-200 border border-stone-200'
+                                        ? 'border-woodland-900 bg-woodland-900 text-white shadow-sm'
+                                        : 'border-stone-300 bg-white text-stone-900 hover:border-woodland-600 hover:bg-woodland-50'
                                     }`}
                                   >
-                                    <span>{n}</span>
-                                    <span className={`text-[10px] font-mono ${isActive ? 'text-amber-300' : 'text-stone-500'}`}>
-                                      ({loopMiles}m)
+                                    <span className="flex items-center justify-between gap-2 text-base font-black">
+                                      <span>{n} {n === 1 ? 'loop' : 'loops'}</span>
+                                      {isActive && <Check className="h-4 w-4 shrink-0" aria-hidden="true" />}
                                     </span>
+                                    <span className={`mt-1 block text-xs font-semibold ${isActive ? 'text-amber-200' : 'text-stone-600'}`}>{loopMiles} mi total</span>
                                   </button>
                                 );
                               })}
-
                             </div>
-                          </div>
+                            {isSelected && <p className="mt-3 text-xs font-bold text-woodland-900">Selected: {optLoops} {optLoops === 1 ? 'loop' : 'loops'} · {optFormattedMiles} mi total</p>}
+                          </fieldset>
                         )}
                       </div>
                     );
