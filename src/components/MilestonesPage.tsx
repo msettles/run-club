@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { UserProfile, Badge, MilestoneReward } from '../types';
 import { isBadge } from '../services/store/helpers';
+import { DEFAULT_PARTNER, type ClubPartner } from '../data/partner';
+import { PartnerThanks } from './PartnerThanks';
 import { CLUB_MILESTONES, INITIAL_BADGES } from '../data/catalog';
 import { milestoneProgress, milestoneMeasure, milestoneTarget, sortMilestones } from '../utils/milestones';
 import { badgeProgress, levelTag } from '../utils/badgeProgress';
@@ -11,6 +13,8 @@ interface MilestonesPageProps {
   badges?: Badge[];
   /** The club's milestones (gear tiers), including any an admin added. */
   milestones?: MilestoneReward[];
+  /** The home-base partner who provides the gear and the $1 off beer. */
+  partner?: ClubPartner;
   /** Signed-in runners see their own progress; everyone else sees the catalog with a join prompt. */
   isSignedIn?: boolean;
   onJoin?: () => void;
@@ -38,6 +42,7 @@ export const MilestonesPage: React.FC<MilestonesPageProps> = ({
   currentUser,
   badges = INITIAL_BADGES,
   milestones = CLUB_MILESTONES,
+  partner = DEFAULT_PARTNER,
   isSignedIn = true,
   onJoin,
 }) => {
@@ -125,6 +130,9 @@ export const MilestonesPage: React.FC<MilestonesPageProps> = ({
           )}
         </div>
       </div>
+
+      {/* Who provides the gear */}
+      <PartnerThanks partner={{ ...partner, thanks: `All milestone gear is purchased by ${partner.name}, who also takes $1 off your draft beer once you reach 5 runs. Please thank them!` }} compact />
 
       {/* Milestone path */}
       <section className="bg-white rounded-3xl border border-stone-200 shadow-sm p-5 sm:p-6 space-y-4">

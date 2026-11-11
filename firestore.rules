@@ -1002,7 +1002,17 @@ service cloud.firestore {
     // 10. CLUB SETTINGS — public read, admin write.
     match /settings/{settingId} {
       allow read: if true;
-      allow create, update, delete: if isAdmin();
+      // The partner doc holds the club's home-base partner: a name, optional https links, an address and a thank-you line.
+      allow create, update: if isAdmin() && (settingId != 'partner' || (
+        request.resource.data.keys().hasOnly(['name', 'website', 'instagram', 'facebook', 'address', 'thanks']) &&
+        request.resource.data.keys().hasAll(['name']) &&
+        request.resource.data.name is string && request.resource.data.name.size() >= 1 && request.resource.data.name.size() <= 100 &&
+        (!('website' in request.resource.data) || (request.resource.data.website is string && request.resource.data.website.size() <= 300 && request.resource.data.website.matches('^https://.*'))) &&
+        (!('instagram' in request.resource.data) || (request.resource.data.instagram is string && request.resource.data.instagram.size() <= 300 && request.resource.data.instagram.matches('^https://.*'))) &&
+        (!('facebook' in request.resource.data) || (request.resource.data.facebook is string && request.resource.data.facebook.size() <= 300 && request.resource.data.facebook.matches('^https://.*'))) &&
+        (!('address' in request.resource.data) || (request.resource.data.address is string && request.resource.data.address.size() <= 200)) &&
+        (!('thanks' in request.resource.data) || (request.resource.data.thanks is string && request.resource.data.thanks.size() <= 400))));
+      allow delete: if isAdmin();
     }
 
     // 11. LEGACY (old app) DATA
