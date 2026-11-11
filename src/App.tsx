@@ -643,31 +643,12 @@ export function App() {
                   Wednesdays at Blue Note Brewing Co. (6:30 PM) • All runs start &amp; finish on the brewery patio!
                 </p>
               </div>
-              <div className="flex flex-wrap items-center gap-2">
-              <details className="relative">
-                <summary className="flex cursor-pointer list-none items-center gap-2 rounded-xl border border-stone-300 bg-white px-4 py-2 text-sm font-semibold text-stone-800 hover:bg-stone-100">
-                  <CalendarPlus className="w-4 h-4" />
-                  <span>Subscribe to calendar</span>
-                </summary>
-                <div className="absolute right-0 z-20 mt-2 w-64 space-y-1 rounded-xl border border-stone-200 bg-white p-2 text-sm shadow-lg">
-                  <a className="block rounded-lg px-3 py-2 font-semibold hover:bg-stone-100" href={`webcal://${window.location.host}/calendar.ics`}>Apple / Outlook</a>
-                  <a className="block rounded-lg px-3 py-2 font-semibold hover:bg-stone-100" target="_blank" rel="noreferrer" href={`https://calendar.google.com/calendar/r?cid=${encodeURIComponent(`webcal://${window.location.host}/calendar.ics`)}`}>Google Calendar</a>
-                  <button
-                    type="button"
-                    className="block w-full rounded-lg px-3 py-2 text-left font-semibold hover:bg-stone-100"
-                    onClick={() => { void navigator.clipboard?.writeText(`${window.location.origin}/calendar.ics`); }}
-                  >
-                    Copy feed link
-                  </button>
-                </div>
-              </details>
               {isOrganizerOrAdmin && (
                 <button type="button" onClick={() => setIsNewRunOpen(true)} className="flex items-center gap-2 rounded-xl bg-woodland-700 px-4 py-2 text-sm font-bold text-white hover:bg-woodland-800">
                   <Plus className="w-4 h-4" />
                   <span>Create run</span>
                 </button>
               )}
-              </div>
             </div>
 
             {/* Run Cards List: upcoming soonest first; prior runs on request, newest first */}
@@ -714,6 +695,25 @@ export function App() {
                   )}
 
                   {hasMoreUpcomingRuns && <button type="button" onClick={loadMoreUpcomingRuns} className="rounded-xl border bg-white px-4 py-2 text-sm font-bold">Load more upcoming runs</button>}
+                  <div className="pt-1">
+              <details className="relative">
+                <summary className="flex cursor-pointer list-none items-center gap-2 rounded-xl border border-stone-300 bg-white px-4 py-2 text-sm font-semibold text-stone-800 hover:bg-stone-100">
+                  <CalendarPlus className="w-4 h-4" />
+                  <span>Subscribe to calendar</span>
+                </summary>
+                <div className="absolute left-0 z-20 mt-2 w-64 space-y-1 rounded-xl border border-stone-200 bg-white p-2 text-sm shadow-lg">
+                  <a className="block rounded-lg px-3 py-2 font-semibold hover:bg-stone-100" href={`webcal://${window.location.host}/calendar.ics`}>Apple / Outlook</a>
+                  <a className="block rounded-lg px-3 py-2 font-semibold hover:bg-stone-100" target="_blank" rel="noreferrer" href={`https://calendar.google.com/calendar/r?cid=${encodeURIComponent(`webcal://${window.location.host}/calendar.ics`)}`}>Google Calendar</a>
+                  <button
+                    type="button"
+                    className="block w-full rounded-lg px-3 py-2 text-left font-semibold hover:bg-stone-100"
+                    onClick={() => { void navigator.clipboard?.writeText(`${window.location.origin}/calendar.ics`); }}
+                  >
+                    Copy feed link
+                  </button>
+                </div>
+              </details>
+                  </div>
                   {(prior.length > 0 || isFirebaseConfigured) && (
                     <div className="pt-2 space-y-4">
                       <button
