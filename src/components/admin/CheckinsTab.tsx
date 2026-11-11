@@ -5,11 +5,14 @@ import {
 } from 'lucide-react';
 import type { AdminDashboardProps } from '../AdminDashboard';
 import { downloadCSV } from './shared';
+import { runnerLookup } from '../../utils/runnerLookup';
 
 export const CheckinsTab: React.FC<AdminDashboardProps> = (props) => {
   const {
     checkins,
+    users = [],
   } = props;
+  const runner = runnerLookup(users);
   const [checkinFilterDate, setCheckinFilterDate] = useState<string>('all');
   // Filtered checkins
   const filteredCheckins = checkins.filter((c) => {
@@ -23,7 +26,7 @@ export const CheckinsTab: React.FC<AdminDashboardProps> = (props) => {
       c.date,
       c.time,
       c.userEmail,
-      c.runnerName || '',
+      runner.name(c.userEmail, c.runnerName),
       c.activity,
       c.withPet ? 'Yes' : 'No',
       c.loops || 1,
@@ -97,7 +100,7 @@ export const CheckinsTab: React.FC<AdminDashboardProps> = (props) => {
                   <td className="py-2.5 px-3 font-mono text-stone-700">
                     {c.date} <span className="text-stone-400 text-[11px]">{c.time}</span>
                   </td>
-                  <td className="py-2.5 px-3 font-bold text-stone-900">{c.runnerName || 'Woodchuck Runner'}</td>
+                  <td className="py-2.5 px-3 font-bold text-stone-900">{runner.name(c.userEmail, c.runnerName) || 'Woodchuck Runner'}</td>
                   <td className="py-2.5 px-3 text-stone-500 font-mono text-[11px]">{c.userEmail}</td>
                   <td className="py-2.5 px-3">
                     <div className="flex items-center gap-1.5 flex-wrap">

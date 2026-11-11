@@ -14,6 +14,8 @@ interface RunCardProps {
   onToggleRSVP: (runId: string) => void;
   onOpenCheckIn: (run: RunEvent) => void;
   onViewRoute: (route: GPXRoute) => void;
+  /** Current name for an RSVP'd runner (by member key); falls back to the name saved on the RSVP. */
+  nameFor?: (memberId: string, stored: string) => string;
   isSignedIn?: boolean;  // RSVPs and check-ins are only shown to signed-in runners
   isCheckedIn?: boolean; // The signed-in runner has a check-in for this run
   notLive?: boolean;     // Missing its code word / check-in event: shown to staff only
@@ -29,6 +31,7 @@ export const RunCard: React.FC<RunCardProps> = ({
   onToggleRSVP,
   onOpenCheckIn,
   onViewRoute,
+  nameFor,
   isSignedIn = false,
   isCheckedIn = false,
   notLive = false,
@@ -305,15 +308,18 @@ export const RunCard: React.FC<RunCardProps> = ({
         {isSignedIn ? (
         <div className="flex items-center gap-2">
           <div className="flex -space-x-1.5 overflow-hidden">
-            {run.attendees.slice(0, 4).map((att, i) => (
+            {run.attendees.slice(0, 4).map((att, i) => {
+              const name = nameFor?.(att.memberId, att.name) || att.name;
+              return (
               <div
                 key={i}
                 className="inline-block h-6 w-6 rounded-full ring-2 ring-white bg-woodland-600 text-white text-[10px] font-bold flex items-center justify-center uppercase shadow-xs"
-                title={att.name}
+                title={name}
               >
-                {att.name.charAt(0)}
+                {name.charAt(0)}
               </div>
-            ))}
+              );
+            })}
           </div>
           <span className="text-xs text-stone-600 font-medium">
             {run.attendees.length} RSVP{run.attendees.length === 1 ? '' : 's'}

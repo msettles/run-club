@@ -13,6 +13,7 @@ import { Navbar } from './components/Navbar';
 import { RunCard } from './components/RunCard';
 import { StandingsPage } from './components/StandingsPage';
 import { SubscribeMenu } from './components/SubscribeMenu';
+import { EditProfileModal } from './components/EditProfileModal';
 import { InstallPwaBanner } from './components/InstallPwaBanner';
 import { InstallAppLink } from './components/InstallAppLink';
 import { MobileBottomNav } from './components/MobileBottomNav';
@@ -96,6 +97,7 @@ export function App() {
     legacyMembers,
     currentUser,
     registerUser,
+    updateOwnProfile,
     checkInRunner,
     refreshDerivedStats,
     resolveRunByCodeWord,
@@ -183,6 +185,7 @@ export function App() {
   const [authReady, setAuthReady] = useState<boolean>(!isFirebaseConfigured);
   const [authLinkReady, setAuthLinkReady] = useState(!isFirebaseConfigured);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
+  const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
   const [isOnboardingOpen, setIsOnboardingOpen] = useState<boolean>(false);
   const [onboardingEmail, setOnboardingEmail] = useState<string>('');
   const [onboardingDisplayName, setOnboardingDisplayName] = useState<string>('');
@@ -209,6 +212,9 @@ export function App() {
   useEffect(() => {
     if (authReady && activeTab === 'leaderboard' && !isUserLoggedIn) setActiveTab('runs');
   }, [authReady, activeTab, isUserLoggedIn]);
+  // RSVP lists keep the name saved at RSVP time; show the runner's current name where we know it.
+  const nameForMember = (memberId: string, stored: string) =>
+    memberId === currentMember.id ? currentMember.name : members.find((m) => m.id === memberId)?.name || stored;
   const checkedInTonight = openCheckInEvents(meetupEvents).some((e) => myCheckedInRunIds.has(e.id));
   // Tick each minute so the hero button's "opens in …" countdown stays current.
   const [clockNow, setClockNow] = useState(() => new Date());
@@ -527,6 +533,7 @@ export function App() {
         currentUser={currentUser}
         firebaseUser={firebaseUser}
         isSignedIn={isUserLoggedIn}
+        onEditProfile={isUserLoggedIn && isProfileVerified ? () => setIsEditProfileOpen(true) : undefined}
         authReady={authReady}
         unreadNotifsCount={bellItems.filter((n) => !isBellItemRead(n)).length}
         onOpenNewRun={() => setIsNewRunOpen(true)}
@@ -679,6 +686,7 @@ export function App() {
                     onToggleRSVP={handleToggleRSVP}
                     onOpenCheckIn={handleOpenCheckIn}
                     onViewRoute={handleViewRouteFromRun}
+                    nameFor={nameForMember}
                     isSignedIn={isUserLoggedIn}
                     isCheckedIn={myCheckedInRunIds.has(run.id)}
                     notLive={!isRunLive(run, meetupEvents)}
@@ -1191,6 +1199,10 @@ export function App() {
             onClose={() => setIsAuthModalOpen(false)}
             onAuthSuccess={() => { setAuthLinkReady(true); setIsAuthModalOpen(false); }}
           />
+        )}
+
+        {isEditProfileOpen && isUserLoggedIn && (
+          <EditProfileModal user={currentUser} onSave={updateOwnProfile} onClose={() => setIsEditProfileOpen(false)} />
         )}
 
         {/* First-Time Runner Profile Creation & Historical Merge */}

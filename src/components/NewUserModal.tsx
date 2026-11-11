@@ -21,6 +21,7 @@ interface NewUserModalProps {
       age?: number;
       city?: string;
       zipCode?: string;
+      emergencyContact?: { name: string; phone: string };
       preferredPace?: string;
     },
     claimedLegacyIds: string[]
@@ -56,6 +57,8 @@ export const NewUserModal: React.FC<NewUserModalProps> = ({
   const [preferredPace, setPreferredPace] = useState<string>('9:30 - 11:00 /mi');
   const [birthday, setBirthday] = useState<string>('');
   const [zipCode, setZipCode] = useState<string>('95695');
+  const [contactName, setContactName] = useState<string>('');
+  const [contactPhone, setContactPhone] = useState<string>('');
 
   const computedAge = useMemo(() => calculateAge(birthday), [birthday]);
 
@@ -124,6 +127,7 @@ export const NewUserModal: React.FC<NewUserModalProps> = ({
           city: 'Woodland',
           zipCode: zipCode.trim() || '95695',
           preferredPace,
+          emergencyContact: contactName.trim() || contactPhone.trim() ? { name: contactName, phone: contactPhone } : undefined,
         },
         claimedIds
       );
@@ -281,6 +285,32 @@ export const NewUserModal: React.FC<NewUserModalProps> = ({
                 value={zipCode}
                 onChange={(e) => setZipCode(e.target.value)}
                 placeholder="95695"
+                className="w-full px-3 py-2 text-sm rounded-xl border border-stone-300 focus:ring-2 focus:ring-amber-500 outline-none"
+              />
+            </div>
+          </div>
+
+          {/* Optional emergency contact */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label htmlFor={`${fieldId}-ecName`} className="block text-xs font-bold text-stone-700 mb-1">Emergency Contact <span className="font-medium text-stone-400">(optional)</span></label>
+              <input id={`${fieldId}-ecName`}
+                type="text"
+                value={contactName}
+                maxLength={100}
+                onChange={(e) => setContactName(e.target.value)}
+                placeholder="Name"
+                className="w-full px-3 py-2 text-sm rounded-xl border border-stone-300 focus:ring-2 focus:ring-amber-500 outline-none"
+              />
+            </div>
+            <div>
+              <label htmlFor={`${fieldId}-ecPhone`} className="block text-xs font-bold text-stone-700 mb-1">Contact Phone</label>
+              <input id={`${fieldId}-ecPhone`}
+                type="tel"
+                value={contactPhone}
+                maxLength={30}
+                onChange={(e) => setContactPhone(e.target.value)}
+                placeholder="Phone"
                 className="w-full px-3 py-2 text-sm rounded-xl border border-stone-300 focus:ring-2 focus:ring-amber-500 outline-none"
               />
             </div>

@@ -194,6 +194,31 @@ test('runner cannot change their own role or legacy totals', async () => {
   await assertSucceeds(updateDoc(doc(alice, 'users', ALICE), { shirtSize: 'L' }));
 });
 
+test('runner can edit their own profile details and public name, not their run totals', async () => {
+  const alice = ctx(ALICE);
+  await assertSucceeds(updateDoc(doc(alice, 'users', ALICE), {
+    firstName: 'Alicia', displayName: 'Alicia Runner', shirtSize: 'M', birthday: '1990-05-01', age: 36,
+    city: 'Davis', zipCode: '95616', preferredPace: '11:00+ /mi',
+    emergencyContact: { name: 'Sam', phone: '555-0100' },
+  }));
+  await assertFails(updateDoc(doc(alice, 'users', ALICE), { birthday: '1990-05-01', totalMiles: 9999 }));
+  await assertFails(updateDoc(doc(ctx(BOB), 'users', ALICE), { shirtSize: 'XL' }));
+});
+
+test('renaming updates the profile and public leaderboard row together', async () => {
+  const alice = ctx(ALICE);
+  const key = memberKeyFor(ALICE);
+  await assertSucceeds(setDoc(doc(alice, 'members', key), memberFromUser(baseUser(ALICE))));
+  const rename = (db, withUser) => {
+    const b = writeBatch(db);
+    if (withUser) b.update(doc(db, 'users', ALICE), { firstName: 'Alicia', displayName: 'Alicia Runner' });
+    b.update(doc(db, 'members', key), { name: 'Alicia Runner', favoritePace: '11:00+ /mi' });
+    return b.commit();
+  };
+  await assertFails(rename(alice, false));
+  await assertSucceeds(rename(alice, true));
+});
+
 test('runner cannot create a profile with a staff role', async () => {
   const carol = ctx('carol@example.com');
   await assertFails(setDoc(doc(carol, 'users', 'carol@example.com'), freshUser('carol@example.com', { role: 'admin' })));
