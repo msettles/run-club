@@ -4,7 +4,7 @@ import { runShareUrl } from '../utils/runLinks';
 import { RunEvent, Member, GPXRoute } from '../types';
 import { ResolvedChoice } from '../utils/runChoices';
 import { buildRunIcs } from '../utils/calendar';
-import { Clock, MapPin, Mountain, Check, CalendarPlus, Map, Pencil } from 'lucide-react';
+import { Clock, MapPin, Mountain, Check, CalendarPlus, Map, Pencil, Users } from 'lucide-react';
 
 interface RunCardProps {
   run: RunEvent;
@@ -19,6 +19,7 @@ interface RunCardProps {
   isSignedIn?: boolean;  // RSVPs and check-ins are only shown to signed-in runners
   isCheckedIn?: boolean; // The signed-in runner has a check-in for this run
   notLive?: boolean;     // Missing its code word / check-in event: shown to staff only
+  onOpenRoster?: (run: RunEvent) => void; // Organizers and admins: who checked in, gear to hand out
   onEdit?: (run: RunEvent) => void; // Organizers and admins, upcoming runs only
   onDelete?: (run: RunEvent) => void; // Admins, past runs (which can't be edited)
 }
@@ -35,6 +36,7 @@ export const RunCard: React.FC<RunCardProps> = ({
   isSignedIn = false,
   isCheckedIn = false,
   notLive = false,
+  onOpenRoster,
   onEdit,
   onDelete,
 }) => {
@@ -376,6 +378,18 @@ export const RunCard: React.FC<RunCardProps> = ({
           </button>
 
             </>
+          )}
+
+          {onOpenRoster && (
+            <button
+              type="button"
+              onClick={() => onOpenRoster(run)}
+              aria-label={`Check-ins for ${run.title}`}
+              className="px-3 py-1.5 text-xs font-semibold rounded-lg transition flex items-center gap-1.5 cursor-pointer bg-white border border-woodland-300 text-woodland-800 hover:bg-woodland-50"
+            >
+              <Users className="w-3.5 h-3.5" />
+              <span>Check-ins{checkedInCount > 0 ? ` (${checkedInCount})` : ''}</span>
+            </button>
           )}
 
           {onEdit && (

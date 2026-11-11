@@ -136,3 +136,17 @@ it.skipIf(!enabled)('discards a search scan and its private cache after session 
   expect(context.staffSearchCache.current.rows).toBeUndefined();
   expect(rows.users).toEqual([]);
 });
+it.skipIf(!enabled)('loads check-ins and gear alerts for just one run, however old', async () => {
+  await env.withSecurityRulesDisabled(async (context) => {
+    const db = context.firestore() as unknown as Firestore;
+    await setDoc(doc(db, 'checkins', 'old-run_a@example.test'), { id: 'old-run_a@example.test', runId: 'old-run', userEmail: 'a@example.test', date: '2020-01-01', time: '18:00:00' });
+    await setDoc(doc(db, 'checkins', 'old-run_b@example.test'), { id: 'old-run_b@example.test', runId: 'old-run', userEmail: 'b@example.test', date: '2020-01-01', time: '18:05:00' });
+    await setDoc(doc(db, 'checkins', 'other_a@example.test'), { id: 'other_a@example.test', runId: 'other', userEmail: 'a@example.test', date: '2020-01-08', time: '18:00:00' });
+    await setDoc(doc(db, 'milestone_alerts', 'm5_a@example.test'), { userEmail: 'a@example.test', runId: 'old-run', fulfilled: true });
+    await setDoc(doc(db, 'milestone_alerts', 'm50_a@example.test'), { userEmail: 'a@example.test', runId: 'other', fulfilled: false });
+  });
+  const { ops } = state();
+  const roster = await ops.loadRunRoster('old-run');
+  expect(roster.checkins.map((c) => c.userEmail).sort()).toEqual(['a@example.test', 'b@example.test']);
+  expect(roster.alerts.map((a) => a.id)).toEqual(['m5_a@example.test']);
+});

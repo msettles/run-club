@@ -744,7 +744,9 @@ service cloud.firestore {
                          (!runIsOver(runId) ||
                           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['attendees', 'attendeeIds', 'deleting']))));
 
-      allow delete: if isStaff();
+      // Organizers can delete a run until its check-in opens; after that only an admin can
+      // (check-ins, run totals and gear alerts depend on it).
+      allow delete: if isAdmin() || (isStaff() && !checkInHasOpened(runId));
     }
 
     // 2. ROUTES — public library, staff-managed.
