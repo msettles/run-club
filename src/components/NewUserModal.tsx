@@ -258,7 +258,7 @@ export const NewUserModal: React.FC<NewUserModalProps> = ({
           <div className="grid grid-cols-2 gap-3">
             <div>
               <div className="flex items-center justify-between mb-1">
-                <label htmlFor={`${fieldId}-birthday`} className="text-xs font-bold text-stone-700">Birthday (Optional)</label>
+                <label htmlFor={`${fieldId}-birthday`} className="text-xs font-bold text-stone-700">Birthday</label>
                 {computedAge !== undefined && (
                   <span className="text-[10px] font-bold bg-amber-100 text-amber-900 px-1.5 py-0.5 rounded font-mono">
                     Age: {computedAge}
