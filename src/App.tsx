@@ -606,11 +606,19 @@ export function App() {
             </div>
 
             {/* Run Schedule Header */}
-            <div className="pt-2">
-              <h3 className="text-xl font-bold text-stone-900 font-display">Upcoming Run Schedule</h3>
-              <p className="text-xs text-stone-500">
-                Wednesdays at Blue Note Brewing Co. (6:00 PM) • All runs start &amp; finish on the brewery patio!
-              </p>
+            <div className="pt-2 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h3 className="text-xl font-bold text-stone-900 font-display">Upcoming Run Schedule</h3>
+                <p className="text-xs text-stone-500">
+                  Wednesdays at Blue Note Brewing Co. (6:00 PM) • All runs start &amp; finish on the brewery patio!
+                </p>
+              </div>
+              {isOrganizerOrAdmin && (
+                <button type="button" onClick={() => setIsNewRunOpen(true)} className="flex items-center gap-2 rounded-xl bg-woodland-700 px-4 py-2 text-sm font-bold text-white hover:bg-woodland-800">
+                  <Plus className="w-4 h-4" />
+                  <span>Create run</span>
+                </button>
+              )}
             </div>
 
             {/* Run Cards List: upcoming soonest first; prior runs on request, newest first */}
@@ -1086,7 +1094,7 @@ export function App() {
           />
         )}
 
-        {isNewRunOpen && (
+        {isNewRunOpen && isOrganizerOrAdmin && (
           <NewRunModal
             isOpen={isNewRunOpen}
             onClose={() => setIsNewRunOpen(false)}
