@@ -186,7 +186,7 @@ export const MilestonesPage: React.FC<MilestonesPageProps> = ({
             <ChevronDown className="w-4 h-4 transition group-open:rotate-180" /> How do I claim my gear?
           </summary>
           <p className="mt-2 leading-relaxed">
-            Check in at the Wednesday run with the code word. The organizer is alerted with your name and shirt size — pick up your gear at the organizer table and enjoy $1 off draft beers.
+            Check in at an event with the code word. During the Wednesday run an organizer is alerted with your name and milestone achieved — you&apos;ll be called out and recognized (and may have to answer a few questions) and enjoy $1 off draft beers.
           </p>
         </details>
       </section>

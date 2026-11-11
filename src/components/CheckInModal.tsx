@@ -791,9 +791,9 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
                       </div>
                       <p className="text-xs text-stone-900 font-medium leading-snug">
                         {justUnlockedMilestone.hasGear === false ? (
-                          <>That&apos;s your first Woodchucker run. Say hi to tonight&apos;s run organizer, who will welcome you to the club!</>
+                          <>That&apos;s your first Woodchucker run. Tonight&apos;s run organizer has been alerted with your name and will welcome you to the club. You may be called out and recognized!</>
                         ) : (
-                          <>Tonight&apos;s run organizer has been alerted with your shirt size (<strong className="font-bold">{successResult?.user?.shirtSize || currentUser.shirtSize}</strong>). Pick up your gear at the organizer table, and show your phone for {justUnlockedMilestone.perks}!</>
+                          <>Tonight&apos;s run organizer has been alerted with your name and milestone. You&apos;ll be called out and recognized (and may have to answer a few questions){justUnlockedMilestone.perks ? <>. Perk: {justUnlockedMilestone.perks}</> : null}!</>
                         )}
                       </p>
                     </div>
@@ -807,7 +807,7 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
                       </div>
                       <div className="font-extrabold text-sm sm:text-base font-display uppercase tracking-tight">{a.hasGear === false ? a.milestoneName : `${a.milestoneName}: ${a.reward}`}</div>
                       <p className="text-xs font-medium leading-snug">
-                        {a.hasGear === false ? 'Nice work. Say hi to tonight\'s run organizer!' : <>Tonight&apos;s run organizer has been alerted with your shirt size (<strong className="font-bold">{successResult?.user?.shirtSize || currentUser.shirtSize}</strong>). Pick up your gear at the organizer table!</>}
+                        {a.hasGear === false ? <>Nice work. Tonight&apos;s run organizer has been alerted with your name and milestone. You may be called out and recognized!</> : <>Tonight&apos;s run organizer has been alerted with your name and milestone. You&apos;ll be called out and recognized (and may have to answer a few questions){a.perks ? <>. Perk: {a.perks}</> : null}!</>}
                       </p>
                     </div>
                   ))}

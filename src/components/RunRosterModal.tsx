@@ -3,7 +3,7 @@ import { CheckInRecord, MilestoneAlert, RunEvent, UserProfile } from '../types';
 import { Modal } from './Modal';
 import { calculateAge } from '../utils/dateUtils';
 import { runnerLookup } from '../utils/runnerLookup';
-import { alertHasGear } from '../utils/milestones';
+import { alertHasGear, alertsForRoster } from '../utils/milestones';
 import { CheckCircle, ChevronDown, Gift, Phone, Search, Shirt, X } from 'lucide-react';
 
 interface RunRosterModalProps {
@@ -38,12 +38,38 @@ export const RunRosterModal: React.FC<RunRosterModalProps> = ({ run, alerts: liv
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [run.id, attempt]);
 
+  // Each runner's profile is read once the check-ins are loaded, so every row can show their current run number.
+  useEffect(() => {
+    if (!loaded) return;
+    let cancelled = false;
+    const emails = [...new Set(loaded.checkins.map((c) => c.userEmail.toLowerCase()))]
+      .filter((email) => !users.some((u) => u.email.toLowerCase() === email));
+    const queue = [...emails];
+    const worker = async () => {
+      for (let email = queue.shift(); email; email = queue.shift()) {
+        try {
+          const user = await onFindUser(email);
+          if (!cancelled && user) setProfiles((p) => (p[email] && p[email] !== 'error' ? p : { ...p, [email]: user }));
+        } catch { /* the row just shows no run number; tapping the runner retries */ }
+      }
+    };
+    void Promise.all(Array.from({ length: Math.min(6, emails.length) }, worker));
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loaded]);
+
   const runner = useMemo(() => runnerLookup(users), [users]);
+  /** The runner's total runs so far (their current run number), once known. */
+  const runNumberOf = (email: string): number | undefined => {
+    const key = email.toLowerCase();
+    const p = profiles[key];
+    if (p && p !== 'loading' && p !== 'error') return p.totalRuns;
+    return users.find((u) => u.email.toLowerCase() === key)?.totalRuns;
+  };
   // Live alert changes (handed out) win over the copy loaded when the window opened.
   const gear = useMemo(() => {
-    const byId = new Map((loaded?.alerts || []).map((a) => [a.id, a]));
-    for (const a of liveAlerts) if (a.runId === run.id) byId.set(a.id, a);
-    return [...byId.values()];
+    // Includes gear earned at an earlier run and still not handed out, for runners who are here again.
+    return alertsForRoster(run.id, loaded?.alerts || [], liveAlerts, (loaded?.checkins || []).map((c) => c.userEmail));
   }, [loaded, liveAlerts, run.id]);
   // Runners who reached a milestone come first (gear still to hand out before handed out), then by check-in time.
   const forRun = useMemo(() => {
@@ -100,8 +126,8 @@ export const RunRosterModal: React.FC<RunRosterModalProps> = ({ run, alerts: liv
         <div className="p-5 space-y-5">
           {/* Gear to hand out */}
           <section aria-label="Gear for this run" className="space-y-2">
-            <h3 className="text-xs font-black uppercase tracking-wider text-amber-800 flex items-center gap-1.5"><Gift className="w-4 h-4" /> Milestones reached at this run ({gear.length})</h3>
-            {gear.length === 0 && <p className="text-sm text-stone-500">No milestone gear from this run.</p>}
+            <h3 className="text-xs font-black uppercase tracking-wider text-amber-800 flex items-center gap-1.5"><Gift className="w-4 h-4" /> Milestones &amp; gear ({gear.length})</h3>
+            {gear.length === 0 && <p className="text-sm text-stone-500">No milestones or gear owed to the runners here.</p>}
             {gearError && <p role="alert" className="text-sm text-amber-900">{gearError}</p>}
             {welcome.map((a) => (
               <div key={a.id} className="flex items-center gap-2 rounded-2xl border border-emerald-300 bg-emerald-50 px-3 py-2.5">
@@ -116,8 +142,9 @@ export const RunRosterModal: React.FC<RunRosterModalProps> = ({ run, alerts: liv
               <div key={a.id} className="rounded-2xl border border-amber-300 bg-amber-50 p-3 space-y-2">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
-                    <div className="font-black text-stone-900">{runner.name(a.userEmail, a.runnerName)}</div>
+                    <div className="font-black text-stone-900">{runner.name(a.userEmail, a.runnerName)}{runNumberOf(a.userEmail) !== undefined && <span className="ml-1.5 rounded-full bg-amber-200 px-1.5 py-0.5 text-[10px] font-black text-stone-900">Run #{runNumberOf(a.userEmail)}</span>}</div>
                     <div className="text-xs text-stone-700">{a.milestoneName} · <strong>{a.reward}</strong></div>
+                    {a.runId !== run.id && <div className="mt-0.5 text-[11px] font-bold text-red-700">Still owed: earned {a.date}, not handed out yet</div>}
                   </div>
                   <span className="shrink-0 inline-flex items-center gap-1 rounded-lg border border-amber-400 bg-amber-200 px-2 py-1 font-mono text-xs font-black text-stone-950">
                     <Shirt className="w-3.5 h-3.5" />{runner.shirtSize(a.userEmail, a.shirtSize)}
@@ -159,6 +186,7 @@ export const RunRosterModal: React.FC<RunRosterModalProps> = ({ run, alerts: liv
                       <span className="min-w-0">
                         <span className="block truncate text-sm font-bold text-stone-900">
                           {runner.name(c.userEmail, c.runnerName) || 'Woodchuck Runner'}
+                          {runNumberOf(c.userEmail) !== undefined && <span className="ml-1.5 rounded-full bg-woodland-100 px-1.5 py-0.5 text-[10px] font-black text-woodland-900" title="Their current run number">Run #{runNumberOf(c.userEmail)}</span>}
                           {alert && <span className="ml-1.5 text-xs">{!alertHasGear(alert) ? '🦫' : alert.fulfilled ? '🎁✓' : '🎁'}</span>}
                         </span>
                         <span className="block text-[11px] text-stone-500">{c.time.slice(0, 5)} · {c.activity}{c.routeName ? ` · ${c.routeName}` : ''}</span>
