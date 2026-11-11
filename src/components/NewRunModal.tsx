@@ -4,7 +4,6 @@ import React, { useState } from 'react';
 import { RunEvent, GPXRoute, PaceGroup, SpecialEventType, SpecialEventDefinition, RunRouteChoice } from '../types';
 import { type RouteCatalogPaginationProps, RouteChoicesEditor, defaultChoices } from './RouteChoicesEditor';
 import { resolveChoices, routeChoiceError, deriveRunStats } from '../utils/runChoices';
-import { INITIAL_SPECIAL_EVENTS } from '../data/catalog';
 import { X, Calendar, Clock, MapPin, Plus, Trash2, Sparkles, KeyRound } from 'lucide-react';
 
 interface NewRunModalProps extends RouteCatalogPaginationProps {
@@ -23,7 +22,7 @@ export const NewRunModal: React.FC<NewRunModalProps> = ({
   onLoadMoreRoutes, hasMoreRoutes, routesLoading,
   organizerName,
   onAddRun,
-  specialEvents = INITIAL_SPECIAL_EVENTS,
+  specialEvents = [],
 }) => {
   const [title, setTitle] = useState('');
   const [specialEvent, setSpecialEvent] = useState<SpecialEventType>('none');

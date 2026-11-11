@@ -3,7 +3,6 @@ import { UserProfile, Badge, MilestoneReward } from '../types';
 import { isBadge } from '../services/store/helpers';
 import { DEFAULT_PARTNER, type ClubPartner } from '../data/partner';
 import { PartnerThanks } from './PartnerThanks';
-import { CLUB_MILESTONES, INITIAL_BADGES } from '../data/catalog';
 import { milestoneProgress, milestoneMeasure, milestoneTarget, sortMilestones } from '../utils/milestones';
 import { badgeProgress, levelTag } from '../utils/badgeProgress';
 import { CheckCircle, Gift, Sparkles, Beer, Award, Lock, UserPlus, ChevronDown } from 'lucide-react';
@@ -40,15 +39,15 @@ const Multiplier: React.FC<{ badge: Badge; count: number }> = ({ badge, count })
 
 export const MilestonesPage: React.FC<MilestonesPageProps> = ({
   currentUser,
-  badges = INITIAL_BADGES,
-  milestones = CLUB_MILESTONES,
+  badges = [],
+  milestones = [],
   partner = DEFAULT_PARTNER,
   isSignedIn = true,
   onJoin,
 }) => {
   const [selectedCategory, setSelectedCategory] = useState('all');
   // Milestones are shown in their own section; they are never also badges.
-  const allBadges = (badges && badges.length > 0 ? badges : INITIAL_BADGES).filter(isBadge);
+  const allBadges = (badges || []).filter(isBadge);
   const totalRuns = isSignedIn ? currentUser.totalRuns : 0;
   const totalMiles = isSignedIn ? Math.round(currentUser.totalMiles * 10) / 10 : 0;
   const { nextMilestone, runsRemaining, progressPercent } = milestoneProgress(totalRuns, milestones);

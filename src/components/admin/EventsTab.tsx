@@ -1,5 +1,4 @@
 import React from 'react';
-import { INITIAL_SPECIAL_EVENTS } from '../../data/catalog';
 import { 
   Calendar, 
   Plus,
@@ -9,7 +8,7 @@ import type { AdminDashboardProps } from '../AdminDashboard';
 export const EventsTab: React.FC<AdminDashboardProps> = (props) => {
   const { onLoadPriorRuns, priorRunsLoading, hasMorePriorRuns, priorRunsError,
     meetupEvents,
-    specialEvents = INITIAL_SPECIAL_EVENTS,
+    specialEvents = [],
     onOpenNewRun,
   } = props;
 

@@ -349,3 +349,25 @@ it.skipIf(!enabled)('streak badges count every full block across separate streak
   const offBeat = { ...stepProof, count: 5, sources: [...stepProof.sources, stepProof.sources[0] + 1], week: stepProof.sources[0] + 1 };
   await expect(setDoc(doc(backend.current!, 'reward_proofs', `${email}_1_streakstep_4`), offBeat)).rejects.toHaveProperty('code', 'permission-denied');
 });
+
+it.skipIf(!enabled)('once the starter pack is saved there are no built-in badges: a badge only counts while its document exists', async () => {
+  const powerWalker = INITIAL_BADGES.find((b) => b.id === 'power-walker')!;
+  await env.withSecurityRulesDisabled(async (context) => {
+    const db = context.firestore() as unknown as Firestore;
+    await setDoc(doc(db, 'users', email), { ...user, totalRuns: 25, walkCount: 25, runCount: 0, petRunCount: 0 });
+    await setDoc(doc(db, 'settings', 'catalog'), { seeded: true, seededAt: '2026-11-12T00:00:00.000Z' }); // seeded, but no badge documents at all
+  });
+  const ctx = { privateSyncEpoch: { current: 0 }, currentUserEmail: email, meetupEvents: events, badges: [powerWalker], checkins: [],
+    setOwnLegacyEvents: vi.fn(), setUsers: vi.fn(), setMembers: vi.fn(), setMeetupEvents: vi.fn(), fetchRunnerCheckins: async () => [] };
+  const ops = createLegacyOps(ctx as unknown as Parameters<typeof createLegacyOps>[0]);
+  const current = async () => (await getDoc(doc(backend.current!, 'users', email))).data() as UserProfile;
+  // Seeded club, badge document deleted: the old built-in rule no longer vouches for it.
+  await expect(ops.refreshDerivedStats(await current())).rejects.toHaveProperty('code', 'permission-denied');
+  // Saved as a document (and editable: here a different level size), it counts under whatever the club defined.
+  await env.withSecurityRulesDisabled(async (context) => {
+    await setDoc(doc(context.firestore() as unknown as Firestore, 'badges', 'power-walker'), { ...powerWalker, triggerConfig: { ...powerWalker.triggerConfig, step: 5 } });
+  });
+  const edited = { ...powerWalker, triggerConfig: { ...powerWalker.triggerConfig, step: 5 } };
+  const refreshed = await createLegacyOps({ ...ctx, badges: [edited] } as unknown as Parameters<typeof createLegacyOps>[0]).refreshDerivedStats(await current());
+  expect(refreshed.badgeCounts).toMatchObject({ 'power-walker': 5 }); // 25 walks, a level every 5 (was every 10)
+});

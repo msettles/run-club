@@ -3,6 +3,7 @@ import { sha256Hex } from './hash';
 import { codeKeyFor, memberKeyFor } from './memberKey';
 import { formatMiles, roundMiles } from './miles';
 import { milestoneProgress } from './milestones';
+import { CLUB_MILESTONES } from '../data/catalog';
 import { hydrateRouteFromFirestore } from '../services/store/helpers';
 
 describe('stable Firebase keys', () => {
@@ -26,7 +27,7 @@ it.each([[0, '0.0'], [3, '3.0'], [3.14, '3.1'], [3.15, '3.2']])('formats %s mile
 it.each([
   [0, 5, 0], [4, 1, 80], [5, 45, 0], [50, 50, 0], [75, 25, 50], [200, 0, 100], [250, 0, 100],
 ])('calculates milestone progress for %s runs', (runs, remaining, percent) => {
-  const progress = milestoneProgress(runs);
+  const progress = milestoneProgress(runs, CLUB_MILESTONES);
   expect(progress.runsRemaining).toBe(remaining);
   expect(progress.progressPercent).toBe(percent);
 });

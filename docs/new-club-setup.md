@@ -67,7 +67,7 @@ Edit these in your fork. (This list is what the extraction plan replaces with on
 | Run day | `nextClubRunDate` in `src/utils/checkInWindow.ts` |
 | Club name and venue wording | Search `src/` for the current club and venue names: hero and footer in `src/App.tsx`, `Navbar.tsx`, `RunCard.tsx`, `CheckInModal.tsx`, `MilestonesPage.tsx`, the install prompts, `src/utils/mapLayers.ts`, `src/utils/calendar.ts`, `src/utils/routeEngine/` |
 | Venue map position | `RouteStudioModal.tsx`, `MapViewer.tsx` |
-| Milestones, badges, perks | `src/data/catalog.ts`, then `npm run sync:reward-rules` |
+| Starter milestones, badges and special events | `src/data/catalog.ts` is only the **starter pack**. The first time an admin opens the app, it is saved to Firestore (marked by `settings/catalog`); after that they are the club's own data, edited or deleted under **Admin > Milestones & Gear** and **Admin > Badges** (nothing is built in), and **Add back starter** restores deleted ones. Change the starter pack for a new club, then run `npm run sync:reward-rules` (it keeps the rules' pre-seed fallback in step) |
 | Local-mode sample data | `src/data/initialData.ts` and the sample route files |
 | Push notification default title | `public/push-sw.js` |
 | Site address | `src/utils/calendar.ts`, `AuthModal.tsx`, `admin/NotificationsTab.tsx` |

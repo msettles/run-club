@@ -24,11 +24,21 @@ export const MilestonesTab: React.FC<AdminDashboardProps> = (props) => {
   const [mPerks, setMPerks] = useState('');
   const [milestoneError, setMilestoneError] = useState('');
   const [savingMilestone, setSavingMilestone] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [restoreNote, setRestoreNote] = useState('');
+  const clearForm = () => { setEditingId(null); setMName(''); setMRuns(''); setMIcon(''); setMDesc(''); setMGear(''); setMPerks(''); setMMeasure('runs'); setMilestoneError(''); };
+  const startEdit = (m: (typeof milestones)[number]) => {
+    setEditingId(m.id); setMName(m.name); setMMeasure(milestoneMeasure(m)); setMRuns(String(milestoneTarget(m)));
+    setMIcon(m.icon); setMDesc(m.description || ''); setMGear(m.hasGear === false ? '' : m.reward); setMPerks(m.perks || ''); setMilestoneError('');
+    document.getElementById('milestone-form')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  };
   const {
     milestoneAlerts = [],
     milestones = [],
     onCreateMilestone,
+    onUpdateMilestone,
     onDeleteMilestone,
+    onInstallStarterCatalog,
     users = [],
     currentUser,
     onMarkMilestoneFulfilled,
@@ -71,7 +81,19 @@ export const MilestonesTab: React.FC<AdminDashboardProps> = (props) => {
 
         {/* Club milestones (separate from badges) */}
         <div className="pt-4 space-y-2 text-xs font-sans">
-          <h4 className="text-[11px] font-black uppercase tracking-wider text-stone-600">Club milestones ({milestones.length})</h4>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h4 className="text-[11px] font-black uppercase tracking-wider text-stone-600">Club milestones ({milestones.length})</h4>
+            {onInstallStarterCatalog && (
+              <button
+                type="button"
+                onClick={() => { onInstallStarterCatalog().then((n) => setRestoreNote(n ? `Added back ${n} starter item${n === 1 ? '' : 's'} (milestones, badges and special events). Your edits were not touched.` : 'Nothing to add back: every starter item is already saved.')).catch(() => setRestoreNote("Couldn't add the starter items. Please try again.")); }}
+                className="text-[11px] font-bold text-woodland-800 hover:underline cursor-pointer"
+              >
+                Add back starter milestones &amp; badges
+              </button>
+            )}
+          </div>
+          {restoreNote && <p role="status" className="text-[11px] text-stone-600">{restoreNote}</p>}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {sortMilestones(milestones).map((m) => (
               <div key={m.id} className="flex items-start gap-2.5 p-2.5 bg-stone-50 rounded-xl border border-stone-200">
@@ -80,11 +102,15 @@ export const MilestonesTab: React.FC<AdminDashboardProps> = (props) => {
                   <strong className="text-amber-800 font-black block">{milestoneTarget(m)} {milestoneMeasure(m) === 'miles' ? (milestoneTarget(m) === 1 ? 'mile' : 'miles') : (milestoneTarget(m) === 1 ? 'run' : 'runs')}: {m.name}</strong>
                   <span className="text-stone-700">{m.hasGear === false ? 'No gear (organizers see it as a welcome)' : m.reward}{m.perks ? ` · ${m.perks}` : ''}</span>
                 </div>
-                {!m.isDefault && onDeleteMilestone && (
+                {onUpdateMilestone && (
+                  <button type="button" onClick={() => startEdit(m)} className="text-[11px] font-bold text-woodland-800 hover:underline cursor-pointer">Edit</button>
+                )}
+                {onDeleteMilestone && (
                   <button
                     type="button"
                     onClick={() => {
-                      if (window.confirm(`Delete the ${m.name} milestone? Alerts already created are kept.`)) {
+                      if (window.confirm(`Delete the ${m.name} milestone? Runners who already reached it keep their gear alerts, but nobody will reach it again.`)) {
+                        if (editingId === m.id) clearForm();
                         onDeleteMilestone(m.id).catch(() => window.alert("Couldn't delete that milestone. Please try again."));
                       }
                     }}
@@ -99,14 +125,16 @@ export const MilestonesTab: React.FC<AdminDashboardProps> = (props) => {
 
           {onCreateMilestone && (
             <form
+              id="milestone-form"
               className="mt-2 space-y-3 rounded-2xl border border-amber-200 bg-amber-50/50 p-4"
               onSubmit={async (e) => {
                 e.preventDefault();
                 setMilestoneError('');
                 setSavingMilestone(true);
                 try {
-                  await onCreateMilestone({ name: mName, measure: mMeasure, target: Number(mRuns), icon: mIcon, description: mDesc, gear: mGear, perks: mPerks });
-                  setMName(''); setMRuns(''); setMIcon(''); setMDesc(''); setMGear(''); setMPerks('');
+                  const data = { name: mName, measure: mMeasure, target: Number(mRuns), icon: mIcon, description: mDesc, gear: mGear, perks: mPerks };
+                  if (editingId && onUpdateMilestone) await onUpdateMilestone(editingId, data); else await onCreateMilestone(data);
+                  clearForm();
                 } catch (err) {
                   setMilestoneError(err instanceof Error ? err.message : 'Could not save the milestone.');
                 } finally {
@@ -114,7 +142,7 @@ export const MilestonesTab: React.FC<AdminDashboardProps> = (props) => {
                 }
               }}
             >
-              <h5 className="text-xs font-black uppercase tracking-wider text-amber-900">Add a milestone</h5>
+              <h5 className="text-xs font-black uppercase tracking-wider text-amber-900">{editingId ? 'Edit milestone' : 'Add a milestone'}</h5>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <label className="block text-xs font-bold text-stone-700">Name *
                   <input required value={mName} onChange={(e) => setMName(e.target.value)} placeholder="e.g. 25 Runs Milestone" className="mt-1 w-full rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-xs font-semibold" />
@@ -144,8 +172,9 @@ export const MilestonesTab: React.FC<AdminDashboardProps> = (props) => {
               <p className="text-[11px] text-stone-500">With no gear, organizers still see the runner when they reach it, but there is nothing to hand out. Each target can only be a milestone once per measure. Miles count from check-ins in this app (old sign-ins have no miles).</p>
               {milestoneError && <p role="alert" className="text-xs font-semibold text-amber-900">{milestoneError}</p>}
               <button type="submit" disabled={savingMilestone} className="rounded-xl bg-stone-950 px-4 py-2 text-xs font-bold uppercase tracking-wider text-amber-300 hover:bg-stone-800 disabled:opacity-50 cursor-pointer">
-                {savingMilestone ? 'Saving…' : 'Add milestone'}
+                {savingMilestone ? 'Saving…' : editingId ? 'Save changes' : 'Add milestone'}
               </button>
+              {editingId && <button type="button" onClick={clearForm} className="ml-2 rounded-xl px-4 py-2 text-xs font-bold text-stone-700 hover:bg-stone-100 cursor-pointer">Cancel</button>}
             </form>
           )}
         </div>

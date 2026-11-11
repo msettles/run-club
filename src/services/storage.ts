@@ -1,7 +1,6 @@
 import { createStaffLoadingOps } from './store/staffLoading';
 import { useEffect } from 'react';
 import { RunEvent, Badge, MilestoneReward, SpecialEventDefinition } from '../types';
-import { INITIAL_BADGES, INITIAL_SPECIAL_EVENTS, CLUB_MILESTONES } from '../data/catalog';
 import { isFirebaseConfigured, db } from './firebase';
 import { doc, collection, type DocumentData, orderBy, limit, onSnapshot, query } from 'firebase/firestore';
 import { ClubNotification, showLocalNotification } from './notifications';
@@ -16,19 +15,13 @@ import { createEventOps } from './store/events';
 import { createBadgeOps } from './store/badges';
 import { createMilestoneOps } from './store/milestones';
 import { createPartnerOps } from './store/partner';
+import { createCatalogOps } from './store/catalog';
 import { DEFAULT_PARTNER, type ClubPartner } from '../data/partner';
-import { sortMilestones } from '../utils/milestones';
 import { createRunOps } from './store/runs';
 import { createAnnouncementOps } from './store/announcements';
-import { isBadge, meetupFromPublicDoc, memberFromPublicDoc } from './store/helpers';
+import { meetupFromPublicDoc, memberFromPublicDoc } from './store/helpers';
 // Re-exported for existing importers.
 export { cleanFirestoreData, formatRouteForFirestore, hydrateRouteFromFirestore, toPublicMember, RECENT_CHECKIN_DAYS } from './store/helpers';
-
-/** Built-in catalog entries plus the ones saved in Firestore (saved copies win). */
-function withCatalog<T extends { id: string }>(remote: T[], builtIn: T[]): T[] {
-  const ids = new Set(remote.map((x) => x.id));
-  return [...builtIn.filter((x) => !ids.has(x.id)), ...remote];
-}
 
 export function useClubStore({ loadLeaderboard = true } = {}) {
   const s = useStoreState();
@@ -36,6 +29,8 @@ export function useClubStore({ loadLeaderboard = true } = {}) {
     setBadges,
     setMilestones,
     setPartner,
+    setCatalogSeeded,
+    setCatalogSettled,
     setSpecialEvents,
     setNotifications,
     setIsSyncing,
@@ -52,8 +47,9 @@ export function useClubStore({ loadLeaderboard = true } = {}) {
   const c3 = Object.assign(c2, createMemberOps(c2));
   const c4 = Object.assign(c3, createCheckInOps(c3));
   const c5 = Object.assign(c4, createEventOps(c4));
-  const c6 = Object.assign(c5, createBadgeOps(c5), createMilestoneOps(c5), createPartnerOps(c5));
-  const c7 = Object.assign(c6, createRunOps(c6));
+  const c6 = Object.assign(c5, createCatalogOps(c5));
+  const c6b = Object.assign(c6, createBadgeOps(c6), createMilestoneOps(c6), createPartnerOps(c6));
+  const c7 = Object.assign(c6b, createRunOps(c6b));
   const store = Object.assign(c7, createAnnouncementOps(c7));
 
   // If Firebase is configured, fetch the public collections on initial load
@@ -68,11 +64,17 @@ export function useClubStore({ loadLeaderboard = true } = {}) {
     const errors = new Set<string>();
     const subscriptions: Array<() => void> = [];
     const handlers = {
-      badges: (docs: DocumentData[]) => setBadges(withCatalog(docs as Badge[], INITIAL_BADGES).filter(isBadge)),
-      milestones: (docs: DocumentData[]) => setMilestones(sortMilestones(withCatalog(docs as MilestoneReward[], CLUB_MILESTONES))),
+      // Raw saved documents. Once the starter pack has been written (settings/catalog), these ARE the catalog: nothing is built in.
+      badges: (docs: DocumentData[]) => setBadges(docs as Badge[]),
+      milestones: (docs: DocumentData[]) => setMilestones(docs as MilestoneReward[]),
       // Club settings (public): the partner's name and links. Anything not saved falls back to the built-in default.
-      settings: (docs: DocumentData[]) => { const saved = docs.find((d) => d.id === 'partner'); setPartner(saved ? { ...DEFAULT_PARTNER, ...(saved as Partial<ClubPartner>) } : DEFAULT_PARTNER); },
-      special_events: (docs: DocumentData[]) => setSpecialEvents(withCatalog(docs as SpecialEventDefinition[], INITIAL_SPECIAL_EVENTS)),
+      settings: (docs: DocumentData[]) => {
+        const saved = docs.find((d) => d.id === 'partner');
+        setPartner(saved ? { ...DEFAULT_PARTNER, ...(saved as Partial<ClubPartner>) } : DEFAULT_PARTNER);
+        setCatalogSeeded(docs.some((d) => d.id === 'catalog'));
+        setCatalogSettled(true);
+      },
+      special_events: (docs: DocumentData[]) => setSpecialEvents(docs as SpecialEventDefinition[]),
 
     };
     for (const [name, apply] of Object.entries(handlers)) {
@@ -188,7 +190,12 @@ export function useClubStore({ loadLeaderboard = true } = {}) {
     partner: store.partner,
     savePartner: store.savePartner,
     createMilestone: store.createMilestone,
+    updateMilestone: store.updateMilestone,
     deleteMilestone: store.deleteMilestone,
+    updateBadge: store.updateBadge,
+    installStarterCatalog: store.installStarterCatalog,
+    catalogSeeded: store.catalogSeeded,
+    catalogSettled: store.catalogSettled,
     notifications: store.notifications,
     bellItems: store.bellItems,
     users: store.users,
