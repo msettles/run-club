@@ -1,3 +1,4 @@
+import { authReturnUrl } from './utils/authReturn';
 import { Modal } from './components/Modal';
 import { ModalLoadBoundary } from './components/ModalLoadBoundary';
 import { LazyRouteMap } from './components/LazyRouteMap';
@@ -17,7 +18,7 @@ import { FULL_VERSION } from './utils/version';
 import { reconcilePushAccount, disablePushOnThisDevice, getPushStatus } from './services/push';
 import { onAuthChange, logoutUser, checkAndCompleteEmailLinkSignIn } from './services/authService';
 import { User as FirebaseUser } from 'firebase/auth';
-import { db } from './services/firebase';
+import { auth, db } from './services/firebase';
 import { rewardsAreCurrent } from './services/store/rewardSync';
 import { doc, getDoc } from 'firebase/firestore';
 import { downloadGPXFile } from './utils/gpxParser';
@@ -169,6 +170,7 @@ export function App() {
   // False until Firebase has restored the sign-in (and loaded the profile), so the
   // navbar doesn't flash a Sign In button on refresh.
   const [authReady, setAuthReady] = useState<boolean>(!isFirebaseConfigured);
+  const [authLinkReady, setAuthLinkReady] = useState(!isFirebaseConfigured);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
   const [isOnboardingOpen, setIsOnboardingOpen] = useState<boolean>(false);
   const [onboardingEmail, setOnboardingEmail] = useState<string>('');
@@ -252,7 +254,12 @@ export function App() {
   // getDoc -> setUsers -> re-subscribe loop.
   useEffect(() => {
     // Completing the link signs the user in; onAuthChange below then handles them.
-    checkAndCompleteEmailLinkSignIn().catch((err) => {
+    let active = true;
+    checkAndCompleteEmailLinkSignIn().then(() => {
+      if (active) setAuthLinkReady(true);
+    }).catch((err) => {
+      if (!active) return;
+      setAuthLinkReady(false);
       console.error('Email sign in check error:', err);
       setCheckInNotice('The sign-in link could not be completed. Request a fresh link and try again.');
       setIsAuthModalOpen(true);
@@ -280,7 +287,7 @@ export function App() {
       }
     });
 
-    return () => { sessionEpoch.current++; unsubscribe(); };
+    return () => { active = false; sessionEpoch.current++; unsubscribe(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -348,14 +355,16 @@ export function App() {
   // once the events have loaded.
   const qrHandledRef = useRef(false);
   useEffect(() => {
-    if (qrHandledRef.current || !scheduleLoaded || !authReady) return;
+    if (qrHandledRef.current || !scheduleLoaded || !authReady || !authLinkReady || (linkedRunId && linkedRunLoading)) return;
+    if (isFirebaseConfigured && auth?.currentUser?.uid !== firebaseUser?.uid) return;
     const params = new URLSearchParams(window.location.search);
     if (params.get('checkin') === 'true' || window.location.hash === '#checkin') {
       qrHandledRef.current = true;
-      handleQuickCheckIn();
+      if (linkedRunId) openCheckInFor({ runId: linkedRunId });
+      else handleQuickCheckIn();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scheduleLoaded, meetupEvents, authReady]);
+  }, [scheduleLoaded, meetupEvents, authReady, authLinkReady, firebaseUser?.uid, linkedRunId, linkedRunLoading]);
 
   // Scheduling or editing a run also updates that night's check-in event,
   // so runners pick from the run's distance options when they check in.
@@ -1158,9 +1167,10 @@ export function App() {
             profile after any sign-in, so success here only closes the modal. */}
         {isAuthModalOpen && (
           <AuthModal
+            returnUrl={authReturnUrl(window.location.href, pendingCheckInRun || undefined)}
             isOpen
             onClose={() => setIsAuthModalOpen(false)}
-            onAuthSuccess={() => setIsAuthModalOpen(false)}
+            onAuthSuccess={() => { setAuthLinkReady(true); setIsAuthModalOpen(false); }}
           />
         )}
 
