@@ -17,6 +17,7 @@ import { EditProfileModal } from './components/EditProfileModal';
 import { RunRosterModal } from './components/RunRosterModal';
 import { PartnerThanks } from './components/PartnerThanks';
 import { safeUrl } from './data/partner';
+import { CLUB_ESTABLISHED } from './data/club';
 import { memberKeyFor } from './utils/memberKey';
 import { alertHasGear } from './utils/milestones';
 import { InstallPwaBanner } from './components/InstallPwaBanner';
@@ -635,6 +636,7 @@ export function App() {
                   <h1 className="text-3xl sm:text-5xl font-display font-extrabold tracking-wide uppercase leading-tight">
                     Woodland Woodchuckers
                   </h1>
+                  <p className="mt-1 text-xs sm:text-sm font-semibold uppercase tracking-widest text-amber-300/90">Established {CLUB_ESTABLISHED}</p>
                   <p className="mt-2 text-sm sm:text-base text-woodland-100/90 leading-relaxed font-sans">
                     Join our weekly Wednesday night group runs, starting at Blue Note Brewing Company in
                     Woodland CA, check in to build your milestones, get a club shirt, $1 off beers, track
@@ -987,6 +989,7 @@ export function App() {
           <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
             <img src="/Woodchucker2026.png" alt="2026 Mascot" className="w-5 h-5 object-contain" />
             <span className="font-semibold text-stone-800">Woodland Woodchuckers Run Club</span>
+            <span>• Est. {CLUB_ESTABLISHED}</span>
             <span>
               •{' '}
               {safeUrl(partner.website) ? (
