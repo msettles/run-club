@@ -775,6 +775,15 @@ test('past runs can\'t be edited; RSVP clean-up and admin delete still work', as
   await assertSucceeds(deleteDoc(doc(admin, 'runs', 'run-past')));
 });
 
+test('organizer can delete a run until check-in opens; only an admin after', async () => {
+  // Default seed: check-in is already open.
+  await assertFails(deleteDoc(doc(ctx(ORGANIZER), 'runs', 'run-1')));
+  await assertSucceeds(deleteDoc(doc(ctx(BOOTSTRAP), 'runs', 'run-1')));
+  await env.clearFirestore();
+  await seed({ windowOpen: false });
+  await assertSucceeds(deleteDoc(doc(ctx(ORGANIZER), 'runs', 'run-1')));
+});
+
 // ---- Push devices ----
 
 test('runners record their own push device; only admins can read the list', async () => {

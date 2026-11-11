@@ -14,6 +14,7 @@ import { RunCard } from './components/RunCard';
 import { StandingsPage } from './components/StandingsPage';
 import { SubscribeMenu } from './components/SubscribeMenu';
 import { EditProfileModal } from './components/EditProfileModal';
+import { RunRosterModal } from './components/RunRosterModal';
 import { InstallPwaBanner } from './components/InstallPwaBanner';
 import { InstallAppLink } from './components/InstallAppLink';
 import { MobileBottomNav } from './components/MobileBottomNav';
@@ -89,7 +90,7 @@ export function App() {
     adminSetLegacyClaim,
     importLegacyData,
     users,
-    staffRosterLoaded, refreshStaffUsers, refreshGearHistory, loadMoreStaffUsers, searchStaffUsers, findStaffUser, exportStaffUsers, staffRosterLoading, staffRosterError, hasMoreStaffUsers,
+    staffRosterLoaded, refreshStaffUsers, refreshGearHistory, loadMoreStaffUsers, searchStaffUsers, findStaffUser, loadRunRoster, exportStaffUsers, staffRosterLoading, staffRosterError, hasMoreStaffUsers,
     loadMoreGearHistory, gearHistoryLoading, gearHistoryError, hasMoreGearHistory,
     setUsers,
     meetupEvents,
@@ -186,6 +187,7 @@ export function App() {
   const [authLinkReady, setAuthLinkReady] = useState(!isFirebaseConfigured);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
   const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
+  const [rosterRun, setRosterRun] = useState<RunEvent | null>(null);
   const [isOnboardingOpen, setIsOnboardingOpen] = useState<boolean>(false);
   const [onboardingEmail, setOnboardingEmail] = useState<string>('');
   const [onboardingDisplayName, setOnboardingDisplayName] = useState<string>('');
@@ -689,6 +691,7 @@ export function App() {
                     isSignedIn={isUserLoggedIn}
                     isCheckedIn={myCheckedInRunIds.has(run.id)}
                     notLive={!isRunLive(run, meetupEvents)}
+                    onOpenRoster={isOrganizerOrAdmin ? setRosterRun : undefined}
                     onEdit={isOrganizerOrAdmin && !past ? setEditingRun : undefined}
                     onDelete={isAdmin && past ? confirmDeletePastRun : undefined}
                   />
@@ -1197,6 +1200,19 @@ export function App() {
             isOpen
             onClose={() => setIsAuthModalOpen(false)}
             onAuthSuccess={() => { setAuthLinkReady(true); setIsAuthModalOpen(false); }}
+          />
+        )}
+
+        {rosterRun && isOrganizerOrAdmin && (
+          <RunRosterModal
+            run={rosterRun}
+            alerts={milestoneAlerts}
+            users={users}
+            onLoadRoster={loadRunRoster}
+            onFindUser={findStaffUser}
+            onMarkFulfilled={markMilestoneFulfilled}
+            staffName={currentUser.displayName || currentUser.email || 'Organizer'}
+            onClose={() => setRosterRun(null)}
           />
         )}
 

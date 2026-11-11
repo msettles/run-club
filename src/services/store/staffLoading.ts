@@ -1,7 +1,7 @@
 import { collection, doc, documentId, getDoc, getDocs, limit, orderBy, query, startAfter, where, type DocumentData, type QueryDocumentSnapshot } from 'firebase/firestore';
 import { db, isFirebaseConfigured } from '../firebase';
 import { isAdminProfile, isStaffProfile } from '../../utils/roles';
-import type { MilestoneAlert, UserProfile } from '../../types';
+import type { CheckInRecord, MilestoneAlert, UserProfile } from '../../types';
 import type { StoreState } from './state';
 export const STAFF_PAGE_SIZE = 50;
 export type StaffSearchRole = 'all' | 'member' | 'organizer' | 'admin';
@@ -77,6 +77,24 @@ export function createStaffLoadingOps(ctx: StoreState) {
       throw error;
     } finally { state.pending = false; if (current()) setLoading(false); }
   };
+  /** Check-ins and gear alerts for the one run an organizer is looking at (no history window). */
+  const loadRunRoster = async (runId: string): Promise<{ checkins: CheckInRecord[]; alerts: MilestoneAlert[] }> => {
+    allowed();
+    if (!db || !isFirebaseConfigured) {
+      return { checkins: ctx.checkins.filter((c) => c.runId === runId), alerts: ctx.milestoneAlerts.filter((a) => a.runId === runId) };
+    }
+    const epoch = ctx.privateSyncEpoch.current;
+    const current = () => epoch === ctx.privateSyncEpoch.current;
+    const [checkinSnap, alertSnap] = await Promise.all([
+      read(getDocs(query(collection(db, 'checkins'), where('runId', '==', runId))), current),
+      read(getDocs(query(collection(db, 'milestone_alerts'), where('runId', '==', runId))), current),
+    ]);
+    if (!current()) throw new Error('Your staff session changed. Please retry.');
+    return {
+      checkins: checkinSnap.docs.map((d) => d.data() as CheckInRecord),
+      alerts: alertSnap.docs.map((d) => ({ ...d.data(), id: d.id }) as MilestoneAlert),
+    };
+  };
   const findStaffUser = async (email: string) => {
     allowed();
     const clean = email.trim().toLowerCase();
@@ -149,5 +167,5 @@ export function createStaffLoadingOps(ctx: StoreState) {
     }
     await page(kind, true);
   };
-  return { searchStaffUsers, refreshStaffUsers: () => refresh('roster'), refreshGearHistory: () => refresh('gear'), loadMoreStaffUsers: () => page('roster'), loadMoreGearHistory: () => page('gear'), findStaffUser, exportStaffUsers };
+  return { searchStaffUsers, refreshStaffUsers: () => refresh('roster'), refreshGearHistory: () => refresh('gear'), loadMoreStaffUsers: () => page('roster'), loadMoreGearHistory: () => page('gear'), findStaffUser, exportStaffUsers, loadRunRoster };
 }
