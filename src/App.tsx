@@ -49,7 +49,8 @@ import {
   Gift,
   UserPlus,
   Edit3,
-  CheckCircle
+  CheckCircle,
+  CalendarPlus,
 } from 'lucide-react';
 
 export function App() {
@@ -567,40 +568,42 @@ export function App() {
                   </p>
 
                   <div className="mt-5 flex flex-wrap items-center gap-3">
-                    <button
-                      onClick={handleQuickCheckIn}
-                      className={`flex items-center gap-2 px-5 py-2.5 font-black text-xs sm:text-sm rounded-xl transition shadow-md font-display uppercase tracking-wide cursor-pointer ${
-                        checkedInTonight
-                          ? 'bg-emerald-500 hover:bg-emerald-600 text-white'
-                          : 'bg-amber-500 hover:bg-amber-600 text-stone-950'
-                      }`}
-                    >
-                      {checkedInTonight ? (
-                        <>
-                          <CheckCircle className="w-4 h-4" />
-                          <span>Checked In ✓</span>
-                        </>
-                      ) : (
-                        <>
-                          <Sparkles className="w-4 h-4 text-stone-950" />
-                          <span>
-                            {nextCheckIn
-                              ? `Check In opens in ${formatCountdown(checkInWindow(nextCheckIn).opensAt, clockNow)}`
-                              : 'Check In 🦫'}
-                          </span>
-                        </>
-                      )}
-                    </button>
-
-                    {/* Prominent Join Club button for Guests */}
-                    {authReady && (currentUser.role === 'guest' || !currentUser.email) && (
+                    {/* One primary action: join (guests, nothing open), else check in or the countdown */}
+                    {!checkInOpenNow && !isUserLoggedIn ? (
+                      authReady && (
+                        <button
+                          onClick={handleOpenRegister}
+                          className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs sm:text-sm rounded-xl transition shadow-md font-display uppercase tracking-wide cursor-pointer"
+                          title="Join the Club (Free, 24/7/365)"
+                        >
+                          <UserPlus className="w-4 h-4 text-emerald-200" />
+                          <span>Join Club (Free)</span>
+                        </button>
+                      )
+                    ) : (
                       <button
-                        onClick={handleOpenRegister}
-                        className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs sm:text-sm rounded-xl transition shadow-md font-display uppercase tracking-wide cursor-pointer"
-                        title="Join the Club (Free, 24/7/365)"
+                        onClick={handleQuickCheckIn}
+                        className={`flex items-center gap-2 px-5 py-2.5 font-black text-xs sm:text-sm rounded-xl transition shadow-md font-display uppercase tracking-wide cursor-pointer ${
+                          checkedInTonight
+                            ? 'bg-emerald-500 hover:bg-emerald-600 text-white'
+                            : 'bg-amber-500 hover:bg-amber-600 text-stone-950'
+                        }`}
                       >
-                        <UserPlus className="w-4 h-4 text-emerald-200" />
-                        <span>Join Club (Free)</span>
+                        {checkedInTonight ? (
+                          <>
+                            <CheckCircle className="w-4 h-4" />
+                            <span>Checked In ✓</span>
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles className="w-4 h-4 text-stone-950" />
+                            <span>
+                              {nextCheckIn
+                                ? `Check In opens in ${formatCountdown(checkInWindow(nextCheckIn).opensAt, clockNow)}`
+                                : 'Check In 🦫'}
+                            </span>
+                          </>
+                        )}
                       </button>
                     )}
 
@@ -617,7 +620,7 @@ export function App() {
                       className="flex items-center gap-2 px-4 py-2.5 bg-woodland-700/60 hover:bg-woodland-700 text-white font-semibold text-xs sm:text-sm rounded-xl border border-woodland-500/40 transition"
                     >
                       <Compass className="w-4 h-4 text-woodland-300" />
-                      <span>Explore Runs</span>
+                      <span>Explore Routes</span>
                     </button>
                     {isAdmin && (
                       <button
@@ -637,15 +640,34 @@ export function App() {
               <div>
                 <h3 className="text-xl font-bold text-stone-900 font-display">Upcoming Run Schedule</h3>
                 <p className="text-xs text-stone-500">
-                  Wednesdays at Blue Note Brewing Co. (6:00 PM) • All runs start &amp; finish on the brewery patio!
+                  Wednesdays at Blue Note Brewing Co. (6:30 PM) • All runs start &amp; finish on the brewery patio!
                 </p>
               </div>
+              <div className="flex flex-wrap items-center gap-2">
+              <details className="relative">
+                <summary className="flex cursor-pointer list-none items-center gap-2 rounded-xl border border-stone-300 bg-white px-4 py-2 text-sm font-semibold text-stone-800 hover:bg-stone-100">
+                  <CalendarPlus className="w-4 h-4" />
+                  <span>Subscribe to calendar</span>
+                </summary>
+                <div className="absolute right-0 z-20 mt-2 w-64 space-y-1 rounded-xl border border-stone-200 bg-white p-2 text-sm shadow-lg">
+                  <a className="block rounded-lg px-3 py-2 font-semibold hover:bg-stone-100" href={`webcal://${window.location.host}/calendar.ics`}>Apple / Outlook</a>
+                  <a className="block rounded-lg px-3 py-2 font-semibold hover:bg-stone-100" target="_blank" rel="noreferrer" href={`https://calendar.google.com/calendar/r?cid=${encodeURIComponent(`webcal://${window.location.host}/calendar.ics`)}`}>Google Calendar</a>
+                  <button
+                    type="button"
+                    className="block w-full rounded-lg px-3 py-2 text-left font-semibold hover:bg-stone-100"
+                    onClick={() => { void navigator.clipboard?.writeText(`${window.location.origin}/calendar.ics`); }}
+                  >
+                    Copy feed link
+                  </button>
+                </div>
+              </details>
               {isOrganizerOrAdmin && (
                 <button type="button" onClick={() => setIsNewRunOpen(true)} className="flex items-center gap-2 rounded-xl bg-woodland-700 px-4 py-2 text-sm font-bold text-white hover:bg-woodland-800">
                   <Plus className="w-4 h-4" />
                   <span>Create run</span>
                 </button>
               )}
+              </div>
             </div>
 
             {/* Run Cards List: upcoming soonest first; prior runs on request, newest first */}
@@ -663,6 +685,7 @@ export function App() {
                     onToggleRSVP={handleToggleRSVP}
                     onOpenCheckIn={handleOpenCheckIn}
                     onViewRoute={handleViewRouteFromRun}
+                    isSignedIn={isUserLoggedIn}
                     isCheckedIn={myCheckedInRunIds.has(run.id)}
                     notLive={!isRunLive(run, meetupEvents)}
                     onEdit={isOrganizerOrAdmin && !past ? setEditingRun : undefined}

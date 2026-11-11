@@ -15,7 +15,7 @@ export const NotificationsTab: React.FC<AdminDashboardProps> = (props) => {
     onDeleteAnnouncement,
   } = props;
   const [notifTitle, setNotifTitle] = useState<string>('🦫 Run Tonight: Wednesday Code Word!');
-  const [notifBody, setNotifBody] = useState<string>('Meet at 6:00 PM on Blue Note Brewing patio. Check-in is live!');
+  const [notifBody, setNotifBody] = useState<string>('Meet at 6:30 PM on Blue Note Brewing patio. Check-in is live!');
   const [broadcastSent, setBroadcastSent] = useState<boolean>(false);
   const [pushCountError, setPushCountError] = useState(false);
   const [pushDeviceCount, setPushDeviceCount] = useState<number | null>(null);

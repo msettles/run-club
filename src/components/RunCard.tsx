@@ -14,6 +14,7 @@ interface RunCardProps {
   onToggleRSVP: (runId: string) => void;
   onOpenCheckIn: (run: RunEvent) => void;
   onViewRoute: (route: GPXRoute) => void;
+  isSignedIn?: boolean;  // RSVPs and check-ins are only shown to signed-in runners
   isCheckedIn?: boolean; // The signed-in runner has a check-in for this run
   notLive?: boolean;     // Missing its code word / check-in event: shown to staff only
   onEdit?: (run: RunEvent) => void; // Organizers and admins, upcoming runs only
@@ -28,6 +29,7 @@ export const RunCard: React.FC<RunCardProps> = ({
   onToggleRSVP,
   onOpenCheckIn,
   onViewRoute,
+  isSignedIn = false,
   isCheckedIn = false,
   notLive = false,
   onEdit,
@@ -300,6 +302,7 @@ export const RunCard: React.FC<RunCardProps> = ({
 
       {/* Attendees summary */}
       <div className="px-5 py-2.5 flex items-center justify-between border-t border-stone-100 bg-stone-50/50">
+        {isSignedIn ? (
         <div className="flex items-center gap-2">
           <div className="flex -space-x-1.5 overflow-hidden">
             {run.attendees.slice(0, 4).map((att, i) => (
@@ -321,6 +324,7 @@ export const RunCard: React.FC<RunCardProps> = ({
             )}
           </span>
         </div>
+        ) : <span />}
 
         {/* Add to Calendar button */}
         <button
@@ -344,6 +348,8 @@ export const RunCard: React.FC<RunCardProps> = ({
         <div className="flex items-center gap-2">
           <button type="button" onClick={() => { void copyRunLink(); }} className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-white border border-stone-300" aria-label={`Copy link to ${run.title}`}>Copy link</button>
           <button type="button" onClick={() => { void shareRun(); }} className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-white border border-stone-300" aria-label={`Share ${run.title}`}>Share run</button>
+          {isSignedIn && (
+            <>
           {/* RSVP Toggle */}
           <button
             onClick={() => onToggleRSVP(run.id)}
@@ -362,6 +368,9 @@ export const RunCard: React.FC<RunCardProps> = ({
               <span>RSVP</span>
             )}
           </button>
+
+            </>
+          )}
 
           {onEdit && (
             <button

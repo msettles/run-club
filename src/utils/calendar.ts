@@ -5,6 +5,7 @@
  */
 import type { RunEvent } from '../types';
 import { eventStart } from './checkInWindow';
+import { formatMiles } from './miles';
 
 const RUN_LENGTH_MS = 90 * 60 * 1000;
 
@@ -34,21 +35,14 @@ function fold(line: string): string {
   return parts.join('\r\n ');
 }
 
-export function buildRunIcs(
-  run: Pick<RunEvent, 'id' | 'title' | 'date' | 'time' | 'description' | 'locationName' | 'address' | 'surface' | 'distanceMiles'>,
-  distanceText: string,
-  now = new Date()
-): string {
+type IcsRun = Pick<RunEvent, 'id' | 'title' | 'date' | 'time' | 'description' | 'locationName' | 'address' | 'surface' | 'distanceMiles'>;
+
+function eventLines(run: IcsRun, distanceText: string, now: Date): string[] {
   const start = eventStart(run.date, run.time);
   const end = new Date(start.getTime() + RUN_LENGTH_MS);
   const description = [run.description, `Distance: ${distanceText}`, `Surface: ${run.surface}`].filter(Boolean).join('\n');
   const location = [run.locationName, run.address].filter(Boolean).join(', ');
   return [
-    'BEGIN:VCALENDAR',
-    'VERSION:2.0',
-    'PRODID:-//Woodland Woodchuckers Run Club//Runs//EN',
-    'CALSCALE:GREGORIAN',
-    'METHOD:PUBLISH',
     'BEGIN:VEVENT',
     `UID:${run.id}@woodland-woodchuckers.web.app`,
     `DTSTAMP:${icsUtc(now)}`,
@@ -59,8 +53,36 @@ export function buildRunIcs(
     `LOCATION:${escapeText(location)}`,
     'STATUS:CONFIRMED',
     'END:VEVENT',
+  ];
+}
+
+function calendar(events: string[], extra: string[] = []): string {
+  return [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//Woodland Woodchuckers Run Club//Runs//EN',
+    'CALSCALE:GREGORIAN',
+    'METHOD:PUBLISH',
+    ...extra,
+    ...events,
     'END:VCALENDAR',
   ]
     .map(fold)
     .join('\r\n') + '\r\n';
+}
+
+export function buildRunIcs(run: IcsRun, distanceText: string, now = new Date()): string {
+  return calendar(eventLines(run, distanceText, now));
+}
+
+/** A subscribable feed (one VEVENT per run) that calendar apps re-fetch on their own schedule. */
+export function buildCalendarFeed(runs: IcsRun[], now = new Date()): string {
+  const events = runs.flatMap((r) => eventLines(r, `${formatMiles(r.distanceMiles)} miles`, now));
+  return calendar(events, [
+    'X-WR-CALNAME:Woodland Woodchuckers Runs',
+    'X-WR-CALDESC:Weekly Wednesday group runs at Blue Note Brewing Co.',
+    'X-WR-TIMEZONE:America/Los_Angeles',
+    'REFRESH-INTERVAL;VALUE=DURATION:PT6H',
+    'X-PUBLISHED-TTL:PT6H',
+  ]);
 }

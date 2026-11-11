@@ -48,6 +48,9 @@ jobs:
       - name: Unit tests
         run: npm test
 
+      - name: Build Cloud Functions bundle
+        run: npm run build:functions
+
       - name: Local resolver fork compatibility
         run: npm run test:resolver
 

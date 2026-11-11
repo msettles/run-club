@@ -12,6 +12,13 @@
     ],
     "rewrites": [
       {
+        "source": "/calendar.ics",
+        "function": {
+          "functionId": "calendar",
+          "region": "us-central1"
+        }
+      },
+      {
         "source": "!/@(assets)/**",
         "destination": "/index.html"
       }
@@ -54,5 +61,19 @@
       "enabled": false
     },
     "singleProjectMode": true
-  }
+  },
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "default",
+      "ignore": [
+        "node_modules",
+        "src",
+        ".git"
+      ],
+      "predeploy": [
+        "npm --prefix \"$PROJECT_DIR\" run build:functions"
+      ]
+    }
+  ]
 }
