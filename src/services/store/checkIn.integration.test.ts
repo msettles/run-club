@@ -326,3 +326,26 @@ it.skipIf(!enabled)('a mileage milestone alert goes through the rules in the che
   expect((await getDoc(doc(backend.current!, 'milestone_alerts', `mi100_${email}`))).data()).toMatchObject({ milestoneMiles: 100, milestoneRuns: 5, reward: 'Club Pin', fulfilled: false });
   expect((await getDoc(doc(backend.current!, 'milestone_alerts', `m5_${email}`))).exists()).toBe(true);
 });
+
+it.skipIf(!enabled)('streak badges count every full block across separate streaks, verified by the rules', async () => {
+  const key = await memberKeyFor(email);
+  const weeks = (start: string, count: number) => Array.from({ length: count }, (_, i) => { const d = new Date(`${start}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + 7 * i); return d.toISOString().slice(0, 10); });
+  const dates = [...weeks('2024-01-03', 12), ...weeks('2024-05-01', 5)]; // a 12-week streak, a gap, then a 5-week streak
+  await env.withSecurityRulesDisabled(async (context) => {
+    const db = context.firestore() as unknown as Firestore;
+    await setDoc(doc(db, 'users', email), { ...user, rewardEpoch: 1, totalRuns: 17, legacyEventRuns: 17, linkedLegacyIds: ['old-name'], linkedLegacyNames: ['OLD NAME'] });
+    await setDoc(doc(db, 'legacy_profiles', 'old-name'), { id: 'old-name', name: 'OLD NAME', oldCount: 0, newCount: 17, totalRuns: 17, claimedBy: key, claimedAt: date });
+    await setDoc(doc(db, 'legacy_history', 'old-name'), { id: 'old-name', events: dates.map((d) => ({ d, t: '18:00', c: 'ACORN' })) });
+  });
+  const ctx = { privateSyncEpoch: { current: 0 }, currentUserEmail: email, meetupEvents: events, badges: INITIAL_BADGES, checkins: [],
+    setOwnLegacyEvents: vi.fn(), setUsers: vi.fn(), setMembers: vi.fn(), setMeetupEvents: vi.fn() };
+  const ops = createLegacyOps(ctx as unknown as Parameters<typeof createLegacyOps>[0]);
+  const refreshed = await ops.refreshDerivedStats((await getDoc(doc(backend.current!, 'users', email))).data() as UserProfile);
+  expect(refreshed.badgeCounts).toMatchObject({ 'streak-4': 4, 'streak-10': 1 }); // 3 + 1, and 1 + 0
+  const stepProof = (await getDoc(doc(backend.current!, 'reward_proofs', `${email}_1_streakstep_4`))).data()!;
+  expect(stepProof.count).toBe(4);
+  // A forged level is refused, and so is a step proof for a week that isn't a block boundary.
+  await expect(updateDoc(doc(backend.current!, 'users', email), { badgeCounts: { ...refreshed.badgeCounts, 'streak-4': 9 }, rewardChanges: ['streak-4'] })).rejects.toHaveProperty('code', 'permission-denied');
+  const offBeat = { ...stepProof, count: 5, sources: [...stepProof.sources, stepProof.sources[0] + 1], week: stepProof.sources[0] + 1 };
+  await expect(setDoc(doc(backend.current!, 'reward_proofs', `${email}_1_streakstep_4`), offBeat)).rejects.toHaveProperty('code', 'permission-denied');
+});

@@ -268,6 +268,21 @@ export function computeStreaks(dates: string[], today = clubYmd()): { current: n
   return { current: alive ? run : 0, longest };
 }
 
+/** Lengths of every unbroken run of consecutive weeks with an event (each separate streak), oldest first. */
+export function streakRunLengths(dates: string[]): number[] {
+  const weeks = [...new Set(dates.filter(Boolean).map(weekStart))].sort();
+  const runs: number[] = [];
+  let run = 0;
+  for (let i = 0; i < weeks.length; i++) {
+    run = i > 0 && weeks[i] === addWeeks(weeks[i - 1], 1) ? run + 1 : 1;
+    if (i === weeks.length - 1 || weeks[i + 1] !== addWeeks(weeks[i], 1)) runs.push(run);
+  }
+  return runs;
+}
+
+/** How many times a streak badge has been earned: every full block of `step` weeks in every streak (20 in a row is 2). */
+export const streakBlocks = (runs: number[], step: number): number => runs.reduce((sum, length) => sum + Math.floor(length / Math.max(1, step)), 0);
+
 /**
  * A stored weekly streak as of today. Streaks are saved at check-in time, so a
  * runner who stopped coming would otherwise keep showing it: once the last
@@ -373,6 +388,7 @@ export function recomputeBadges(
   const pets = user.petRunCount || 0;
   const dist = user.distanceCounts || {};
   const { current, longest } = computeStreaks(events.map((e) => e.date), today);
+  const runsOfWeeks = streakRunLengths(events.map((e) => e.date));
   const specialCounts: Record<string, number> = {};
   for (const e of events) for (const id of e.specialEventIds) specialCounts[id] = (specialCounts[id] || 0) + 1;
 
@@ -420,7 +436,9 @@ export function recomputeBadges(
       }
       case 'streak': {
         const weeks = cfg.streakWeeks || 4;
-        award(b.id, steps(longest, weeks, cfg.isIncremental, weeks));
+        // Incremental streak badges earn a level for every full block of `weeks` in any streak (20 in a row = 2;
+        // a later 10-week streak adds another). Others are earned once, by reaching `weeks` at all.
+        award(b.id, cfg.isIncremental ? streakBlocks(runsOfWeeks, weeks) : (longest >= weeks ? 1 : 0));
         break;
       }
       case 'special_event': {

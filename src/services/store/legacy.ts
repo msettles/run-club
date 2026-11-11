@@ -122,7 +122,8 @@ export function createLegacyOps(ctx: StoreState) {
       const base = initial.data() as UserProfile;
       const history = await fetchRunnerCheckins(user.email);
       events = legacyEvents ?? await fetchLegacyEvents(base.linkedLegacyIds || []);
-      const proofs = await prepareRewardProofs(firestore, base, history, events, meetupEvents);
+      const streakSteps = badges.filter((b) => b.triggerConfig?.type === 'streak' && b.triggerConfig.isIncremental).map((b) => b.triggerConfig!.streakWeeks || 4);
+      const proofs = await prepareRewardProofs(firestore, base, history, events, meetupEvents, streakSteps);
       const desired = recomputeBadges(base, badges, datedEventsFrom(events, history, meetupEvents));
       const changed = [...new Set([...Object.keys(base.badgeCounts || {}), ...Object.keys(desired.badgeCounts || {}), ...base.unlockedBadgeIds])].filter((id) => (base.badgeCounts?.[id] || 0) !== (desired.badgeCounts?.[id] || 0));
       updated = base;
