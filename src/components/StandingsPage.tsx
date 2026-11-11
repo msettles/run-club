@@ -1,3 +1,4 @@
+import { runningSince } from '../utils/firstRun';
 import React, { useState } from 'react';
 import { Member, Badge, MilestoneReward } from '../types';
 import { milestoneMeasure, milestoneTarget, sortMilestones } from '../utils/milestones';
@@ -91,7 +92,7 @@ export const StandingsPage: React.FC<StandingsPageProps> = ({ members, badges, m
             <h2 className="text-xl font-extrabold truncate">{me.name}</h2>
             <p className="text-xs text-woodland-200 flex items-center gap-1.5 mt-0.5">
               <Timer className="w-3.5 h-3.5" /> Pace {me.favoritePace}
-              {me.joinedDate && <span>· Running since {me.joinedDate.slice(0, 4)}</span>}
+              {runningSince(me.joinedDate || '') && <span>· Running since {runningSince(me.joinedDate || '')}</span>}
             </p>
           </div>
         </div>

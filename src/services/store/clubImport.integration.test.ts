@@ -56,7 +56,7 @@ it.skipIf(!enabled)('imports members, runs, check-ins and held names, then deriv
   expect(result).toMatchObject({ membersCreated: 2, runsWritten: 5, checkinsWritten: 5, aliasesHeld: 1, rewards: { updated: 2, failed: 0 } });
 
   const jane = (await getDoc(doc(db(), 'users', 'jane@example.test'))).data() as UserProfile;
-  expect(jane).toMatchObject({ displayName: 'Jane Runner', shirtSize: 'Not specified', pre2021Runs: 5, loggedRuns: 4, totalRuns: 9, runCount: 3, walkCount: 1, totalMiles: 12.4, firstRunDate: '2026-10-07', lastCheckInDate: '2026-10-28' });
+  expect(jane).toMatchObject({ displayName: 'Jane Runner', shirtSize: 'Not specified', pre2021Runs: 5, loggedRuns: 4, totalRuns: 9, runCount: 3, walkCount: 1, totalMiles: 12.4, firstRunDate: 'Before 10/2026', lastCheckInDate: '2026-10-28' });
   expect(jane.longestStreakWeeks).toBe(4);
   expect(jane.unlockedBadgeIds).toContain('streak-4');
   expect(jane.badgeCounts?.['special-halloween']).toBe(1);

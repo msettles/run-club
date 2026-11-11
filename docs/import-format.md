@@ -80,6 +80,10 @@ Importing and recomputing **never** create gear alerts (so history never sends m
 
 Only run-count milestones apply (old sign-ins have no mileage). The runner's run total itself still adds up every claimed name's runs; the day check only decides gear.
 
+### First Run Date
+
+A member's First Run Date is their oldest check-in date (or oldest dated sign-in from a claimed name). If they also have runs with no check-in record, it reads **Before mm/yyyy** instead, using the month and year of that oldest recorded date, because those runs came before it. With such runs but no dated record at all it reads "Before check-ins began". It is worked out when an import or **Recompute rewards** runs, so a claim made later shows its effect after the next recompute.
+
 ### Recompute rewards
 
 **Recompute rewards for everyone** rebuilds every member's totals, badges, streaks and reward proofs from their check-ins. Use it after you add, change or delete a badge or special event, so members are current without waiting for them to sign in. It is safe to repeat.

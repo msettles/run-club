@@ -12,8 +12,15 @@ describe('totalsFromCheckins', () => {
     const totals = totalsFromCheckins({ pre2021Runs: 10, legacyEventRuns: 5 }, [
       checkin('2026-10-07'), checkin('2026-10-14', { activity: 'walking', actualMiles: 2 }), checkin('2026-10-21', { withPet: true }),
     ]);
-    expect(totals).toMatchObject({ loggedRuns: 3, totalRuns: 18, totalMiles: 8.2, runCount: 2, walkCount: 1, petRunCount: 1, firstRunDate: '2026-10-07', lastCheckInDate: '2026-10-21', lastCheckInRunId: 'run-2026-10-21' });
+    expect(totals).toMatchObject({ loggedRuns: 3, totalRuns: 18, totalMiles: 8.2, runCount: 2, walkCount: 1, petRunCount: 1, firstRunDate: 'Before 10/2026', lastCheckInDate: '2026-10-21', lastCheckInRunId: 'run-2026-10-21' });
     expect(Object.values(totals.distanceCounts || {}).reduce((a, b) => a + b, 0)).toBeGreaterThan(0);
+  });
+
+  it('sets the first run date to the oldest check-in or claimed sign-in, or "Before mm/yyyy" when some runs have no record', () => {
+    const rows = [checkin('2026-10-07'), checkin('2026-10-14')];
+    expect(totalsFromCheckins({ pre2021Runs: 0 }, rows).firstRunDate).toBe('2026-10-07');
+    expect(totalsFromCheckins({ pre2021Runs: 0 }, rows, ['2022-02-02']).firstRunDate).toBe('2022-02-02');
+    expect(totalsFromCheckins({ pre2021Runs: 4 }, rows, ['2022-02-02']).firstRunDate).toBe('Before 02/2022');
   });
 
   it('gives the same answer however often it runs', () => {
@@ -22,6 +29,7 @@ describe('totalsFromCheckins', () => {
   });
 
   it('keeps what it cannot know when there are no check-ins', () => {
-    expect(totalsFromCheckins({ pre2021Runs: 7, firstRunDate: '2019-01-02' }, [])).toMatchObject({ loggedRuns: 0, totalRuns: 7, totalMiles: 0, firstRunDate: '2019-01-02' });
+    expect(totalsFromCheckins({ pre2021Runs: 0, firstRunDate: '2019-01-02' }, [])).toMatchObject({ loggedRuns: 0, totalRuns: 0, totalMiles: 0, firstRunDate: '2019-01-02' });
+    expect(totalsFromCheckins({ pre2021Runs: 7 }, [])).toMatchObject({ loggedRuns: 0, totalRuns: 7, totalMiles: 0, firstRunDate: 'Before check-ins began' });
   });
 });

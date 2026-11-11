@@ -65,7 +65,7 @@ export function createClubImportOps(ctx: StoreState & ReturnType<typeof createLe
     const base = snapshot.data() as UserProfile;
     if (base.deleting) throw new Error(`${clean} is being deleted.`);
     const [history, legacy] = await Promise.all([ctx.fetchRunnerCheckins(clean), ctx.fetchLegacyEvents(base.linkedLegacyIds || [])]);
-    const totals = totalsFromCheckins(base, history);
+    const totals = totalsFromCheckins(base, history, legacy.map((e) => e.d));
     const withTotals: UserProfile = { ...base, ...totals };
     const streakSteps = ctx.badges.filter((b) => b.triggerConfig?.type === 'streak' && b.triggerConfig.isIncremental).map((b) => b.triggerConfig!.streakWeeks || 4);
     const proofs = await prepareRewardProofs(firestore, base, history, legacy, ctx.meetupEvents, streakSteps);
