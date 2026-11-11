@@ -1,4 +1,5 @@
 import { Modal } from './Modal';
+import { MapViewport } from './MapViewport';
 import React, { useState, useEffect, useRef } from 'react';
 import L from 'leaflet';
 import {
@@ -703,10 +704,12 @@ export const RouteStudioModal: React.FC<RouteStudioModalProps> = ({
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
                 {/* Leaflet Map Preview */}
                 <div className="lg:col-span-7 rounded-2xl overflow-hidden border border-stone-200 shadow-inner relative h-[360px] sm:h-[420px]">
+                  <MapViewport title={name || 'Route preview'} height="100%" onResize={() => mapInstanceRef.current?.invalidateSize({ animate: false })}>
                   <div ref={mapContainerRef} className="w-full h-full" />
                   <div className="absolute top-3 right-3 z-[400] bg-white/90 backdrop-blur-xs px-2.5 py-1 rounded-lg shadow-xs border text-[11px] font-bold text-stone-800">
                     {directions.length} Turn Points
                   </div>
+                  </MapViewport>
                 </div>
 
                 {/* Editable Turn Cards List */}

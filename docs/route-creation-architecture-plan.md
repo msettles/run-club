@@ -3,7 +3,7 @@
 > **Update (Nov 9, 2026):** The port is done. `src/utils/routeEngine/` is the source of truth, and the original Python prototype in `scripts/` has been removed (it's still in git history).
 >
 > **Document Version:** 1.0  
-> **Status:** Planning / Architecture Review  
+> **Status (Nov 10, 2026):** Phases 1–4 are implemented (engine, Route Studio, run-card/check-in integration, route library with edit versions and delete). Not built: print view, "report a problem", mile markers, first/last-200 m privacy trim. Section 9 questions are historical.  
 > **Created:** November 7, 2026  
 > **Context:** Integrates the proven GPX routing algorithms in `scripts/gpx_route/` and external chatbot notes in `docs/route-resources-plan.md` into the live Woodland Woodchuckers PWA (`woodland-woodchuckers.web.app`).
 

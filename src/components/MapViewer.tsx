@@ -1,3 +1,4 @@
+import { MapViewport } from './MapViewport';
 import React, { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import { GPXRoute } from '../types';
@@ -334,9 +335,8 @@ export const MapViewer: React.FC<MapViewerProps> = ({
         </div>
       )}
 
-      {/* Map View */}
-      <div className="relative">
-        <div ref={mapContainerRef} style={{ height }} className="w-full z-0" />
+      <MapViewport title={route.name} height={height} onResize={() => mapInstanceRef.current?.invalidateSize({ animate: false })}>
+        <div ref={mapContainerRef} className="h-full w-full z-0" />
 
         {/* Floating GPS Location Button (Bottom Right - Clear of top-left zoom controls) */}
         <div className="absolute bottom-3 right-3 z-[400]">
@@ -393,7 +393,8 @@ export const MapViewer: React.FC<MapViewerProps> = ({
         <div className="absolute bottom-1 left-2 z-[400] text-[10px] bg-white/80 backdrop-blur-xs px-2 py-0.5 rounded text-stone-600">
           🗺️ Free OpenStreetMap • All runs start &amp; end at Blue Note Brewing
         </div>
-      </div>
+      </MapViewport>
+
 
       {/* Elevation Profile */}
       {showElevationProfile && route.points.length > 0 && (

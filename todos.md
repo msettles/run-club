@@ -3,7 +3,7 @@
 > **Application Status:** Production PWA live at [https://woodland-woodchuckers.web.app](https://woodland-woodchuckers.web.app)  
 > **Infrastructure:** Firebase Hosting + Firestore (100% Free Spark Tier, zero monthly cost)  
 > **Design Philosophy:** Mobile-First for runners & organizers; responsive desktop/tablet tools for admins.  
-> **Last Updated:** November 7, 2026
+> **Last Updated:** November 10, 2026 (audited against the code)
 
 ---
 
@@ -143,16 +143,13 @@ Admins oversee the entire club system, scheduling, route library, member rosters
   - CSV export for record-keeping.
 - [x] **Push Notification Broadcaster:** Send instant notifications to all subscribed mobile and desktop PWAs.
 - [x] **Legacy Runner Claim Pool:** Complete audit roster of pre-2026 runs and tracking of claimed vs unclaimed aliases.
+- [x] **User Role Management:** Admins promote/demote member, organizer and admin from the roster (not their own role); delete runners.
+- [x] **GPX Route Library Management:** Route Studio edits routes (new immutable versions) and deletes them; routes referenced by runs are protected.
+- [x] **Route creation and turn-by-turn directions:** In-browser engine, review studio, route map with GPS dot, concise/verbose directions (see `docs/route-creation-architecture-plan.md`).
 
 ### 📋 Pending TODOs
 
 #### High Priority
-- [ ] **User Role Management (Promote / Demote from UI)**
-  - Add a role dropdown in the Admin Roster table (`Active User Profiles`) allowing admins to change a user's role:
-    - `member` (standard runner)
-    - `organizer` (run host with table access)
-    - `admin` (full permissions)
-  - Prevents needing to manually update database documents.
 - [ ] **Milestone Gear Photo Uploads / Image URLs**
   - Replace the placeholder mockup boxes in `MilestonesPage.tsx` with admin-configurable images:
     - 5-Run Woodchucker Shirt photo.
@@ -162,8 +159,6 @@ Admins oversee the entire club system, scheduling, route library, member rosters
   - Admin UI to upload images or paste hosted image URLs.
 
 #### Medium Priority
-- [ ] **GPX Route Library Management (Edit & Delete)**
-  - Currently admins can upload new GPX files via `GpxUploader`, but cannot edit names, descriptions, or delete obsolete routes from the library.
 - [ ] **One-Click Club Data Backup & Restore (JSON)**
   - Button in Admin dashboard to download a single JSON backup of all users, check-ins, custom badges, and runs.
   - Import button to restore or seed from backup, protecting against accidental data loss.
