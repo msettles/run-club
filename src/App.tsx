@@ -9,7 +9,7 @@ import { RunEvent, GPXRoute, UserProfile } from './types';
 import { deleteRunConfirmMessage, getRunChoices, resolveChoices } from './utils/runChoices';
 import { Navbar } from './components/Navbar';
 import { RunCard } from './components/RunCard';
-import { Leaderboard } from './components/Leaderboard';
+import { StandingsPage } from './components/StandingsPage';
 import { InstallPwaBanner } from './components/InstallPwaBanner';
 import { InstallAppLink } from './components/InstallAppLink';
 import { MobileBottomNav } from './components/MobileBottomNav';
@@ -23,7 +23,7 @@ import { rewardsAreCurrent } from './services/store/rewardSync';
 import { doc, getDoc } from 'firebase/firestore';
 import { downloadGPXFile } from './utils/gpxParser';
 import { isAdminProfile, isStaffProfile } from './utils/roles';
-import { formatOpening, nextCheckInEvent, openCheckInEvents, checkInWindow, upcomingRuns, priorRuns, isRunLive } from './utils/checkInWindow';
+import { formatOpening, formatCountdown, nextCheckInEvent, openCheckInEvents, checkInWindow, upcomingRuns, priorRuns, isRunLive } from './utils/checkInWindow';
 
 // Lazy-loaded heavy components & modals (saves >60% initial mobile bundle size)
 const AdminDashboard = lazy(() => import('./components/AdminDashboard').then((m) => ({ default: m.AdminDashboard })));
@@ -194,7 +194,19 @@ export function App() {
       ? checkins.filter((c) => c.userEmail.toLowerCase() === myEmail && c.runId).map((c) => c.runId as string)
       : []
   );
+  // Standings are for signed-in runners; send anyone else back to Runs.
+  useEffect(() => {
+    if (authReady && activeTab === 'leaderboard' && !isUserLoggedIn) setActiveTab('runs');
+  }, [authReady, activeTab, isUserLoggedIn]);
   const checkedInTonight = openCheckInEvents(meetupEvents).some((e) => myCheckedInRunIds.has(e.id));
+  // Tick each minute so the hero button's "opens in …" countdown stays current.
+  const [clockNow, setClockNow] = useState(() => new Date());
+  useEffect(() => {
+    const t = setInterval(() => setClockNow(new Date()), 60_000);
+    return () => clearInterval(t);
+  }, []);
+  const checkInOpenNow = openCheckInEvents(meetupEvents, clockNow).length > 0;
+  const nextCheckIn = checkInOpenNow ? undefined : nextCheckInEvent(meetupEvents, clockNow);
 
   // Refs so the auth listener can be subscribed once without stale values
   const usersRef = useRef(users);
@@ -503,6 +515,7 @@ export function App() {
         setActiveTab={setActiveTab}
         currentUser={currentUser}
         firebaseUser={firebaseUser}
+        isSignedIn={isUserLoggedIn}
         authReady={authReady}
         unreadNotifsCount={bellItems.filter((n) => !isBellItemRead(n)).length}
         onOpenNewRun={() => setIsNewRunOpen(true)}
@@ -548,8 +561,9 @@ export function App() {
                     Woodland Woodchuckers
                   </h1>
                   <p className="mt-2 text-sm sm:text-base text-woodland-100/90 leading-relaxed font-sans">
-                    Join our weekly Wednesday group runs, check in to build your milestone shirt streak,
-                    track your lifetime miles, and earn club badges — 100% free with zero fees!
+                    Join our weekly Wednesday night group runs, starting at Blue Note Brewing Company in
+                    Woodland CA, check in to build your milestones, get a club shirt, $1 off beers, track
+                    your lifetime miles, and earn other fun club badges — 100% free!
                   </p>
 
                   <div className="mt-5 flex flex-wrap items-center gap-3">
@@ -569,7 +583,11 @@ export function App() {
                       ) : (
                         <>
                           <Sparkles className="w-4 h-4 text-stone-950" />
-                          <span>Check In Tonight 🦫</span>
+                          <span>
+                            {nextCheckIn
+                              ? `Check In opens in ${formatCountdown(checkInWindow(nextCheckIn).opensAt, clockNow)}`
+                              : 'Check In 🦫'}
+                          </span>
                         </>
                       )}
                     </button>
@@ -837,13 +855,14 @@ export function App() {
           <MilestonesPage
             currentUser={currentUser}
             badges={badges}
-            onOpenCheckIn={handleQuickCheckIn}
+            isSignedIn={isUserLoggedIn}
+            onJoin={handleOpenRegister}
           />
         )}
 
-        {/* TAB 4: MEMBERS & LEADERBOARD */}
-        {activeTab === 'leaderboard' && (
-          <Leaderboard
+        {/* TAB 4: STANDINGS (signed-in runners only) */}
+        {activeTab === 'leaderboard' && isUserLoggedIn && (
+          <StandingsPage
             members={members}
             loading={!leaderboardLoaded} error={leaderboardError} onRetry={retrySync}
             badges={badges}
@@ -899,6 +918,7 @@ export function App() {
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         isAdmin={isAdmin}
+        isSignedIn={isUserLoggedIn}
         onQuickCheckIn={handleQuickCheckIn}
       />
 

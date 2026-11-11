@@ -97,6 +97,16 @@ export function formatOpening(d: Date): string {
   return `${day} at ${time}`;
 }
 
+/** "1h 20m", "45m", or "3 days" until `target`. */
+export function formatCountdown(target: Date, now = new Date()): string {
+  const mins = Math.max(1, Math.ceil((target.getTime() - now.getTime()) / 60000));
+  if (mins >= 48 * 60) return `${Math.floor(mins / 1440)} days`;
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  if (h === 0) return `${m}m`;
+  return m === 0 ? `${h}h` : `${h}h ${m}m`;
+}
+
 /** Runs still to come (including today's), soonest first. */
 export function upcomingRuns(runs: RunEvent[], now = new Date()): RunEvent[] {
   return runs

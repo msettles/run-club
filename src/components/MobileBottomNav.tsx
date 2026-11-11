@@ -5,6 +5,7 @@ interface MobileBottomNavProps {
   activeTab: 'runs' | 'routes' | 'milestones' | 'leaderboard' | 'admin';
   setActiveTab: (tab: 'runs' | 'routes' | 'milestones' | 'leaderboard' | 'admin') => void;
   isAdmin: boolean;
+  isSignedIn?: boolean;
   onQuickCheckIn: () => void;
 }
 
@@ -12,6 +13,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
   activeTab,
   setActiveTab,
   isAdmin,
+  isSignedIn = false,
   onQuickCheckIn,
 }) => {
   return (
@@ -66,7 +68,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
             <Shield className="w-5 h-5 mb-0.5 text-woodland-600" />
             <span>Admin</span>
           </button>
-        ) : (
+        ) : isSignedIn ? (
           <button
             onClick={() => setActiveTab('leaderboard')}
             className={`flex flex-col items-center py-1 px-1.5 rounded-lg transition ${
@@ -74,9 +76,9 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
             }`}
           >
             <Trophy className="w-5 h-5 mb-0.5 text-stone-400" />
-            <span>Roster</span>
+            <span>Standings</span>
           </button>
-        )}
+        ) : null}
       </div>
     </nav>
   );
