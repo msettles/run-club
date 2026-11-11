@@ -15,6 +15,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import type { AdminDashboardProps } from '../AdminDashboard';
+import { UnifiedImportPanel } from './UnifiedImportPanel';
 import { RunnerPicker, ROLE_OPTIONS, ROLE_BADGE, effectiveRole, downloadCSV, type AssignableRole } from './shared';
 
 export const MembersTab: React.FC<AdminDashboardProps> = (props) => {
@@ -196,7 +197,7 @@ export const MembersTab: React.FC<AdminDashboardProps> = (props) => {
     setExportBusy(true); setExportMessage('');
     try {
     const profiles = props.onExportStaffUsers ? await props.onExportStaffUsers() : users;
-    const headers = ['Email', 'Display Name', 'Shirt Size', 'Birthday', 'Age', 'Total Runs', 'Pre-2021 Runs', 'Logged Runs', 'Total Miles', 'Runs Count', 'Walks Count', 'First Run Date', 'Linked Legacy Names'];
+    const headers = ['Email', 'Display Name', 'Shirt Size', 'Birthday', 'Age', 'Total Runs', 'No Check-In Runs', 'Logged Runs', 'Total Miles', 'Runs Count', 'Walks Count', 'First Run Date', 'Linked Legacy Names'];
     const rows = profiles.map((u) => [
       u.email,
       u.displayName,
@@ -401,6 +402,9 @@ export const MembersTab: React.FC<AdminDashboardProps> = (props) => {
             {totalLegacyClaimed} / {legacyMembers.length} Claimed
           </span>
         </div>
+
+        {/* Import format: one set of columns, with an example and a checker */}
+        <UnifiedImportPanel />
 
         {/* Import */}
         {onImportLegacyData && (

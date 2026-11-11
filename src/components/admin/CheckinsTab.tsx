@@ -21,10 +21,11 @@ export const CheckinsTab: React.FC<AdminDashboardProps> = (props) => {
   });
 
   const exportCheckinsCSV = () => {
-    const headers = ['Date', 'Time', 'User Email', 'Runner Name', 'Activity', 'With Pet', 'Loops', 'Route Choice', 'Actual GPS Miles', 'Route Name', 'Source'];
+    const headers = ['Date', 'Time', 'Code Word', 'User Email', 'Runner Name', 'Activity', 'With Pet', 'Loops', 'Route Choice', 'Actual GPS Miles', 'Route Name', 'Source'];
     const rows = checkins.map((c) => [
       c.date,
       c.time,
+      c.codeWord || '',
       c.userEmail,
       runner.name(c.userEmail, c.runnerName),
       c.activity,

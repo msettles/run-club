@@ -1,0 +1,5 @@
+Email,Name,Date,Run ID,Code Word,Time,Activity,With Pet,Loops,Route,Miles
+jane.runner@example.com,Jane Runner,2026-10-07,,,18:35:00,running,No,1,The 123,3.1
+jane.runner@example.com,,2026-10-14,,,,walking,Yes,,,1.2
+sam@example.com,,2026-10-07,,,,,,,,
+,PAT EXAMPLE,2022-04-06,,BASEBALL,,,,,,
