@@ -25,6 +25,7 @@ function context() {
 const params = { eventId: 'run', userEmail: 'alice@example.com', codeWordEntered: 'ACORN', activity: 'running' as const, distanceChoice: 'short' };
 
 beforeEach(() => {
+  vi.unstubAllGlobals();
   vi.clearAllMocks();
   firestore.attendees = [];
   const c = context();
@@ -123,4 +124,22 @@ it('keeps a completed handout visible when the pending listener removes it befor
   const update = ctx.setMilestoneAlerts.mock.calls[0][0];
   expect(update([])).toEqual([expect.objectContaining({ id: 'gear', runnerName: 'Alice', fulfilled: true, fulfilledBy: 'Organizer' })]);
   expect(firestore.update).toHaveBeenCalledWith('milestone_alerts/gear', expect.objectContaining({ fulfilled: true }));
+});
+
+it('rejects offline updates before starting a transaction or changing saved data', async () => {
+  vi.stubGlobal('navigator', { onLine: false });
+  const ctx = context();
+  const result = await createCheckInOps(ctx as unknown as Parameters<typeof createCheckInOps>[0]).checkInRunner(params);
+  expect(result).toMatchObject({ success: false, message: expect.stringContaining("You're offline") });
+  expect(firestore.runTransaction).not.toHaveBeenCalled();
+  expect(ctx.setCheckins).not.toHaveBeenCalled();
+  expect(ctx.setUsers).not.toHaveBeenCalled();
+});
+
+it('explains uncertain network failures without claiming the save failed or queued', async () => {
+  firestore.runTransaction.mockRejectedValue({ code: 'unavailable', message: 'Connection failed' });
+  const ctx = context();
+  const result = await createCheckInOps(ctx as unknown as Parameters<typeof createCheckInOps>[0]).checkInRunner(params);
+  expect(result).toMatchObject({ success: false, message: expect.stringContaining('Could not confirm') });
+  expect(ctx.setCheckins).not.toHaveBeenCalled();
 });

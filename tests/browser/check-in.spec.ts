@@ -88,3 +88,18 @@ test('a loop route offers exactly its allowed loop counts and credits the chosen
   const records = await stored(page, STORAGE_KEYS.CHECKINS);
   expect(records.find((record: { userEmail: string }) => record.userEmail === email)).toMatchObject({ actualMiles: 9, loops: 3 });
 });
+
+test('offline check-in edits keep choices and saved attendance until the runner retries online', async ({ page, context }) => {
+  const dialog = await saveCheckIn(page);
+  await dialog.getByRole('button', { name: /Change Distance/ }).click();
+  await dialog.getByRole('button', { name: /Walk/ }).click();
+  await context.setOffline(true);
+  await dialog.getByRole('button', { name: /Update Check-In/ }).click();
+  await expect(dialog.getByText(/You're offline/)).toBeVisible();
+  expect((await stored(page, STORAGE_KEYS.CHECKINS))[0].activity).toBe('running');
+  await context.setOffline(false);
+  await dialog.getByRole('button', { name: /Update Check-In/ }).click();
+  await expect(dialog.getByText(/Your check-in is saved/)).toBeVisible();
+  expect((await stored(page, STORAGE_KEYS.CHECKINS))[0].activity).toBe('walking');
+  expect(await stored(page, STORAGE_KEYS.CHECKINS)).toHaveLength(1);
+});

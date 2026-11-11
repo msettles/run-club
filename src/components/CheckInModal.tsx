@@ -428,6 +428,10 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
   const handlePerformCheckIn = async () => {
     if (submittingRef.current) return;
     setErrorMsg(null);
+    if (navigator.onLine === false) {
+      setErrorMsg("You're offline. Reconnect, then try again. Your choices are still here while this window stays open; they have not been saved.");
+      return;
+    }
     if (!selectedOption) {
       setErrorMsg('No routes are configured for this run. Please ask an organizer to add a route.');
       return;

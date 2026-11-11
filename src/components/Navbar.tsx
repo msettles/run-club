@@ -28,6 +28,7 @@ interface NavbarProps {
   setActiveTab: (tab: 'runs' | 'routes' | 'milestones' | 'leaderboard' | 'admin') => void;
   currentUser: UserProfile;
   firebaseUser: FirebaseUser | null;
+  isSignedIn?: boolean;
   authReady?: boolean; // false while Firebase restores the sign-in after a refresh
   unreadNotifsCount?: number;
   onOpenNewRun: () => void;
@@ -44,6 +45,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   setActiveTab,
   currentUser,
   firebaseUser,
+  isSignedIn = false,
   unreadNotifsCount = 0,
   onOpenNewRun,
   onOpenUploadGpx,
@@ -133,6 +135,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               <span>Milestones</span>
             </button>
 
+            {isSignedIn && (
             <button
               onClick={() => setActiveTab('leaderboard')}
               className={`flex items-center gap-1.5 px-2 lg:px-3 py-1.5 rounded-xl text-xs lg:text-sm font-semibold transition ${
@@ -142,8 +145,9 @@ export const Navbar: React.FC<NavbarProps> = ({
               }`}
             >
               <Trophy className="w-4 h-4 text-amber-500" />
-              <span>Members</span>
+              <span>Standings</span>
             </button>
+            )}
 
             {isAdmin && (
               <button

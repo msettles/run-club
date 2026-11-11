@@ -1,6 +1,6 @@
 # Run Club Route Resources — Implementation Plan
 
-_As of 2026-11-07_
+_As of 2026-11-07. Status 2026-11-10: rollout phases 1–3 are built in the app (see [route-creation-architecture-plan.md](route-creation-architecture-plan.md)). Still open from phase 4: Print option, "report a problem", mile markers, and the first/last 200 m privacy trim. The open questions at the end are still unanswered._
 
 ## Overview
 
