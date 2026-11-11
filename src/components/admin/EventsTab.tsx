@@ -43,7 +43,7 @@ export const EventsTab: React.FC<AdminDashboardProps> = (props) => {
         <div className="flex items-center justify-between">
           <h4 className="text-xs font-bold text-stone-800 uppercase tracking-wider flex items-center gap-1.5">
             <Calendar className="w-4 h-4 text-amber-500" />
-            <span>Meetups &amp; Active Code Words</span>
+            <span>Check-In Events &amp; Active Code Words</span>
           </h4>
           {onOpenNewRun && (
             <button
@@ -58,7 +58,7 @@ export const EventsTab: React.FC<AdminDashboardProps> = (props) => {
         </div>
 
         <div className="space-y-2.5 max-h-[500px] overflow-y-auto">
-          {onLoadPriorRuns && hasMorePriorRuns && <button type="button" disabled={priorRunsLoading} className="text-xs font-bold underline disabled:opacity-50" onClick={() => { void onLoadPriorRuns().catch(() => {}); }}>{priorRunsLoading ? 'Loading prior meetups…' : 'Load prior meetups'}</button>}
+          {onLoadPriorRuns && hasMorePriorRuns && <button type="button" disabled={priorRunsLoading} className="text-xs font-bold underline disabled:opacity-50" onClick={() => { void onLoadPriorRuns().catch(() => {}); }}>{priorRunsLoading ? 'Loading prior check-in events…' : 'Load prior check-in events'}</button>}
           {priorRunsError && <p role="alert" className="text-xs text-amber-800">{priorRunsError}</p>}
           {meetupEvents.map((evt) => (
             <div

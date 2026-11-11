@@ -50,8 +50,11 @@ export function createCheckInOps(ctx: StoreState & ReturnType<typeof createLegac
           for (const field of ['unlockedBadgeIds', 'badgeCounts', 'currentStreakWeeks', 'longestStreakWeeks'] as const) {
             Object.assign(persistedUser, { [field]: user.data()[field] });
           }
-          let alert: MilestoneAlert | undefined = computed.unlockedMilestone;
-          if (alert && (await tx.get(doc(firestore, 'milestone_alerts', alert.id))).exists()) alert = undefined;
+          // Skip any alert that already exists (never announce a milestone twice).
+          const alerts: MilestoneAlert[] = [];
+          for (const candidate of computed.unlockedMilestones) {
+            if (!(await tx.get(doc(firestore, 'milestone_alerts', candidate.id))).exists()) alerts.push(candidate);
+          }
           const mine: Attendee = { memberId: key, name: computed.updatedUser.displayName, checkedIn: true, checkedInAt: computed.newCheckIn.createdAt, rsvpDate: computed.newCheckIn.createdAt };
           const current = (run.data().attendees || []) as Attendee[];
           const previous = current.find((a) => a.memberId === key);
@@ -69,8 +72,8 @@ export function createCheckInOps(ctx: StoreState & ReturnType<typeof createLegac
           if (!unchanged) tx.update(runRef, { attendees: next, ...(ids.includes(key) ? {} : { attendeeIds: [...ids, key] }) });
           tx.set(ciRef, cleanFirestoreData(computed.newCheckIn));
           tx.set(userRef, cleanFirestoreData(persistedUser));
-          if (alert) tx.set(doc(firestore, 'milestone_alerts', alert.id), cleanFirestoreData(alert));
-          return { preview: computed.updatedUser, computed: { ...computed, updatedUser: persistedUser, unlockedMilestone: alert }, attendees: next };
+          for (const alert of alerts) tx.set(doc(firestore, 'milestone_alerts', alert.id), cleanFirestoreData(alert));
+          return { preview: computed.updatedUser, computed: { ...computed, updatedUser: persistedUser, unlockedMilestone: alerts[0], unlockedMilestones: alerts }, attendees: next };
         });
         let saved;
         for (let attempt = 0; ; attempt++) {
@@ -91,12 +94,13 @@ export function createCheckInOps(ctx: StoreState & ReturnType<typeof createLegac
         if (!event || !user) throw new Error('This run or profile is no longer available.');
         if (event.codeWord.trim().toUpperCase() !== params.codeWordEntered.trim().toUpperCase()) throw new Error('Incorrect code word.');
         result = await prepare(user, event, ctx.checkins.find((c) => c.id === id));
-        if (ctx.milestoneAlerts.some((a) => a.id === result.unlockedMilestone?.id)) result.unlockedMilestone = undefined;
+        result.unlockedMilestones = result.unlockedMilestones.filter((a) => !ctx.milestoneAlerts.some((existing) => existing.id === a.id));
+        result.unlockedMilestone = result.unlockedMilestones[0];
         const run = ctx.runs?.find((r) => r.id === params.eventId);
         const previous = run?.attendees.find((a) => a.memberId === key);
         attendees = [...(run?.attendees || []).filter((a) => a.memberId !== key), { memberId: key, name: user.displayName, checkedIn: true, checkedInAt: result.newCheckIn.createdAt, rsvpDate: previous?.rsvpDate || result.newCheckIn.createdAt }];
       }
-      const { newCheckIn, creditedRoute, earnedBadges, unlockedMilestone, isUpdate } = result;
+      const { newCheckIn, creditedRoute, earnedBadges, unlockedMilestones, isUpdate } = result;
       const { updatedUser } = result;
       let rewardsReady: Promise<unknown> | undefined;
       if (privateEpoch === ctx.privateSessionEpoch?.current) {
@@ -112,9 +116,9 @@ export function createCheckInOps(ctx: StoreState & ReturnType<typeof createLegac
       ctx.setCheckins((prev) => [newCheckIn, ...prev.filter((c) => c.id !== id)]);
       ctx.setUsers((prev) => [updatedUser, ...prev.filter((u) => u.email.toLowerCase() !== email)]);
       ctx.setMembers((prev) => [memberFromUser(updatedUser, key, isFirebaseConfigured), ...prev.filter((m) => m.id !== key)]);
-      if (unlockedMilestone) ctx.setMilestoneAlerts((prev) => [unlockedMilestone, ...prev.filter((a) => a.id !== unlockedMilestone.id)]);
+      if (unlockedMilestones.length) ctx.setMilestoneAlerts((prev) => [...unlockedMilestones, ...prev.filter((a) => !unlockedMilestones.some((m) => m.id === a.id))]);
       }
-      return { rewardsReady, success: true, message: isUpdate ? 'Check-in updated!' : 'Checked in successfully!', checkIn: newCheckIn, user: rewardPreview || updatedUser, route: creditedRoute, newBadges: earnedBadges, milestoneAlert: unlockedMilestone };
+      return { rewardsReady, success: true, message: isUpdate ? 'Check-in updated!' : 'Checked in successfully!', checkIn: newCheckIn, user: rewardPreview || updatedUser, route: creditedRoute, newBadges: earnedBadges, milestoneAlert: unlockedMilestones[0], milestoneAlerts: unlockedMilestones };
     } catch (error) {
       console.error('Check-in failed:', error);
       const err = error as { code?: string; message?: string };

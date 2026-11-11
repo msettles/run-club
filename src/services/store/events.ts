@@ -30,7 +30,7 @@ export function createEventOps(ctx: StoreState) {
    * Save / update a meetup event (Admin)
    */
   const saveMeetupEvent = async (event: MeetupEvent, run?: RunEvent) => {
-    assertDocumentFitsFirestore(event, 'This meetup');
+    assertDocumentFitsFirestore(event, 'This run');
     const win = computeCheckInWindow(event.date, event.time);
     const runId = event.runId || event.id;
     const previous = meetupEvents.find((e) => e.id === runId);

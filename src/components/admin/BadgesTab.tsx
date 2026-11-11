@@ -14,11 +14,14 @@ import {
   CheckCheck
 } from 'lucide-react';
 import type { AdminDashboardProps } from '../AdminDashboard';
+import { EmojiPicker } from './EmojiPicker';
+import { emojiOwners } from '../../utils/emoji';
 
 const COUNTER_LABEL: Record<IncrementalCounter, { plural: string }> = {
   walks: { plural: 'walking check-ins' },
   runs: { plural: 'running check-ins' },
   pet: { plural: 'check-ins with a pet' },
+  miles: { plural: 'miles' },
 };
 
 export const BadgesTab: React.FC<AdminDashboardProps> = (props) => {
@@ -154,125 +157,7 @@ export const BadgesTab: React.FC<AdminDashboardProps> = (props) => {
             className="space-y-4"
           >
             {/* 1. Emoji Selection Section */}
-            <div className="bg-stone-50 border border-stone-200 rounded-2xl p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-black text-stone-800 uppercase tracking-wider flex items-center gap-1.5">
-                  <span>🎨</span>
-                  <span>Badge Emoji &amp; Visual Symbol</span>
-                </label>
-                <span className="text-[11px] text-stone-500">
-                  Tap any emoji below or type custom
-                </span>
-              </div>
-
-              <div className="flex items-center gap-3">
-                <div className="w-14 h-14 rounded-2xl bg-white border-2 border-amber-400 flex items-center justify-center text-3xl shadow-sm shrink-0">
-                  {newBadgeEmoji || '🏅'}
-                </div>
-                <div className="flex-1">
-                  <label className="block text-[11px] font-bold text-stone-600 mb-0.5">
-                    Selected Emoji (or paste from phone)
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={newBadgeEmoji}
-                    onChange={(e) => setNewBadgeEmoji(e.target.value)}
-                    placeholder="e.g. 🍀, 🎽, 🎄"
-                    className="w-full px-3 py-2 text-sm border border-stone-300 rounded-xl font-bold bg-white outline-none focus:border-amber-500"
-                    maxLength={6}
-                  />
-                </div>
-              </div>
-
-              {/* Curated Suggested Emojis by Categories */}
-              <div className="pt-2 border-t border-stone-200 space-y-2">
-                <span className="text-[10px] font-black uppercase text-stone-400 tracking-wider block">
-                  Quick Picks for Run Club &amp; Special Events:
-                </span>
-                <div className="space-y-1.5">
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="text-[10px] font-bold text-stone-500 w-16 shrink-0">Mascot/Run:</span>
-                    {['🦫', '🐕', '🐶', '🐾', '🏃', '🚶', '👟', '🎽', '⏱️', '🏅', '🏆', '🥇', '🥈', '🥉'].map((emoji) => (
-                      <button
-                        key={emoji}
-                        type="button"
-                        onClick={() => setNewBadgeEmoji(emoji)}
-                        className={`w-7 h-7 text-base rounded-lg border flex items-center justify-center transition cursor-pointer ${
-                          newBadgeEmoji === emoji ? 'bg-amber-300 border-amber-500 scale-110 shadow-xs' : 'bg-white border-stone-200 hover:bg-stone-100'
-                        }`}
-                      >
-                        {emoji}
-                      </button>
-                    ))}
-                  </div>
-
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="text-[10px] font-bold text-stone-500 w-16 shrink-0">Themes:</span>
-                    {['🦃', '🎃', '🎂', '🍀', '🎄', '🎅', '🎆', '🐰', '🇺🇸', '💘', '🤠', '🕶️'].map((emoji) => (
-                      <button
-                        key={emoji}
-                        type="button"
-                        onClick={() => setNewBadgeEmoji(emoji)}
-                        className={`w-7 h-7 text-base rounded-lg border flex items-center justify-center transition cursor-pointer ${
-                          newBadgeEmoji === emoji ? 'bg-amber-300 border-amber-500 scale-110 shadow-xs' : 'bg-white border-stone-200 hover:bg-stone-100'
-                        }`}
-                      >
-                        {emoji}
-                      </button>
-                    ))}
-                  </div>
-
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="text-[10px] font-bold text-stone-500 w-16 shrink-0">Routes:</span>
-                    {['1️⃣', '3️⃣', '5️⃣', '🗺️', '🧭', '🌲', '🏔️', '🛣️', '🏙️', '🌉', '🌊', '☀️'].map((emoji) => (
-                      <button
-                        key={emoji}
-                        type="button"
-                        onClick={() => setNewBadgeEmoji(emoji)}
-                        className={`w-7 h-7 text-base rounded-lg border flex items-center justify-center transition cursor-pointer ${
-                          newBadgeEmoji === emoji ? 'bg-amber-300 border-amber-500 scale-110 shadow-xs' : 'bg-white border-stone-200 hover:bg-stone-100'
-                        }`}
-                      >
-                        {emoji}
-                      </button>
-                    ))}
-                  </div>
-
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="text-[10px] font-bold text-stone-500 w-16 shrink-0">Brewery:</span>
-                    {['🍺', '🍻', '🥂', '🍷', '🍕', '🌮', '🥨', '🍩', '☕', '🍔', '🌭'].map((emoji) => (
-                      <button
-                        key={emoji}
-                        type="button"
-                        onClick={() => setNewBadgeEmoji(emoji)}
-                        className={`w-7 h-7 text-base rounded-lg border flex items-center justify-center transition cursor-pointer ${
-                          newBadgeEmoji === emoji ? 'bg-amber-300 border-amber-500 scale-110 shadow-xs' : 'bg-white border-stone-200 hover:bg-stone-100'
-                        }`}
-                      >
-                        {emoji}
-                      </button>
-                    ))}
-                  </div>
-
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="text-[10px] font-bold text-stone-500 w-16 shrink-0">Streaks:</span>
-                    {['🔥', '⚡', '🌟', '⭐', '💥', '🚀', '🦾', '👑', '🐾', '🎉'].map((emoji) => (
-                      <button
-                        key={emoji}
-                        type="button"
-                        onClick={() => setNewBadgeEmoji(emoji)}
-                        className={`w-7 h-7 text-base rounded-lg border flex items-center justify-center transition cursor-pointer ${
-                          newBadgeEmoji === emoji ? 'bg-amber-300 border-amber-500 scale-110 shadow-xs' : 'bg-white border-stone-200 hover:bg-stone-100'
-                        }`}
-                      >
-                        {emoji}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
+            <EmojiPicker value={newBadgeEmoji} onChange={setNewBadgeEmoji} title="Badge Emoji & Visual Symbol" required taken={emojiOwners(badges, props.milestones || [])} />
 
             {/* 2. Badge Name */}
             <div>
@@ -392,6 +277,7 @@ export const BadgesTab: React.FC<AdminDashboardProps> = (props) => {
                         <option value="walks">🚶 Walking check-ins</option>
                         <option value="runs">🏃 Running check-ins</option>
                         <option value="pet">🐕 Check-ins with a pet</option>
+                        <option value="miles">📏 Total miles</option>
                       </select>
                     </div>
                     <div>

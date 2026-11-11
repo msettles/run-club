@@ -8,6 +8,7 @@ import {
 import { isFirebaseConfigured, db } from '../firebase';
 import { doc, writeBatch } from 'firebase/firestore';
 import { cleanFirestoreData } from './helpers';
+import { emojiOwners, emojiTakenMessage } from '../../utils/emoji';
 import type { StoreState } from './state';
 
 const slugify = (name: string): string =>
@@ -46,6 +47,9 @@ export function createBadgeOps(ctx: StoreState) {
   }): Promise<Badge> => {
     const cleanName = badgeData.name.trim();
     const cleanEmoji = badgeData.emoji.trim() || '🏅';
+    // No two badges or milestones share an emoji (a special-event badge and its own event option do).
+    const taken = emojiTakenMessage(cleanEmoji, emojiOwners(badges, ctx.milestones));
+    if (taken) throw new Error(taken);
     const slug = slugify(cleanName);
     const badgeId = uniqueId(`badge_${slug}`, (id) => badges.some((b) => b.id === id));
     const now = new Date().toISOString();

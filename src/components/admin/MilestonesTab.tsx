@@ -10,11 +10,14 @@ import {
 } from 'lucide-react';
 import type { AdminDashboardProps } from '../AdminDashboard';
 import { runnerLookup } from '../../utils/runnerLookup';
-import { alertHasGear } from '../../utils/milestones';
+import { EmojiPicker } from './EmojiPicker';
+import { emojiOwners } from '../../utils/emoji';
+import { alertHasGear, milestoneMeasure, milestoneTarget, sortMilestones } from '../../utils/milestones';
 
 export const MilestonesTab: React.FC<AdminDashboardProps> = (props) => {
   const [mName, setMName] = useState('');
   const [mRuns, setMRuns] = useState('');
+  const [mMeasure, setMMeasure] = useState<'runs' | 'miles'>('runs');
   const [mIcon, setMIcon] = useState('');
   const [mDesc, setMDesc] = useState('');
   const [mGear, setMGear] = useState('');
@@ -70,11 +73,11 @@ export const MilestonesTab: React.FC<AdminDashboardProps> = (props) => {
         <div className="pt-4 space-y-2 text-xs font-sans">
           <h4 className="text-[11px] font-black uppercase tracking-wider text-stone-600">Club milestones ({milestones.length})</h4>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {milestones.map((m) => (
+            {sortMilestones(milestones).map((m) => (
               <div key={m.id} className="flex items-start gap-2.5 p-2.5 bg-stone-50 rounded-xl border border-stone-200">
                 <span className="text-xl leading-none">{m.icon}</span>
                 <div className="min-w-0 flex-1">
-                  <strong className="text-amber-800 font-black block">{m.runsRequired} {m.runsRequired === 1 ? 'run' : 'runs'}: {m.name}</strong>
+                  <strong className="text-amber-800 font-black block">{milestoneTarget(m)} {milestoneMeasure(m) === 'miles' ? (milestoneTarget(m) === 1 ? 'mile' : 'miles') : (milestoneTarget(m) === 1 ? 'run' : 'runs')}: {m.name}</strong>
                   <span className="text-stone-700">{m.hasGear === false ? 'No gear (organizers see it as a welcome)' : m.reward}{m.perks ? ` · ${m.perks}` : ''}</span>
                 </div>
                 {!m.isDefault && onDeleteMilestone && (
@@ -102,7 +105,7 @@ export const MilestonesTab: React.FC<AdminDashboardProps> = (props) => {
                 setMilestoneError('');
                 setSavingMilestone(true);
                 try {
-                  await onCreateMilestone({ name: mName, runsRequired: Number(mRuns), icon: mIcon, description: mDesc, gear: mGear, perks: mPerks });
+                  await onCreateMilestone({ name: mName, measure: mMeasure, target: Number(mRuns), icon: mIcon, description: mDesc, gear: mGear, perks: mPerks });
                   setMName(''); setMRuns(''); setMIcon(''); setMDesc(''); setMGear(''); setMPerks('');
                 } catch (err) {
                   setMilestoneError(err instanceof Error ? err.message : 'Could not save the milestone.');
@@ -116,16 +119,20 @@ export const MilestonesTab: React.FC<AdminDashboardProps> = (props) => {
                 <label className="block text-xs font-bold text-stone-700">Name *
                   <input required value={mName} onChange={(e) => setMName(e.target.value)} placeholder="e.g. 25 Runs Milestone" className="mt-1 w-full rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-xs font-semibold" />
                 </label>
-                <label className="block text-xs font-bold text-stone-700">Total runs required *
+                <label className="block text-xs font-bold text-stone-700">Earned by
+                  <select value={mMeasure} onChange={(e) => setMMeasure(e.target.value as 'runs' | 'miles')} className="mt-1 w-full rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-xs font-bold">
+                    <option value="runs">Total runs</option>
+                    <option value="miles">Total miles</option>
+                  </select>
+                </label>
+                <label className="block text-xs font-bold text-stone-700">{mMeasure === 'miles' ? 'Total miles required *' : 'Total runs required *'}
                   <input required type="number" min={1} step={1} value={mRuns} onChange={(e) => setMRuns(e.target.value)} className="mt-1 w-full rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-xs font-bold" />
                 </label>
-                <label className="block text-xs font-bold text-stone-700">Icon (emoji)
-                  <input value={mIcon} maxLength={8} onChange={(e) => setMIcon(e.target.value)} placeholder="🏆" className="mt-1 w-full rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-xs" />
-                </label>
               </div>
+              <EmojiPicker value={mIcon} onChange={setMIcon} title="Milestone Icon" fallback="🏆" taken={emojiOwners(props.badges || [], milestones)} />
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <label className="block text-xs font-bold text-stone-700">Gear to hand out
-                  <input value={mGear} onChange={(e) => setMGear(e.target.value)} placeholder="e.g. Club pin. Leave blank for no gear" className="mt-1 w-full rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-xs font-semibold" />
+                <label className="block text-xs font-bold text-stone-700">Gear to hand out <span className="font-medium text-stone-400">(optional)</span>
+                  <input value={mGear} onChange={(e) => setMGear(e.target.value)} placeholder="e.g. Club pin (blank = no gear)" className="mt-1 w-full rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-xs font-semibold" />
                 </label>
                 <label className="block text-xs font-bold text-stone-700">Perks (optional)
                   <input value={mPerks} onChange={(e) => setMPerks(e.target.value)} placeholder="e.g. $1 off beers at Blue Note" className="mt-1 w-full rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-xs" />
@@ -134,7 +141,7 @@ export const MilestonesTab: React.FC<AdminDashboardProps> = (props) => {
               <label className="block text-xs font-bold text-stone-700">Description
                 <input value={mDesc} onChange={(e) => setMDesc(e.target.value)} placeholder="Shown to runners on the Milestones page" className="mt-1 w-full rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-xs" />
               </label>
-              <p className="text-[11px] text-stone-500">With no gear, organizers still see the runner when they reach it, but there is nothing to hand out. Each run count can only be a milestone once.</p>
+              <p className="text-[11px] text-stone-500">With no gear, organizers still see the runner when they reach it, but there is nothing to hand out. Each target can only be a milestone once per measure. Miles count from check-ins in this app (old sign-ins have no miles).</p>
               {milestoneError && <p role="alert" className="text-xs font-semibold text-amber-900">{milestoneError}</p>}
               <button type="submit" disabled={savingMilestone} className="rounded-xl bg-stone-950 px-4 py-2 text-xs font-bold uppercase tracking-wider text-amber-300 hover:bg-stone-800 disabled:opacity-50 cursor-pointer">
                 {savingMilestone ? 'Saving…' : 'Add milestone'}

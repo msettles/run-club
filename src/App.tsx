@@ -565,6 +565,19 @@ export function App() {
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {/* Admins: a shortcut to the portal on every page except the portal itself */}
+        {isAdmin && activeTab !== 'admin' && (
+          <div className="mb-3 flex justify-end">
+            <button
+              type="button"
+              onClick={() => setActiveTab('admin')}
+              className="flex items-center gap-1.5 rounded-full border border-stone-700 bg-stone-900 px-3.5 py-1.5 text-xs font-bold text-white shadow-sm transition hover:bg-stone-800 cursor-pointer"
+            >
+              <span>Admin Portal</span>
+              <span aria-hidden="true">→</span>
+            </button>
+          </div>
+        )}
         {/* TAB 1: RUN SCHEDULES */}
         {activeTab === 'runs' && (
           <div className="space-y-6">
@@ -646,14 +659,6 @@ export function App() {
                       <Compass className="hidden sm:block w-4 h-4 text-woodland-300" />
                       <span><span className="hidden sm:inline">Explore </span>Routes</span>
                     </button>
-                    {isAdmin && (
-                      <button
-                        onClick={() => setActiveTab('admin')}
-                        className="flex items-center gap-2 px-4 py-2.5 bg-stone-900 hover:bg-stone-800 text-white font-bold text-xs sm:text-sm rounded-xl border border-stone-700 transition"
-                      >
-                        <span>Admin Portal</span>
-                      </button>
-                    )}
                   </div>
                 </div>
               </div>
@@ -879,6 +884,7 @@ export function App() {
             members={members}
             loading={!leaderboardLoaded} error={leaderboardError} onRetry={retrySync}
             badges={badges}
+            milestones={milestones}
             currentMember={currentMember}
           />
         )}
@@ -933,7 +939,6 @@ export function App() {
       <MobileBottomNav
         activeTab={activeTab}
         setActiveTab={setActiveTab}
-        isAdmin={isAdmin}
         isSignedIn={isUserLoggedIn}
         onQuickCheckIn={handleQuickCheckIn}
       />

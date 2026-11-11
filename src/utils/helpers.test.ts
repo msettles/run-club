@@ -101,3 +101,37 @@ describe('incremental badges', () => {
     expect(counts).toEqual({ r: 2 }); // 14 runs / 5 = 2; 4 walks is short of 5; no pet check-ins
   });
 });
+
+it('mileage milestones have their own progress, separate from runs', () => {
+  const list = [
+    { id: 'r', runsRequired: 5, name: '5', reward: 'Shirt', perks: '', icon: '👕', description: '' },
+    { id: 'm1', measure: 'miles' as const, milesRequired: 100, name: '100 mi', reward: 'Pin', perks: '', icon: '📏', description: '' },
+    { id: 'm2', measure: 'miles' as const, milesRequired: 500, name: '500 mi', reward: 'Mug', perks: '', icon: '🍺', description: '' },
+  ];
+  expect(milestoneProgress(40, list, 'miles')).toMatchObject({ runsRemaining: 60, progressPercent: 40 });
+  expect(milestoneProgress(250, list, 'miles').nextMilestone?.id).toBe('m2');
+  expect(milestoneProgress(3, list, 'runs').nextMilestone?.id).toBe('r');
+});
+
+it('a miles incremental badge levels up every step of total miles', async () => {
+  const { recomputeBadges } = await import('./legacy');
+  const user = { totalRuns: 30, totalMiles: 257.4, unlockedBadgeIds: [], badgeCounts: {} } as unknown as import('../types').UserProfile;
+  const badge = { id: 'mi', name: 'mi', emoji: '📏', description: '', requirement: '', category: 'incremental' as const, isIncremental: true, triggerConfig: { type: 'incremental' as const, counter: 'miles' as const, step: 100, isIncremental: true } };
+  expect(recomputeBadges(user, [badge], []).badgeCounts).toEqual({ mi: 2 });
+  expect(recomputeBadges({ ...user, totalMiles: 99.9 } as typeof user, [badge], []).badgeCounts).toEqual({});
+});
+
+describe('badge progress is shown within the current level', () => {
+  it('13 weeks on a 4-week streak badge is 1 / 4, not 13 / 16', async () => {
+    const { badgeProgress } = await import('./badgeProgress');
+    const { INITIAL_BADGES } = await import('../data/catalog');
+    const user = (extra: object) => ({ totalRuns: 0, totalMiles: 0, walkCount: 0, runCount: 0, unlockedBadgeIds: [], badgeCounts: {}, ...extra }) as unknown as import('../types').UserProfile;
+    const streak = INITIAL_BADGES.find((b) => b.id === 'streak-4')!;
+    expect(badgeProgress(streak, user({ longestStreakWeeks: 13, badgeCounts: { 'streak-4': 3 } }))).toMatchObject({ current: 1, target: 4 });
+    expect(badgeProgress(streak, user({ longestStreakWeeks: 12, badgeCounts: { 'streak-4': 3 } }))).toMatchObject({ current: 0, target: 4 });
+    expect(badgeProgress(streak, user({ longestStreakWeeks: 2 }))).toMatchObject({ current: 2, target: 4 }); // not earned yet
+    const walker = INITIAL_BADGES.find((b) => b.id === 'power-walker')!;
+    expect(badgeProgress(walker, user({ walkCount: 25, badgeCounts: { 'power-walker': 2 } }))).toMatchObject({ current: 5, target: 10 });
+    expect(badgeProgress(walker, user({ walkCount: 3 }))).toMatchObject({ current: 3, target: 10 });
+  });
+});

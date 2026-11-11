@@ -153,3 +153,32 @@ it('a runner\'s very first check-in creates a recognition-only First Chuck Run a
   expect(result.success).toBe(true);
   expect(firestore.set).toHaveBeenCalledWith('milestone_alerts/m1_alice@example.com', expect.objectContaining({ milestoneRuns: 1, milestoneName: 'First Chuck Run', fulfilled: false }));
 });
+
+it('a check-in that carries total miles past a mileage milestone creates its own alert (alongside a run milestone)', async () => {
+  const ctx = context();
+  // 4 runs and 98 miles; this 3.1 mi run is the 5th run (shirt) and takes miles past 100.
+  const user = { ...ctx.users[0], totalRuns: 4, totalMiles: 98 };
+  firestore.docs['users/alice@example.com'] = user;
+  Object.assign(ctx, {
+    users: [user], currentUser: user, refreshDerivedStats: vi.fn().mockResolvedValue(user),
+    milestones: [...CLUB_MILESTONES, { id: 'milestone-miles-100', measure: 'miles' as const, milesRequired: 100, name: '100 Miles', reward: 'Club Pin', perks: '', icon: '📏', description: '', hasGear: true }],
+  });
+  const result = await createCheckInOps(ctx as unknown as Parameters<typeof createCheckInOps>[0]).checkInRunner(params);
+  expect(result.success).toBe(true);
+  expect(firestore.set).toHaveBeenCalledWith('milestone_alerts/m5_alice@example.com', expect.objectContaining({ milestoneRuns: 5, hasGear: true }));
+  expect(firestore.set).toHaveBeenCalledWith('milestone_alerts/mi100_alice@example.com', expect.objectContaining({ milestoneMiles: 100, milestoneName: '100 Miles', reward: 'Club Pin', fulfilled: false }));
+  expect(result.milestoneAlerts).toHaveLength(2);
+});
+
+it('does not announce a mileage milestone that was already passed, or one that is not reached', async () => {
+  const ctx = context();
+  const user = { ...ctx.users[0], totalRuns: 10, totalMiles: 120 };
+  firestore.docs['users/alice@example.com'] = user;
+  Object.assign(ctx, {
+    users: [user], currentUser: user, refreshDerivedStats: vi.fn().mockResolvedValue(user),
+    milestones: [{ id: 'milestone-miles-100', measure: 'miles' as const, milesRequired: 100, name: '100', reward: 'Pin', perks: '', icon: '📏', description: '', hasGear: true }, { id: 'milestone-miles-500', measure: 'miles' as const, milesRequired: 500, name: '500', reward: 'Mug', perks: '', icon: '🍺', description: '', hasGear: true }],
+  });
+  const result = await createCheckInOps(ctx as unknown as Parameters<typeof createCheckInOps>[0]).checkInRunner(params);
+  expect(result.success).toBe(true);
+  expect(result.milestoneAlerts).toEqual([]);
+});

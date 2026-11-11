@@ -108,10 +108,10 @@ Admins have full control: everything an Organizer has, plus:
 
 - **Roles:** promote and demote runners, organizers and admins (not themselves, not the owner).
 - **Deletion:** delete runners (with their dependent records) and check-ins, and delete runs whose check-in has opened or that have already happened. Retention rules in [go-live-policy.md](go-live-policy.md) still apply: records are kept indefinitely unless an Admin explicitly deletes them, and referenced routes and attendance rollbacks have integrity safeguards.
-- **Content:** badges, special events, milestones and club settings. **Milestones** (run-count tiers such as the 5-run shirt, with optional gear) and **badges** (attendance, streak, walking and similar achievements) are separate: a milestone is never also a badge. Milestones are added under **Admin → Milestones & Gear**, badges under **Admin → Badges**.
+- **Content:** badges, special events, milestones and club settings. **Milestones** (tiers earned by total runs or total miles, such as the 5-run shirt, with optional gear) and **badges** (attendance, streak, walking and similar achievements) are separate: a milestone is never also a badge. Milestones are added under **Admin → Milestones & Gear**, badges under **Admin → Badges**.
 - **Communication:** post and delete announcements and see how many devices are subscribed to phone notifications. Phone pushes themselves are sent from the Firebase console today (see [push-notifications-plan-b.md](push-notifications-plan-b.md)).
 - **Legacy data:** manage the old-app name index and unclaim names.
-- **Admin dashboard:** Meetups & Code Words, Check-In Log, Milestones & Gear, Badges, Members, Notifications, with CSV exports.
+- **Admin dashboard:** Check-In Events & Code Words, Check-In Log, Milestones & Gear, Badges, Members, Notifications, with CSV exports.
 
 ## Gaps between the rules and the screens
 

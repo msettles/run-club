@@ -115,8 +115,8 @@ async function seed({ windowOpen = true } = {}) {
   });
 }
 
-function checkInBatch(db, email, { codeWord = 'ACORN', bump = 1, milestone = false, rsvp = false } = {}) {
-  const user = baseUser(email);
+function checkInBatch(db, email, { codeWord = 'ACORN', bump = 1, milestone = false, rsvp = false, milesAlert = 0, startMiles = 12 } = {}) {
+  const user = baseUser(email, { totalMiles: startMiles });
   const updated = {
     ...user,
     totalRuns: user.totalRuns + bump,
@@ -137,6 +137,13 @@ function checkInBatch(db, email, { codeWord = 'ACORN', bump = 1, milestone = fal
       memberId: memberKeyFor(email), name: user.displayName,
       checkedIn: false, rsvpDate: '2026-11-11T18:05:00.000Z',
     }), attendeeIds: arrayUnion(memberKeyFor(email)) });
+  }
+  if (milesAlert) {
+    batch.set(doc(db, 'milestone_alerts', `mi${milesAlert}_${email}`), {
+      id: `mi${milesAlert}_${email}`, userEmail: email, runnerName: updated.displayName,
+      shirtSize: 'M', milestoneRuns: updated.totalRuns, milestoneMiles: milesAlert, milestoneName: '100 Miles', reward: 'Pin',
+      perks: '', hasGear: true, date: DATE, time: '18:05:00', fulfilled: false, runId: RUN,
+    });
   }
   if (milestone) {
     batch.set(doc(db, 'milestone_alerts', `m${updated.totalRuns}_${email}`), {
@@ -795,6 +802,37 @@ test('milestones are public to read and admin-only to change; one per run count'
   await assertSucceeds(getDoc(doc(env.unauthenticatedContext().firestore(), 'milestones', 'milestone-25')));
   await assertFails(deleteDoc(doc(ctx(ORGANIZER), 'milestones', 'milestone-25')));
   await assertSucceeds(deleteDoc(doc(admin, 'milestones', 'milestone-25')));
+});
+
+test('a miles milestone alert is accepted only for the check-in that crosses it', async () => {
+  const setMiles = (miles) => env.withSecurityRulesDisabled(async (c) => setDoc(doc(c.firestore(), 'users', ALICE), baseUser(ALICE, { totalMiles: miles })));
+  // 99 mi + a 3.1 mi run crosses 100.
+  await setMiles(99);
+  await assertSucceeds(checkInBatch(ctx(ALICE), ALICE, { startMiles: 99, milesAlert: 100 }));
+  // Not crossed: 12 mi -> 15.1 mi never reaches 100.
+  await env.clearFirestore(); await seed();
+  await assertFails(checkInBatch(ctx(ALICE), ALICE, { milesAlert: 100 }));
+  // Already past it before this check-in: no alert for it.
+  await env.clearFirestore(); await seed(); await setMiles(100);
+  await assertFails(checkInBatch(ctx(ALICE), ALICE, { startMiles: 100, milesAlert: 100 }));
+  // A threshold this check-in doesn't reach can't be claimed.
+  await env.clearFirestore(); await seed(); await setMiles(99);
+  await assertFails(checkInBatch(ctx(ALICE), ALICE, { startMiles: 99, milesAlert: 200 }));
+});
+
+test('a milestone with no gear is valid: blank perks and description, reward is just its name', async () => {
+  const admin = ctx(BOOTSTRAP);
+  await assertSucceeds(setDoc(doc(admin, 'milestones', 'milestone-30'), { id: 'milestone-30', measure: 'runs', runsRequired: 30, name: '30 Runs', reward: '30 Runs', perks: '', icon: '🏆', description: '', hasGear: false, isDefault: false, createdAt: '2026-11-11T00:00:00Z' }));
+});
+
+test('milestones can be earned by miles; ids must match the target and measure', async () => {
+  const admin = ctx(BOOTSTRAP);
+  const base = { name: '100 Miles', reward: 'Pin', perks: '', icon: '📏', description: '', hasGear: true, isDefault: false, createdAt: '2026-11-11T00:00:00Z' };
+  await assertSucceeds(setDoc(doc(admin, 'milestones', 'milestone-miles-100'), { ...base, id: 'milestone-miles-100', measure: 'miles', milesRequired: 100 }));
+  await assertFails(setDoc(doc(admin, 'milestones', 'milestone-100'), { ...base, id: 'milestone-100', measure: 'miles', milesRequired: 100 }));
+  await assertFails(setDoc(doc(admin, 'milestones', 'milestone-miles-100'), { ...base, id: 'milestone-miles-100', measure: 'miles', runsRequired: 100 }));
+  await assertFails(setDoc(doc(admin, 'milestones', 'milestone-miles-1.5'), { ...base, id: 'milestone-miles-1.5', measure: 'miles', milesRequired: 1.5 }));
+  await assertSucceeds(setDoc(doc(admin, 'milestones', 'milestone-25'), { ...base, id: 'milestone-25', runsRequired: 25 })); // runs stays the default
 });
 
 // ---- Push devices ----

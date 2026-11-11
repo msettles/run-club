@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { UserProfile, Badge, MilestoneReward } from '../types';
 import { isBadge } from '../services/store/helpers';
 import { CLUB_MILESTONES, INITIAL_BADGES } from '../data/catalog';
-import { milestoneProgress } from '../utils/milestones';
+import { milestoneProgress, milestoneMeasure, milestoneTarget, sortMilestones } from '../utils/milestones';
 import { badgeProgress, levelTag } from '../utils/badgeProgress';
 import { CheckCircle, Gift, Sparkles, Beer, Award, Lock, UserPlus, ChevronDown } from 'lucide-react';
 
@@ -45,21 +45,15 @@ export const MilestonesPage: React.FC<MilestonesPageProps> = ({
   // Milestones are shown in their own section; they are never also badges.
   const allBadges = (badges && badges.length > 0 ? badges : INITIAL_BADGES).filter(isBadge);
   const totalRuns = isSignedIn ? currentUser.totalRuns : 0;
+  const totalMiles = isSignedIn ? Math.round(currentUser.totalMiles * 10) / 10 : 0;
   const { nextMilestone, runsRemaining, progressPercent } = milestoneProgress(totalRuns, milestones);
+  // Mileage milestones only show progress when the club has defined some.
+  const hasMileMilestones = milestones.some((m) => milestoneMeasure(m) === 'miles');
+  const miles = milestoneProgress(currentUser.totalMiles || 0, milestones, 'miles');
 
   const unlockedIds = new Set(isSignedIn ? currentUser.unlockedBadgeIds || [] : []);
   const earned = allBadges.filter((b) => unlockedIds.has(b.id));
   const countOf = (b: Badge) => currentUser.badgeCounts?.[b.id] || 1;
-
-  // Locked badges we can measure, closest to unlocking first.
-  const almostThere = isSignedIn
-    ? allBadges
-        .filter((b) => !unlockedIds.has(b.id))
-        .map((b) => ({ badge: b, progress: badgeProgress(b, currentUser) }))
-        .filter((x): x is { badge: Badge; progress: NonNullable<typeof x.progress> } => !!x.progress && x.progress.current > 0)
-        .sort((a, b) => b.progress.current / b.progress.target - a.progress.current / a.progress.target)
-        .slice(0, 6)
-    : [];
 
   const categoryCounts = allBadges.reduce((acc, b) => {
     const cat = b.category || 'other';
@@ -88,7 +82,7 @@ export const MilestonesPage: React.FC<MilestonesPageProps> = ({
             <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 sm:p-5 border border-white/20 space-y-3 max-w-xl">
               <div className="flex items-center justify-between text-xs">
                 <span className="font-bold text-woodland-200">{currentUser.displayName}</span>
-                <span className="font-mono font-black text-amber-300 text-sm">{totalRuns} total runs</span>
+                <span className="font-mono font-black text-amber-300 text-sm">{totalRuns} total runs{hasMileMilestones || totalMiles > 0 ? ` · ${totalMiles} mi` : ''}</span>
               </div>
               {nextMilestone ? (
                 <>
@@ -104,6 +98,17 @@ export const MilestonesPage: React.FC<MilestonesPageProps> = ({
                 </>
               ) : (
                 <div className="text-xs font-black text-amber-300 uppercase tracking-wider">🌟 Every milestone unlocked — legend status!</div>
+              )}
+              {hasMileMilestones && miles.nextMilestone && (
+                <div className="space-y-1.5 pt-1 border-t border-white/10">
+                  <div className="w-full bg-black/30 rounded-full h-2.5 overflow-hidden p-0.5 border border-white/10">
+                    <div className="bg-gradient-to-r from-sky-400 to-emerald-400 h-full rounded-full transition-all duration-700" style={{ width: `${miles.progressPercent}%` }} />
+                  </div>
+                  <div className="flex items-center justify-between text-xs gap-3">
+                    <span className="text-stone-300 text-[11px]">Next mileage: <strong className="text-white">{miles.nextMilestone.icon} {miles.nextMilestone.reward}</strong></span>
+                    <span className="text-sky-300 font-extrabold shrink-0">{Math.round(miles.runsRemaining * 10) / 10} mi to go</span>
+                  </div>
+                </div>
               )}
             </div>
           ) : (
@@ -127,12 +132,15 @@ export const MilestonesPage: React.FC<MilestonesPageProps> = ({
           <Gift className="w-5 h-5 text-amber-500" /> Club Milestones
         </h3>
         <ol className="space-y-3">
-          {milestones.map((m) => {
-            const unlocked = isSignedIn && totalRuns >= m.runsRequired;
-            const isNext = isSignedIn && nextMilestone?.runsRequired === m.runsRequired;
+          {sortMilestones(milestones).map((m) => {
+            const byMiles = milestoneMeasure(m) === 'miles';
+            const target = milestoneTarget(m);
+            const unlocked = isSignedIn && (byMiles ? (currentUser.totalMiles || 0) : totalRuns) >= target;
+            const isNext = isSignedIn && (byMiles ? miles.nextMilestone?.id : nextMilestone?.id) === m.id;
+            const toGo = byMiles ? Math.round(miles.runsRemaining * 10) / 10 : runsRemaining;
             return (
               <li
-                key={m.runsRequired}
+                key={m.id}
                 className={`flex items-start gap-4 p-4 rounded-2xl border ${
                   unlocked ? 'bg-emerald-50/60 border-emerald-300' : isNext ? 'bg-amber-50/60 border-amber-400 ring-2 ring-amber-300/30' : 'bg-stone-50 border-stone-200'
                 }`}
@@ -146,12 +154,23 @@ export const MilestonesPage: React.FC<MilestonesPageProps> = ({
                         <CheckCircle className="w-3.5 h-3.5 text-emerald-600" /> EARNED
                       </span>
                     ) : isNext ? (
-                      <span className="px-2.5 py-0.5 bg-amber-100 text-amber-900 border border-amber-300 font-bold text-[11px] rounded-full">NEXT · {runsRemaining} to go</span>
+                      <span className="px-2.5 py-0.5 bg-amber-100 text-amber-900 border border-amber-300 font-bold text-[11px] rounded-full">NEXT · {toGo} {byMiles ? 'mi' : 'to go'}{byMiles ? ' to go' : ''}</span>
                     ) : (
-                      <span className="px-2.5 py-0.5 bg-stone-100 text-stone-500 font-mono font-bold text-[11px] rounded-full">{m.runsRequired} runs</span>
+                      <span className="px-2.5 py-0.5 bg-stone-100 text-stone-500 font-mono font-bold text-[11px] rounded-full">{target} {byMiles ? 'mi' : 'runs'}</span>
                     )}
                   </div>
                   <p className="text-xs text-stone-600 leading-relaxed">{m.description}</p>
+                  {isSignedIn && !unlocked && (
+                    <div className="space-y-1 pt-1">
+                      <div className="flex items-center justify-between text-[10px] font-bold text-stone-600">
+                        <span className="uppercase tracking-wider text-stone-500">Progress</span>
+                        <span>{byMiles ? Math.round((currentUser.totalMiles || 0) * 10) / 10 : totalRuns} / {target} {byMiles ? 'mi' : 'runs'}</span>
+                      </div>
+                      <div className="h-2 rounded-full bg-stone-200 overflow-hidden">
+                        <div className="h-full bg-gradient-to-r from-amber-400 to-emerald-500" style={{ width: `${Math.min(100, Math.round((((byMiles ? currentUser.totalMiles || 0 : totalRuns) / target) * 100)))}%` }} />
+                      </div>
+                    </div>
+                  )}
                   {m.perks && (
                     <p className="text-[11px] font-bold text-amber-900 flex items-center gap-1.5">
                       <Beer className="w-3.5 h-3.5 text-amber-600 shrink-0" /> {m.perks}
@@ -183,53 +202,8 @@ export const MilestonesPage: React.FC<MilestonesPageProps> = ({
           </span>
         </div>
 
-        {isSignedIn && (
-          <div className="space-y-2">
-            <h4 className="text-[11px] font-black uppercase tracking-wider text-stone-500">Earned</h4>
-            {earned.length === 0 ? (
-              <p className="text-xs text-stone-500">No badges yet — check in to a run to earn your first.</p>
-            ) : (
-              <div className="flex flex-wrap gap-2">
-                {earned.map((b) => (
-                  <span key={b.id} title={`${b.name}: ${b.description}`} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-300 text-xs font-bold text-stone-900">
-                    <span className="text-base">{b.emoji}</span>
-                    {b.name}
-                    <Multiplier badge={b} count={countOf(b)} />
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {almostThere.length > 0 && (
-          <div className="space-y-2">
-            <h4 className="text-[11px] font-black uppercase tracking-wider text-stone-500">Almost there</h4>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {almostThere.map(({ badge, progress }) => (
-                <div key={badge.id} className="p-3 rounded-2xl border border-stone-200 bg-stone-50 space-y-2">
-                  <div className="flex items-center gap-2.5">
-                    <span className="text-2xl">{badge.emoji}</span>
-                    <div className="min-w-0">
-                      <div className="font-extrabold text-sm text-stone-900 leading-snug">{badge.name}</div>
-                      <div className="text-[11px] text-stone-500 truncate">{badge.requirement}</div>
-                    </div>
-                  </div>
-                  <div className="h-2 rounded-full bg-stone-200 overflow-hidden">
-                    <div className="h-full bg-gradient-to-r from-amber-400 to-emerald-500" style={{ width: `${Math.round((progress.current / progress.target) * 100)}%` }} />
-                  </div>
-                  <div className="text-[11px] font-bold text-stone-600">{progress.current} / {progress.target} {progress.unit}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        <details className="group" open={!isSignedIn}>
-          <summary className="cursor-pointer font-bold text-sm text-stone-800 flex items-center gap-1.5 list-none">
-            <ChevronDown className="w-4 h-4 transition group-open:rotate-180" /> All badges
-          </summary>
-          <div className="mt-4 space-y-4">
+        <div className="space-y-4">
+          <div className="space-y-4">
             <div className="flex items-center gap-1.5 flex-wrap">
               {filterOptions.map((f) => (
                 <button
@@ -246,6 +220,7 @@ export const MilestonesPage: React.FC<MilestonesPageProps> = ({
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {catalog.map((b) => {
                 const unlocked = unlockedIds.has(b.id);
+                const progress = isSignedIn ? badgeProgress(b, currentUser) : null;
                 return (
                   <div key={b.id} className={`p-4 rounded-2xl border space-y-2 ${unlocked ? 'bg-emerald-50/50 border-emerald-300' : 'bg-stone-50/70 border-stone-200'}`}>
                     <div className="flex items-center gap-2.5">
@@ -260,12 +235,25 @@ export const MilestonesPage: React.FC<MilestonesPageProps> = ({
                     </div>
                     <p className="text-xs text-stone-600 leading-relaxed">{b.description}</p>
                     {isSignedIn && (
-                      <div className="pt-2 border-t border-stone-200/60 flex justify-end text-[10px] font-bold">
-                        {unlocked ? (
-                          <span className="text-emerald-700 flex items-center gap-1"><CheckCircle className="w-3.5 h-3.5" /> EARNED</span>
-                        ) : (
-                          <span className="text-stone-400 flex items-center gap-1"><Lock className="w-3 h-3" /> LOCKED</span>
+                      <div className="pt-2 border-t border-stone-200/60 space-y-2">
+                        {progress && (
+                          <div className="space-y-1">
+                            <div className="flex items-center justify-between text-[10px] font-bold text-stone-600">
+                              <span className="uppercase tracking-wider text-stone-500">Progress</span>
+                              <span>{progress.current} / {progress.target} {progress.unit}</span>
+                            </div>
+                            <div className="h-2 rounded-full bg-stone-200 overflow-hidden">
+                              <div className="h-full bg-gradient-to-r from-amber-400 to-emerald-500" style={{ width: `${Math.round((progress.current / progress.target) * 100)}%` }} />
+                            </div>
+                          </div>
                         )}
+                        <div className="flex justify-end text-[10px] font-bold">
+                          {unlocked ? (
+                            <span className="text-emerald-700 flex items-center gap-1 bg-emerald-100/90 px-2.5 py-0.5 rounded-full border border-emerald-300"><CheckCircle className="w-3.5 h-3.5" /> UNLOCKED</span>
+                          ) : (
+                            <span className="text-stone-400 flex items-center gap-1 bg-stone-100 px-2.5 py-0.5 rounded-full border border-stone-200/80"><Lock className="w-3 h-3" /> LOCKED</span>
+                          )}
+                        </div>
                       </div>
                     )}
                   </div>
@@ -273,7 +261,7 @@ export const MilestonesPage: React.FC<MilestonesPageProps> = ({
               })}
             </div>
           </div>
-        </details>
+        </div>
       </section>
     </div>
   );
