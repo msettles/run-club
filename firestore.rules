@@ -625,7 +625,7 @@ service cloud.firestore {
     // Incremental badges: first earned at `step`, then a level every `step` more of what they count.
     function incrementalCount(cfg, d) {
       let counter = cfg.get('counter', 'walks');
-      return counter == 'pet' ? d.get('petRunCount', 0) : (counter == 'runs' ? d.runCount : d.walkCount);
+      return counter == 'pet' ? d.get('petRunCount', 0) : (counter == 'runs' ? d.runCount : (counter == 'miles' ? d.totalMiles : d.walkCount));
     }
     function incrementalLevel(cfg, d) {
       let step = cfg.get('step', 1);
@@ -860,7 +860,7 @@ service cloud.firestore {
         (request.resource.data.get('triggerConfig', {}).get('type', '') != 'incremental' ||
          (request.resource.data.triggerConfig.get('step', 0) is int && request.resource.data.triggerConfig.step >= 1 &&
           request.resource.data.triggerConfig.step <= 100000 &&
-          request.resource.data.triggerConfig.get('counter', '') in ['walks', 'runs', 'pet'] &&
+          request.resource.data.triggerConfig.get('counter', '') in ['walks', 'runs', 'pet', 'miles'] &&
           (!('maxMultiplier' in request.resource.data) || (request.resource.data.maxMultiplier is int && request.resource.data.maxMultiplier >= 1))));
       allow delete: if isAdmin();
     }
@@ -869,12 +869,21 @@ service cloud.firestore {
     // The doc ID is 'milestone-<runsRequired>', so each run count can be a milestone only once.
     match /milestones/{milestoneId} {
       allow read: if true;
+      // Earned by total runs (id milestone-<runs>) or total miles (id milestone-miles-<miles>); one per target.
       allow create, update: if isAdmin() &&
-                               request.resource.data.keys().hasOnly(['id', 'runsRequired', 'name', 'reward', 'perks', 'icon', 'description', 'hasGear', 'isDefault', 'createdAt']) &&
-                               request.resource.data.keys().hasAll(['id', 'runsRequired', 'name', 'reward', 'icon']) &&
+                               request.resource.data.keys().hasOnly(['id', 'measure', 'runsRequired', 'milesRequired', 'name', 'reward', 'perks', 'icon', 'description', 'hasGear', 'isDefault', 'createdAt']) &&
+                               request.resource.data.keys().hasAll(['id', 'name', 'reward', 'icon']) &&
                                request.resource.data.id == milestoneId &&
-                               request.resource.data.runsRequired is int && request.resource.data.runsRequired >= 1 && request.resource.data.runsRequired <= 100000 &&
-                               milestoneId == 'milestone-' + string(request.resource.data.runsRequired) &&
+                               (
+                                 (request.resource.data.get('measure', 'runs') == 'runs' &&
+                                  !('milesRequired' in request.resource.data) &&
+                                  request.resource.data.get('runsRequired', 0) is int && request.resource.data.get('runsRequired', 0) >= 1 && request.resource.data.get('runsRequired', 0) <= 100000 &&
+                                  milestoneId == 'milestone-' + string(request.resource.data.get('runsRequired', 0))) ||
+                                 (request.resource.data.get('measure', '') == 'miles' &&
+                                  !('runsRequired' in request.resource.data) &&
+                                  request.resource.data.get('milesRequired', 0) is int && request.resource.data.get('milesRequired', 0) >= 1 && request.resource.data.get('milesRequired', 0) <= 100000 &&
+                                  milestoneId == 'milestone-miles-' + string(request.resource.data.get('milesRequired', 0)))
+                               ) &&
                                request.resource.data.name is string && request.resource.data.name.size() >= 1 && request.resource.data.name.size() <= 100 &&
                                request.resource.data.reward is string && request.resource.data.reward.size() >= 1 && request.resource.data.reward.size() <= 150 &&
                                request.resource.data.icon is string && request.resource.data.icon.size() <= 16 &&
@@ -901,18 +910,28 @@ service cloud.firestore {
                        (hasVerifiedEmail() &&
                         request.resource.data.keys().hasOnly([
                           'id', 'userEmail', 'runnerName', 'shirtSize', 'milestoneRuns',
-                          'milestoneName', 'reward', 'perks', 'hasGear', 'date', 'time', 'fulfilled', 'runId'
+                          'milestoneName', 'reward', 'perks', 'hasGear', 'milestoneMiles', 'date', 'time', 'fulfilled', 'runId'
                         ]) &&
                         (!('hasGear' in request.resource.data) || request.resource.data.hasGear is bool) &&
                         request.resource.data.id == alertId &&
                         request.resource.data.userEmail == tokenEmail() &&
                         request.resource.data.milestoneRuns is int &&
                         request.resource.data.milestoneRuns >= 1 &&
-                        alertId == 'm' + string(request.resource.data.milestoneRuns) + '_' + tokenEmail() &&
                         request.resource.data.fulfilled == false &&
                         request.resource.data.runId is string &&
                         isCheckInCreatedInBatch(checkinPath(request.resource.data.runId, tokenEmail())) &&
-                        getAfter(userPath(tokenEmail())).data.totalRuns == request.resource.data.milestoneRuns);
+                        getAfter(userPath(tokenEmail())).data.totalRuns == request.resource.data.milestoneRuns &&
+                        (
+                          // A run-count milestone: reached by exactly this check-in.
+                          (!('milestoneMiles' in request.resource.data) &&
+                           alertId == 'm' + string(request.resource.data.milestoneRuns) + '_' + tokenEmail()) ||
+                          // A miles milestone: this check-in took the runner's total miles across it.
+                          ('milestoneMiles' in request.resource.data &&
+                           request.resource.data.milestoneMiles is int && request.resource.data.milestoneMiles >= 1 &&
+                           alertId == 'mi' + string(request.resource.data.milestoneMiles) + '_' + tokenEmail() &&
+                           get(userPath(tokenEmail())).data.totalMiles < request.resource.data.milestoneMiles &&
+                           getAfter(userPath(tokenEmail())).data.totalMiles >= request.resource.data.milestoneMiles)
+                        ));
 
       allow update, delete: if isStaff();
     }

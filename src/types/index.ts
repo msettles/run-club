@@ -130,8 +130,8 @@ export type BadgeCategory =
   | 'pet'
   | 'incremental';
 
-/** What an incremental badge counts: walking check-ins, running check-ins, or check-ins with a pet. */
-export type IncrementalCounter = 'walks' | 'runs' | 'pet';
+/** What an incremental badge counts: walking check-ins, running check-ins, check-ins with a pet, or total miles. */
+export type IncrementalCounter = 'walks' | 'runs' | 'pet' | 'miles';
 
 export type BadgeTriggerType =
   | 'milestone'      // Total runs milestone (5, 25, 50, 100, etc.)
@@ -306,7 +306,10 @@ export type Member = UserProfile & {
 
 export interface MilestoneReward {
   id: string;           // Firestore doc ID (milestones/{id}); built-in ones are 'milestone-<runs>'
-  runsRequired: number; // Total runs that earns it (1, 5, 50, 100, 200, ...). Unique per club.
+  /** What earns it: total runs (default) or total miles. Each target can be a milestone only once per measure. */
+  measure?: 'runs' | 'miles';
+  runsRequired?: number;  // Total runs (measure 'runs'): 1, 5, 50, 100, 200, ...
+  milesRequired?: number; // Total miles (measure 'miles'), whole miles
   name: string;
   reward: string;
   perks: string;
@@ -324,7 +327,8 @@ export interface MilestoneAlert {
   userEmail: string;
   runnerName: string;
   shirtSize: string;
-  milestoneRuns: number; // 5, 50, 100, 200
+  milestoneRuns: number; // Runs when reached: the milestone itself for a runs milestone, the runner's total for a miles one
+  milestoneMiles?: number; // Set for a miles milestone: the mileage that was crossed
   milestoneName: string;
   reward: string;
   perks: string;

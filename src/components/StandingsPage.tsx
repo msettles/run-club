@@ -1,5 +1,9 @@
 import React, { useState } from 'react';
-import { Member, Badge } from '../types';
+import { Member, Badge, MilestoneReward } from '../types';
+import { CLUB_MILESTONES } from '../data/catalog';
+import { milestoneMeasure, milestoneTarget, sortMilestones } from '../utils/milestones';
+import { levelTag } from '../utils/badgeProgress';
+import { isBadge } from '../services/store/helpers';
 import { Trophy, Flame, Footprints, MapPin, Timer, TrendingUp } from 'lucide-react';
 import { StandingMetric, metricValue, sortByMetric, standingFor, streakOf } from '../utils/standings';
 
@@ -9,6 +13,7 @@ interface StandingsPageProps {
   onRetry?: () => void;
   members: Member[];
   badges: Badge[];
+  milestones?: MilestoneReward[];
   currentMember: Member;
 }
 
@@ -20,7 +25,7 @@ const METRICS: { id: StandingMetric; label: string; unit: (n: number) => string;
 
 const rankIcon = (i: number) => (i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}`);
 
-export const StandingsPage: React.FC<StandingsPageProps> = ({ members, badges, currentMember, loading, error, onRetry }) => {
+export const StandingsPage: React.FC<StandingsPageProps> = ({ members, badges, milestones = CLUB_MILESTONES, currentMember, loading, error, onRetry }) => {
   const [visibleCount, setVisibleCount] = useState(25);
   const [metric, setMetric] = useState<StandingMetric>('miles');
 
@@ -36,6 +41,10 @@ export const StandingsPage: React.FC<StandingsPageProps> = ({ members, badges, c
   const visible = sorted.slice(0, visibleCount);
   const meVisible = myIndex < visibleCount;
   const bestStreak = Math.max(me.longestStreakWeeks || 0, streakOf(me));
+
+  // Milestones reached (by runs or miles) and badges earned, shown on the hero.
+  const earnedMilestones = sortMilestones(milestones).filter((m) => (milestoneMeasure(m) === 'miles' ? me.totalMiles : me.totalRuns) >= milestoneTarget(m));
+  const earnedBadges = badges.filter(isBadge).filter((b) => me.unlockedBadgeIds.includes(b.id));
 
   const stats = [
     { label: 'Runs', value: me.totalRuns },
@@ -97,6 +106,35 @@ export const StandingsPage: React.FC<StandingsPageProps> = ({ members, badges, c
               </span>
             </div>
           ))}
+        </div>
+
+        {/* Everything earned: milestones, then badges with their level */}
+        <div className="space-y-2 border-t border-woodland-800/80 pt-4">
+          <span className="text-xs font-semibold text-woodland-200 uppercase tracking-wider">
+            Earned ({earnedMilestones.length + earnedBadges.length})
+          </span>
+          {earnedMilestones.length + earnedBadges.length === 0 ? (
+            <p className="text-xs text-woodland-300">Nothing yet. Check in to a run to earn your first milestone.</p>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {earnedMilestones.map((m) => (
+                <span key={m.id} title={m.description} className="inline-flex items-center gap-1.5 rounded-xl border border-amber-300/50 bg-amber-400/15 px-2.5 py-1.5 text-xs font-bold text-amber-100">
+                  <span className="text-base">{m.icon}</span>
+                  {m.hasGear === false ? m.name : m.reward}
+                </span>
+              ))}
+              {earnedBadges.map((b) => {
+                const count = me.badgeCounts?.[b.id] || 1;
+                return (
+                  <span key={b.id} title={`${b.name}: ${b.description}`} className="inline-flex items-center gap-1.5 rounded-xl border border-woodland-500/60 bg-woodland-900/90 px-2.5 py-1.5 text-xs font-bold text-white">
+                    <span className="text-base">{b.emoji}</span>
+                    {b.name}
+                    {b.isIncremental && count > 1 && <span className="rounded-full bg-amber-400 px-1.5 text-[10px] font-black text-stone-950">{levelTag(b, count)}</span>}
+                  </span>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
 

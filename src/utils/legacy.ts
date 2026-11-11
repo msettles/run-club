@@ -413,7 +413,7 @@ export function recomputeBadges(
         break;
       case 'incremental': {
         // First earned at `step`, then a level every `step` more.
-        const count = cfg.counter === 'pet' ? pets : cfg.counter === 'runs' ? runs : walks;
+        const count = cfg.counter === 'pet' ? pets : cfg.counter === 'runs' ? runs : cfg.counter === 'miles' ? user.totalMiles || 0 : walks;
         const step = Math.max(1, cfg.step || 1);
         award(b.id, steps(count, step, true, step));
         break;

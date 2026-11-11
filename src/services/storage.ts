@@ -15,6 +15,7 @@ import { createCheckInOps } from './store/checkIn';
 import { createEventOps } from './store/events';
 import { createBadgeOps } from './store/badges';
 import { createMilestoneOps } from './store/milestones';
+import { sortMilestones } from '../utils/milestones';
 import { createRunOps } from './store/runs';
 import { createAnnouncementOps } from './store/announcements';
 import { isBadge, meetupFromPublicDoc, memberFromPublicDoc } from './store/helpers';
@@ -65,7 +66,7 @@ export function useClubStore({ loadLeaderboard = true } = {}) {
     const subscriptions: Array<() => void> = [];
     const handlers = {
       badges: (docs: DocumentData[]) => setBadges(withCatalog(docs as Badge[], INITIAL_BADGES).filter(isBadge)),
-      milestones: (docs: DocumentData[]) => setMilestones(withCatalog(docs as MilestoneReward[], CLUB_MILESTONES).sort((a, b) => a.runsRequired - b.runsRequired)),
+      milestones: (docs: DocumentData[]) => setMilestones(sortMilestones(withCatalog(docs as MilestoneReward[], CLUB_MILESTONES))),
       special_events: (docs: DocumentData[]) => setSpecialEvents(withCatalog(docs as SpecialEventDefinition[], INITIAL_SPECIAL_EVENTS)),
 
     };

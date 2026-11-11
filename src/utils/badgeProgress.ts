@@ -17,8 +17,10 @@ export function badgeProgress(badge: Badge, user: UserProfile): BadgeProgress | 
   // Incremental badges level up every `step`; others have a single threshold.
   const levelUp = (threshold: number, step: number | undefined, count: number, unit: string, incremental = Boolean(cfg.isIncremental)): BadgeProgress => {
     const size = incremental ? step || threshold : threshold;
-    const target = incremental ? Math.max(threshold, (Math.floor(count / size) + 1) * size) : threshold;
-    return { current: Math.min(count, target), target, unit };
+    // Before the first level: progress toward it. After that: progress within the current level
+    // (13 weeks on a 4-week badge is 1 / 4 toward the next level, not 13 / 16).
+    if (incremental && count >= threshold) return { current: count - Math.floor(count / size) * size, target: size, unit };
+    return { current: Math.min(count, threshold), target: threshold, unit };
   };
   switch (cfg.type) {
     case 'milestone':
@@ -33,9 +35,11 @@ export function badgeProgress(badge: Badge, user: UserProfile): BadgeProgress | 
     }
     case 'incremental': {
       const step = Math.max(1, cfg.step || 1);
-      const count = cfg.counter === 'pet' ? user.petRunCount || 0 : cfg.counter === 'runs' ? user.runCount || 0 : user.walkCount || 0;
-      const unit = cfg.counter === 'pet' ? 'pet check-ins' : cfg.counter === 'runs' ? 'runs' : 'walks';
-      return levelUp(step, step, count, unit, true);
+      const count = cfg.counter === 'pet' ? user.petRunCount || 0 : cfg.counter === 'runs' ? user.runCount || 0 : cfg.counter === 'miles' ? user.totalMiles || 0 : user.walkCount || 0;
+      const unit = cfg.counter === 'pet' ? 'pet check-ins' : cfg.counter === 'runs' ? 'runs' : cfg.counter === 'miles' ? 'mi' : 'walks';
+      const progress = levelUp(step, step, count, unit, true);
+      // Miles are fractional: show one decimal.
+      return cfg.counter === 'miles' ? { ...progress, current: Math.round(progress.current * 10) / 10 } : progress;
     }
     case 'streak': {
       const weeks = cfg.streakWeeks || 4;

@@ -1,4 +1,5 @@
 import type { ActivityType, DistanceChoice, UserProfile, MeetupEvent, CheckInRecord, RouteOption, Badge, MilestoneAlert, MilestoneReward } from '../../types';
+import { milestoneMeasure, milestoneTarget } from '../../utils/milestones';
 import { adjustDistanceCounts, recomputeBadges, datedEventsFrom, type LegacyEvent } from '../../utils/legacy';
 
 export interface CheckInParams { eventId: string; userEmail: string; codeWordEntered: string; activity: ActivityType; distanceChoice: DistanceChoice; loops?: number; withPet?: boolean; now?: Date }
@@ -101,30 +102,25 @@ export function calculateCheckIn(params: CheckInParams, u: UserProfile, event: M
     const before = (id: string) => u.badgeCounts?.[id] ?? ((u.unlockedBadgeIds || []).includes(id) ? 1 : 0);
     const earnedBadges = badges.filter((b) => (derived.badgeCounts?.[b.id] || 0) > before(b.id));
 
-    // 7. Milestone alert: only when this check-in is what crossed the milestone (never on a same-night
-    //    edit), with a deterministic ID so it can't duplicate. Milestones without gear are recognition only.
-    let unlockedMilestone: MilestoneAlert | undefined;
+    // 7. Milestone alerts: only when this check-in is what crossed the milestone, with a deterministic ID
+    //    so it can't duplicate. A run-count milestone is never re-announced on a same-night edit; a miles
+    //    milestone is crossed when the runner's total miles passes it. Milestones without gear are recognition only.
+    const unlockedMilestones: MilestoneAlert[] = [];
     if (!isUpdate) {
-      const mDef = milestones.find((m) => m.runsRequired === updatedUser.totalRuns);
-      if (mDef) {
-        unlockedMilestone = {
-          id: `m${updatedUser.totalRuns}_${cleanEmail}`,
-          userEmail: cleanEmail,
-          runnerName: updatedUser.displayName,
-          shirtSize: updatedUser.shirtSize,
-          milestoneRuns: updatedUser.totalRuns,
-          milestoneName: mDef.name,
-          reward: mDef.reward,
-          perks: mDef.perks,
-          hasGear: mDef.hasGear !== false,
-          date: eventDate,
-          time: timeStr,
-          runId: eventId,
-          fulfilled: false,
-        };
+      const base = { userEmail: cleanEmail, runnerName: updatedUser.displayName, shirtSize: updatedUser.shirtSize, date: eventDate, time: timeStr, runId: eventId, fulfilled: false };
+      const runMilestone = milestones.find((m) => milestoneMeasure(m) === 'runs' && milestoneTarget(m) === updatedUser.totalRuns);
+      if (runMilestone) {
+        unlockedMilestones.push({ ...base, id: `m${updatedUser.totalRuns}_${cleanEmail}`, milestoneRuns: updatedUser.totalRuns, milestoneName: runMilestone.name, reward: runMilestone.reward, perks: runMilestone.perks, hasGear: runMilestone.hasGear !== false });
+      }
+      // Several mileage milestones can be crossed at once; each gets its own alert, lowest first.
+      for (const m of milestones.filter((x) => milestoneMeasure(x) === 'miles').sort((x, y) => milestoneTarget(x) - milestoneTarget(y))) {
+        const miles = milestoneTarget(m);
+        if (u.totalMiles < miles && updatedUser.totalMiles >= miles) {
+          unlockedMilestones.push({ ...base, id: `mi${miles}_${cleanEmail}`, milestoneRuns: updatedUser.totalRuns, milestoneMiles: miles, milestoneName: m.name, reward: m.reward, perks: m.perks, hasGear: m.hasGear !== false });
+        }
       }
     }
+    const unlockedMilestone: MilestoneAlert | undefined = unlockedMilestones[0];
 
-
-  return { newCheckIn, updatedUser, creditedRoute, earnedBadges, unlockedMilestone, isUpdate };
+  return { newCheckIn, updatedUser, creditedRoute, earnedBadges, unlockedMilestone, unlockedMilestones, isUpdate };
 }

@@ -45,8 +45,8 @@ beforeEach(async () => {
 });
 afterAll(async () => { if (enabled) await env.cleanup(); });
 
-function operations() {
-  const ctx = { privateSyncEpoch: { current: 0 }, users: [user], currentUser: user, currentUserEmail: email, meetupEvents: events, badges: INITIAL_BADGES, milestones: CLUB_MILESTONES, checkins: [], milestoneAlerts: [],
+function operations(overrides: Record<string, unknown> = {}) {
+  const ctx = { privateSyncEpoch: { current: 0 }, users: [user], currentUser: user, currentUserEmail: email, meetupEvents: events, badges: INITIAL_BADGES, milestones: CLUB_MILESTONES, ...overrides, checkins: [], milestoneAlerts: [],
     setOwnLegacyEvents: vi.fn(), setUsers: vi.fn(), setMembers: vi.fn(), setRuns: vi.fn(), setCheckins: vi.fn(), setMilestoneAlerts: vi.fn(),
     fetchLegacyEvents: async () => [],
     fetchRunnerCheckins: async () => (await getDocs(query(collection(backend.current!, 'checkins'), where('userEmail', '==', email)))).docs.map((d) => d.data() as CheckInRecord) };
@@ -313,4 +313,16 @@ it.skipIf(!enabled)('credits each run using its own loop-choice limit rather tha
   }
   expect((await getDoc(doc(backend.current!, 'users', email))).data()?.totalMiles).toBe(9.6);
   expect((await getDoc(doc(backend.current!, 'routes', loop.id))).data()?.maxLoops).toBe(4);
+});
+
+it.skipIf(!enabled)('a mileage milestone alert goes through the rules in the check-in that crosses it', async () => {
+  const before = { ...user, totalRuns: 4, loggedRuns: 4, runCount: 4, totalMiles: 98, distanceCounts: { '3': 4, '3.1': 4, '3.1 mi': 4 } };
+  await env.withSecurityRulesDisabled(async (context) => { await setDoc(doc(context.firestore() as unknown as Firestore, 'users', email), before); });
+  const miles = [{ id: 'milestone-miles-100', measure: 'miles' as const, milesRequired: 100, name: '100 Miles', reward: 'Club Pin', perks: '', icon: '📏', description: '', hasGear: true }];
+  const ops = operations({ milestones: [...CLUB_MILESTONES, ...miles] });
+  const result = await ops.checkInRunner({ eventId: 'first', userEmail: email, codeWordEntered: 'FIRST', activity: 'running', distanceChoice: 'route' });
+  expect(result.success, result.message).toBe(true);
+  await result.rewardsReady;
+  expect((await getDoc(doc(backend.current!, 'milestone_alerts', `mi100_${email}`))).data()).toMatchObject({ milestoneMiles: 100, milestoneRuns: 5, reward: 'Club Pin', fulfilled: false });
+  expect((await getDoc(doc(backend.current!, 'milestone_alerts', `m5_${email}`))).exists()).toBe(true);
 });

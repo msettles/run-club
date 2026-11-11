@@ -6,7 +6,8 @@ import { milestoneProgress } from '../utils/milestones';
 import { levelTag } from '../utils/badgeProgress';
 import { RunEvent, MeetupEvent, UserProfile, RouteOption, ActivityType, DistanceChoice, CheckInRecord, Badge, GPXRoute } from '../types';
 import { CLUB_MILESTONES } from '../data/catalog';
-import type { MilestoneReward } from '../types';
+import type { MilestoneAlert, MilestoneReward } from '../types';
+import { milestoneMeasure, milestoneTarget } from '../utils/milestones';
 import { checkInStatus, checkInWindow, formatOpening } from '../utils/checkInWindow';
 import { MapViewer } from './MapViewer';
 import { downloadGPXFile } from '../utils/gpxParser';
@@ -53,6 +54,7 @@ interface CheckInModalProps {
     user?: UserProfile;
     newBadges?: Badge[];
     milestoneAlert?: any;
+    milestoneAlerts?: MilestoneAlert[];
   }>;
   onLoadRoute?: (id: string) => Promise<GPXRoute>;
   onOpenAuthModal?: () => void;
@@ -173,6 +175,7 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
     checkIn?: CheckInRecord;
     user?: UserProfile;
     newBadges?: Badge[];
+    milestoneAlerts?: MilestoneAlert[];
   } | null>(null);
 
   const [postCheckInStep, setPostCheckInStep] = useState<'run_info' | 'rewards'>('run_info');
@@ -500,7 +503,9 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
   // Milestone helpers
   const activeUserRuns = successResult?.user?.totalRuns ?? currentUser.totalRuns;
   const { nextMilestone, runsRemaining, progressPercent: progressPct } = milestoneProgress(activeUserRuns, milestones);
-  const justUnlockedMilestone = milestones.find((m) => m.runsRequired === activeUserRuns) || null;
+  const justUnlockedMilestone = milestones.find((m) => milestoneMeasure(m) === 'runs' && milestoneTarget(m) === activeUserRuns) || null;
+  // Mileage milestones this check-in just crossed (they come back with the saved check-in).
+  const milesUnlocked = (successResult?.milestoneAlerts || []).filter((a) => a.milestoneMiles !== undefined);
 
   const activeCheckIn = successResult?.checkIn || existingCheckIn;
 
@@ -794,13 +799,26 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
                     </div>
                   )}
 
+                  {milesUnlocked.map((a) => (
+                    <div key={a.id} className="bg-gradient-to-r from-sky-400 to-emerald-300 text-stone-950 rounded-xl p-3.5 shadow-md border border-sky-600 space-y-1 animate-in zoom-in-95">
+                      <div className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider">
+                        <Sparkles className="w-4 h-4 shrink-0" />
+                        <span>🎉 {a.milestoneMiles} Miles!</span>
+                      </div>
+                      <div className="font-extrabold text-sm sm:text-base font-display uppercase tracking-tight">{a.hasGear === false ? a.milestoneName : `${a.milestoneName}: ${a.reward}`}</div>
+                      <p className="text-xs font-medium leading-snug">
+                        {a.hasGear === false ? 'Nice work. Say hi to tonight\'s run organizer!' : <>Tonight&apos;s run organizer has been alerted with your shirt size (<strong className="font-bold">{successResult?.user?.shirtSize || currentUser.shirtSize}</strong>). Pick up your gear at the organizer table!</>}
+                      </p>
+                    </div>
+                  ))}
+
                   <div className="flex items-center justify-between text-xs font-semibold">
                     <span className="text-stone-600 flex items-center gap-1.5">
                       <Shirt className="w-4 h-4 text-amber-500" />
                       Milestone Progress
                     </span>
                     <span className="text-amber-700 font-bold">
-                      {activeUserRuns} / {nextMilestone ? nextMilestone.runsRequired : 200} Runs
+                      {activeUserRuns} / {nextMilestone ? milestoneTarget(nextMilestone) : 200} Runs
                     </span>
                   </div>
                   <div className="w-full bg-stone-200 rounded-full h-3 overflow-hidden">

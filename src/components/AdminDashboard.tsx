@@ -65,7 +65,7 @@ export interface AdminDashboardProps {
   milestoneAlerts?: MilestoneAlert[];
   /** Club milestones (gear tiers); admins can add their own. Separate from badges. */
   milestones?: MilestoneReward[];
-  onCreateMilestone?: (data: { name: string; runsRequired: number; icon: string; description: string; gear: string; perks?: string }) => Promise<unknown>;
+  onCreateMilestone?: (data: { name: string; measure?: 'runs' | 'miles'; target: number; icon: string; description: string; gear: string; perks?: string }) => Promise<unknown>;
   onDeleteMilestone?: (id: string) => Promise<void>;
   currentUser?: UserProfile;
   badges?: Badge[];
@@ -191,7 +191,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = (props) => {
           }`}
         >
           <Key className="w-4 h-4 text-amber-500" />
-          <span>Meetups &amp; Code Words</span>
+          <span>Check-In Events &amp; Code Words</span>
         </button>
 
         <button
@@ -261,7 +261,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = (props) => {
       </div>
 
       {/* ============================================================== */}
-      {/* TAB 1: MEETUPS & CODE WORDS */}
+      {/* TAB 1: CHECK-IN EVENTS & CODE WORDS */}
       {/* ============================================================== */}
       {adminTab === 'events' && <EventsTab {...props} />}
 

@@ -1,10 +1,9 @@
 import React from 'react';
-import { Calendar, Map, Trophy, Shield, Gift, Sparkles } from 'lucide-react';
+import { Calendar, Map, Trophy, Gift, Sparkles } from 'lucide-react';
 
 interface MobileBottomNavProps {
   activeTab: 'runs' | 'routes' | 'milestones' | 'leaderboard' | 'admin';
   setActiveTab: (tab: 'runs' | 'routes' | 'milestones' | 'leaderboard' | 'admin') => void;
-  isAdmin: boolean;
   isSignedIn?: boolean;
   onQuickCheckIn: () => void;
 }
@@ -12,7 +11,6 @@ interface MobileBottomNavProps {
 export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
   activeTab,
   setActiveTab,
-  isAdmin,
   isSignedIn = false,
   onQuickCheckIn,
 }) => {
@@ -58,17 +56,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
           <span>Milestones</span>
         </button>
 
-        {isAdmin ? (
-          <button
-            onClick={() => setActiveTab('admin')}
-            className={`flex flex-col items-center py-1 px-1.5 rounded-lg transition ${
-              activeTab === 'admin' ? 'text-woodland-900 font-bold' : 'hover:text-stone-900'
-            }`}
-          >
-            <Shield className="w-5 h-5 mb-0.5 text-woodland-600" />
-            <span>Admin</span>
-          </button>
-        ) : isSignedIn ? (
+        {isSignedIn ? (
           <button
             onClick={() => setActiveTab('leaderboard')}
             className={`flex flex-col items-center py-1 px-1.5 rounded-lg transition ${

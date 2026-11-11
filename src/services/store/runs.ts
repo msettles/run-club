@@ -120,7 +120,7 @@ export function createRunOps(ctx: StoreState & ReturnType<typeof createLegacyOps
       checkInClosesAt: win.closesAt.toISOString(),
     };
 
-    assertDocumentFitsFirestore(event, 'This meetup');
+    assertDocumentFitsFirestore(event, 'This run');
     if (isFirebaseConfigured && db) {
       const key = await codeKeyFor(run.date, word);
       if ((await getDoc(doc(db, 'meetup_codes', key))).exists()) throw duplicateError();
