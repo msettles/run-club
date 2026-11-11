@@ -94,7 +94,7 @@ const toInt = (v: string | undefined): number => {
   return Number.isFinite(n) && n > 0 ? n : 0;
 };
 
-const toIsoDate = (v: string): string | null => {
+export const toIsoDate = (v: string): string | null => {
   const s = v.trim();
   if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
   const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/); // M/D/YYYY from spreadsheets
