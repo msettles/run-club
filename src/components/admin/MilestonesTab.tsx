@@ -9,13 +9,18 @@ import {
   Clock,
 } from 'lucide-react';
 import type { AdminDashboardProps } from '../AdminDashboard';
+import { runnerLookup } from '../../utils/runnerLookup';
 
 export const MilestonesTab: React.FC<AdminDashboardProps> = (props) => {
   const {
     milestoneAlerts = [],
+    users = [],
     currentUser,
     onMarkMilestoneFulfilled,
   } = props;
+  // Names and sizes follow the runner's current profile, not the copy saved with the alert.
+  const runner = runnerLookup(users);
+  const currentShirtSize = (alert: { userEmail: string; shirtSize: string }) => runner.shirtSize(alert.userEmail, alert.shirtSize);
   const pendingMilestones = milestoneAlerts.filter((a) => !a.fulfilled);
   const fulfilledMilestones = milestoneAlerts.filter((a) => a.fulfilled);
 
@@ -106,7 +111,7 @@ export const MilestonesTab: React.FC<AdminDashboardProps> = (props) => {
                         {alert.milestoneName} ({alert.milestoneRuns} Runs)
                       </div>
                       <h4 className="text-lg font-black text-stone-900 font-display">
-                        {alert.runnerName}
+                        {runner.name(alert.userEmail, alert.runnerName)}
                       </h4>
                       <span className="text-xs text-stone-500 font-mono">
                         {alert.userEmail}
@@ -128,7 +133,7 @@ export const MilestonesTab: React.FC<AdminDashboardProps> = (props) => {
                         <span>Shirt Size on File:</span>
                       </span>
                       <span className="px-3 py-1 bg-amber-200 text-stone-950 font-black text-xs rounded-lg border border-amber-400 shadow-2xs font-mono">
-                        {alert.shirtSize}
+                        {currentShirtSize(alert)}
                       </span>
                     </div>
 
@@ -196,7 +201,7 @@ export const MilestonesTab: React.FC<AdminDashboardProps> = (props) => {
               <tbody className="divide-y divide-stone-100 font-sans">
                 {fulfilledMilestones.map((f) => (
                   <tr key={f.id} className="hover:bg-stone-50/70 transition">
-                    <td className="py-2.5 px-3 font-bold text-stone-900">{f.runnerName}</td>
+                    <td className="py-2.5 px-3 font-bold text-stone-900">{runner.name(f.userEmail, f.runnerName)}</td>
                     <td className="py-2.5 px-3 font-semibold text-amber-800">{f.milestoneName}</td>
                     <td className="py-2.5 px-3 text-stone-700">{f.reward}</td>
                     <td className="py-2.5 px-3 font-mono font-bold">{f.shirtSize}</td>

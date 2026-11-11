@@ -204,6 +204,7 @@ export function useClubStore({ loadLeaderboard = true } = {}) {
     clearPrivateData: store.clearPrivateData,
     switchCurrentUser: store.switchCurrentUser,
     registerUser: store.registerUser,
+    updateOwnProfile: store.updateOwnProfile,
 
     // Runners
     setUserRole: store.setUserRole,

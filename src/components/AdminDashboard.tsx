@@ -21,6 +21,7 @@ import { EventsTab } from './admin/EventsTab';
 import { BadgesTab } from './admin/BadgesTab';
 import { CheckinsTab } from './admin/CheckinsTab';
 import { MilestonesTab } from './admin/MilestonesTab';
+import { runnerLookup } from '../utils/runnerLookup';
 import { MembersTab } from './admin/MembersTab';
 import { NotificationsTab } from './admin/NotificationsTab';
 import { 
@@ -158,7 +159,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = (props) => {
                 <span className="px-2 py-0.5 bg-stone-950 text-amber-300 rounded-full text-[10px] font-bold">Action Needed</span>
               </div>
               <p className="text-xs font-semibold text-stone-900 mt-0.5">
-                {pendingMilestones.map((m) => `${m.runnerName} (${m.milestoneName} • Size: ${m.shirtSize})`).join(' | ')}
+                {pendingMilestones.map((m) => `${runnerLookup(users).name(m.userEmail, m.runnerName)} (${m.milestoneName} • Size: ${runnerLookup(users).shirtSize(m.userEmail, m.shirtSize)})`).join(' | ')}
               </p>
             </div>
           </div>

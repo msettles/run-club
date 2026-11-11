@@ -9,6 +9,7 @@ import {
   collection,
   getDocs,
   updateDoc,
+  deleteField,
   doc,
   query,
   where,
@@ -52,6 +53,7 @@ export function createMemberOps(ctx: StoreState & ReturnType<typeof createLegacy
       city?: string;
       zipCode?: string;
       preferredPace?: string;
+      emergencyContact?: { name: string; phone: string };
     },
     claimedLegacyIds: string[] = []
   ): Promise<UserProfile> => {
@@ -77,6 +79,9 @@ export function createMemberOps(ctx: StoreState & ReturnType<typeof createLegacy
       city: profileData.city || 'Woodland',
       zipCode: profileData.zipCode || '95695',
       preferredPace: profileData.preferredPace,
+      emergencyContact: profileData.emergencyContact?.name?.trim() || profileData.emergencyContact?.phone?.trim()
+        ? { name: profileData.emergencyContact.name.trim(), phone: profileData.emergencyContact.phone.trim() }
+        : undefined,
       pre2021Runs: 0,
       legacyEventRuns: 0,
       loggedRuns: 0,
@@ -228,11 +233,80 @@ export function createMemberOps(ctx: StoreState & ReturnType<typeof createLegacy
     setUsers((prev) => prev.map((u) => (u.email.toLowerCase() === cleanEmail ? { ...u, role } : u)));
   };
 
+  /**
+   * The signed-in runner edits their own details: name, shirt size, birthday, city, zip
+   * and preferred pace. Run totals, legacy claims and role are never touched here.
+   * The name and pace are shown on the public leaderboard, so that row is updated in the same batch
+   * (the rules require the public name to mirror the profile).
+   */
+  const updateOwnProfile = async (changes: {
+    firstName: string;
+    lastName: string;
+    shirtSize: string;
+    birthday?: string;
+    city?: string;
+    zipCode?: string;
+    preferredPace?: string;
+    emergencyContact?: { name: string; phone: string };
+  }): Promise<UserProfile> => {
+    const email = currentUserEmail.toLowerCase();
+    const existing = users.find((u) => u.email.toLowerCase() === email);
+    if (!email || !existing) throw new Error('Sign in to edit your profile.');
+    const firstName = changes.firstName.trim();
+    const lastName = changes.lastName.trim();
+    if (!firstName || !lastName) throw new Error('First and last name are required.');
+    const session = ctx.privateSessionEpoch?.current;
+    const birthday = changes.birthday || undefined;
+    const next: UserProfile = {
+      ...existing,
+      firstName,
+      lastName,
+      displayName: `${firstName} ${lastName}`,
+      shirtSize: changes.shirtSize || existing.shirtSize,
+      birthday,
+      age: birthday ? calculateAge(birthday) : undefined,
+      city: changes.city?.trim() || undefined,
+      zipCode: changes.zipCode?.trim() || undefined,
+      preferredPace: changes.preferredPace || existing.preferredPace,
+      emergencyContact: changes.emergencyContact && (changes.emergencyContact.name.trim() || changes.emergencyContact.phone.trim())
+        ? { name: changes.emergencyContact.name.trim(), phone: changes.emergencyContact.phone.trim() }
+        : undefined,
+    };
+    const memberKey = await memberKeyFor(email);
+    if (isFirebaseConfigured && db) {
+      // Only these fields are written, so a stale copy here can't overwrite run stats.
+      const field = <T,>(v: T | undefined) => (v === undefined ? deleteField() : v);
+      const batch = writeBatch(db);
+      batch.update(doc(db, 'users', email), {
+        firstName: next.firstName,
+        lastName: next.lastName,
+        displayName: next.displayName,
+        shirtSize: next.shirtSize,
+        birthday: field(next.birthday),
+        age: field(next.age),
+        city: field(next.city),
+        zipCode: field(next.zipCode),
+        preferredPace: field(next.preferredPace),
+        emergencyContact: field(next.emergencyContact),
+      });
+      batch.update(doc(db, 'members', memberKey), {
+        name: next.displayName,
+        favoritePace: next.preferredPace || '9:00 min/mi',
+      });
+      await batch.commit();
+    }
+    if (session !== ctx.privateSessionEpoch?.current) throw new Error('The signed-in account changed. Sign in again to continue.');
+    if (ctx.staffSearchCache) ctx.staffSearchCache.current = { expires: 0 };
+    setUsers((prev) => prev.map((u) => (u.email.toLowerCase() === email ? next : u)));
+    setMembers((prev) => prev.map((m) => (m.id === memberKey ? { ...m, name: next.displayName, favoritePace: next.preferredPace || m.favoritePace } : m)));
+    return next;
+  };
+
   /** Set (or clear, with '') whose profile this app is showing: the signed-in account. */
   const switchCurrentUser = (email: string) => {
     setCurrentUserEmail(email.toLowerCase());
   };
 
 
-  return { registerUser, adminDeleteRunner, setUserRole, switchCurrentUser };
+  return { registerUser, updateOwnProfile, adminDeleteRunner, setUserRole, switchCurrentUser };
 }

@@ -20,6 +20,7 @@ import {
   Flame,
   ChevronDown,
   Gift,
+  Pencil,
   UserPlus
 } from 'lucide-react';
 
@@ -37,6 +38,7 @@ interface NavbarProps {
   onOpenAuthModal: () => void;
   onOpenRegister?: () => void;
   onOpenVersionModal?: () => void;
+  onEditProfile?: () => void;
   onLogout: () => void;
 }
 
@@ -50,6 +52,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenNewRun,
   onOpenUploadGpx,
   onToggleNotifications,
+  onEditProfile,
   onOpenAuthModal,
   onOpenRegister,
   onOpenVersionModal,
@@ -284,6 +287,18 @@ export const Navbar: React.FC<NavbarProps> = ({
                         >
                           <Shield className="w-3.5 h-3.5 text-woodland-600" />
                           <span>Admin Portal</span>
+                        </button>
+                      )}
+                      {onEditProfile && (
+                        <button
+                          onClick={() => {
+                            setShowProfileMenu(false);
+                            onEditProfile();
+                          }}
+                          className="w-full text-left px-2.5 py-1.5 text-xs font-semibold text-stone-700 hover:bg-stone-100 rounded-lg flex items-center gap-2 cursor-pointer"
+                        >
+                          <Pencil className="w-3.5 h-3.5 text-woodland-600" />
+                          <span>Edit profile</span>
                         </button>
                       )}
                       <NotificationsToggle email={currentUser.email} />
