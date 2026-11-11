@@ -15,6 +15,8 @@ import { createCheckInOps } from './store/checkIn';
 import { createEventOps } from './store/events';
 import { createBadgeOps } from './store/badges';
 import { createMilestoneOps } from './store/milestones';
+import { createPartnerOps } from './store/partner';
+import { DEFAULT_PARTNER, type ClubPartner } from '../data/partner';
 import { sortMilestones } from '../utils/milestones';
 import { createRunOps } from './store/runs';
 import { createAnnouncementOps } from './store/announcements';
@@ -33,6 +35,7 @@ export function useClubStore({ loadLeaderboard = true } = {}) {
   const {
     setBadges,
     setMilestones,
+    setPartner,
     setSpecialEvents,
     setNotifications,
     setIsSyncing,
@@ -49,7 +52,7 @@ export function useClubStore({ loadLeaderboard = true } = {}) {
   const c3 = Object.assign(c2, createMemberOps(c2));
   const c4 = Object.assign(c3, createCheckInOps(c3));
   const c5 = Object.assign(c4, createEventOps(c4));
-  const c6 = Object.assign(c5, createBadgeOps(c5), createMilestoneOps(c5));
+  const c6 = Object.assign(c5, createBadgeOps(c5), createMilestoneOps(c5), createPartnerOps(c5));
   const c7 = Object.assign(c6, createRunOps(c6));
   const store = Object.assign(c7, createAnnouncementOps(c7));
 
@@ -67,6 +70,8 @@ export function useClubStore({ loadLeaderboard = true } = {}) {
     const handlers = {
       badges: (docs: DocumentData[]) => setBadges(withCatalog(docs as Badge[], INITIAL_BADGES).filter(isBadge)),
       milestones: (docs: DocumentData[]) => setMilestones(sortMilestones(withCatalog(docs as MilestoneReward[], CLUB_MILESTONES))),
+      // Club settings (public): the partner's name and links. Anything not saved falls back to the built-in default.
+      settings: (docs: DocumentData[]) => { const saved = docs.find((d) => d.id === 'partner'); setPartner(saved ? { ...DEFAULT_PARTNER, ...(saved as Partial<ClubPartner>) } : DEFAULT_PARTNER); },
       special_events: (docs: DocumentData[]) => setSpecialEvents(withCatalog(docs as SpecialEventDefinition[], INITIAL_SPECIAL_EVENTS)),
 
     };
@@ -80,9 +85,9 @@ export function useClubStore({ loadLeaderboard = true } = {}) {
         setIsSyncing(loaded.size + errors.size < Object.keys(handlers).length);
       }, (err) => {
         console.warn(`${name} subscription failed:`, err);
-        // Milestones fall back to the built-in list, so a failed load is not worth a warning banner
+        // Milestones and the partner fall back to built-in defaults, so a failed load is not worth a warning banner
         // (it happens when the app is newer than the deployed rules).
-        if (name === 'milestones') { loaded.add(name); setIsSyncing(loaded.size + errors.size < Object.keys(handlers).length); return; }
+        if (name === 'milestones' || name === 'settings') { loaded.add(name); setIsSyncing(loaded.size + errors.size < Object.keys(handlers).length); return; }
         errors.add(name);
         setSyncError(`Club data could not be loaded (${[...errors].join(', ')}). Please retry.`);
         if (name === 'badges') setBadgeCatalogLoaded(false);
@@ -180,6 +185,8 @@ export function useClubStore({ loadLeaderboard = true } = {}) {
     leaderboardLoaded: store.leaderboardLoaded, leaderboardError: store.leaderboardError,
     badges: store.badges,
     milestones: store.milestones,
+    partner: store.partner,
+    savePartner: store.savePartner,
     createMilestone: store.createMilestone,
     deleteMilestone: store.deleteMilestone,
     notifications: store.notifications,

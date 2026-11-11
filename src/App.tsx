@@ -15,6 +15,8 @@ import { StandingsPage } from './components/StandingsPage';
 import { SubscribeMenu } from './components/SubscribeMenu';
 import { EditProfileModal } from './components/EditProfileModal';
 import { RunRosterModal } from './components/RunRosterModal';
+import { PartnerThanks } from './components/PartnerThanks';
+import { safeUrl } from './data/partner';
 import { memberKeyFor } from './utils/memberKey';
 import { alertHasGear } from './utils/milestones';
 import { InstallPwaBanner } from './components/InstallPwaBanner';
@@ -71,6 +73,8 @@ export function App() {
     milestones,
     createMilestone,
     deleteMilestone,
+    partner,
+    savePartner,
     notifications,
     currentMember,
     toggleRSVP,
@@ -607,7 +611,12 @@ export function App() {
                 <div className="max-w-2xl">
                   <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-woodland-500/20 text-woodland-200 border border-woodland-400/30 text-xs font-semibold mb-3">
                     <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-                    <span>Wednesday Night Runs • Blue Note Brewing Co.</span>
+                    <span>
+                      Wednesday Night Runs •{' '}
+                      {safeUrl(partner.website) ? (
+                        <a href={safeUrl(partner.website)} target="_blank" rel="noopener noreferrer" className="underline decoration-woodland-300/60 underline-offset-2 hover:text-white">{partner.name}</a>
+                      ) : partner.name}
+                    </span>
                   </div>
                   <h1 className="text-3xl sm:text-5xl font-display font-extrabold tracking-wide uppercase leading-tight">
                     Woodland Woodchuckers
@@ -877,6 +886,7 @@ export function App() {
             currentUser={currentUser}
             badges={badges}
             milestones={milestones}
+            partner={partner}
             isSignedIn={isUserLoggedIn}
             onJoin={handleOpenRegister}
           />
@@ -919,6 +929,8 @@ export function App() {
               onMarkMilestoneFulfilled={markMilestoneFulfilled}
               currentUser={currentUser}
               specialEvents={specialEvents}
+              partner={partner}
+              onSavePartner={savePartner}
               milestones={milestones}
               onCreateMilestone={createMilestone}
               onDeleteMilestone={deleteMilestone}
@@ -947,13 +959,23 @@ export function App() {
         onQuickCheckIn={handleQuickCheckIn}
       />
 
+      {/* Thank-you to the club's home-base partner, on every page */}
+      <div className="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 mt-10">
+        <PartnerThanks partner={partner} />
+      </div>
+
       {/* Footer (Mobile & Desktop with bottom navigation spacing) */}
-      <footer className="bg-white border-t border-stone-200 py-6 mt-12 pb-24 md:pb-6">
+      <footer className="bg-white border-t border-stone-200 py-6 mt-6 pb-24 md:pb-6">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-stone-500 text-center sm:text-left">
           <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
             <img src="/Woodchucker2026.png" alt="2026 Mascot" className="w-5 h-5 object-contain" />
             <span className="font-semibold text-stone-800">Woodland Woodchuckers Run Club</span>
-            <span>• Blue Note Brewing Co.</span>
+            <span>
+              •{' '}
+              {safeUrl(partner.website) ? (
+                <a href={safeUrl(partner.website)} target="_blank" rel="noopener noreferrer" className="underline hover:text-stone-800">{partner.name}</a>
+              ) : partner.name}
+            </span>
             <button
               type="button"
               onClick={() => setIsVersionModalOpen(true)}

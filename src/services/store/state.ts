@@ -18,6 +18,7 @@ import {
   type LegacyEvent,
 } from '../../utils/legacy';
 import { INITIAL_BADGES, INITIAL_SPECIAL_EVENTS, CLUB_MILESTONES, GUEST_USER } from '../../data/catalog';
+import { DEFAULT_PARTNER, type ClubPartner } from '../../data/partner';
 import { createRouteCatalogClient, RouteDetailsCache } from '../routeCatalog';
 import type { DocumentData, QueryDocumentSnapshot } from 'firebase/firestore';
 import { clubYmd } from '../../utils/dateUtils';
@@ -106,6 +107,8 @@ export function useStoreState() {
   // The built-in badge catalog is part of the app; admin-made badges come from Firestore.
   // Milestones (gear tiers) and badges are separate: a milestone is never also a badge.
   const [badges, setBadges] = useState<Badge[]>(() => (LOCAL_MODE ? loadMerged(STORAGE_KEYS.BADGES, INITIAL_BADGES, idOf).filter(isBadge) : INITIAL_BADGES));
+  // The club's home-base partner; admins can edit it (settings/partner), the app ships with a default.
+  const [partner, setPartner] = useState<ClubPartner>(DEFAULT_PARTNER);
   const [milestones, setMilestones] = useState<MilestoneReward[]>(() => (LOCAL_MODE ? loadMerged(STORAGE_KEYS.MILESTONES, CLUB_MILESTONES, idOf) : CLUB_MILESTONES));
   const [specialEvents, setSpecialEvents] = useState<SpecialEventDefinition[]>(() =>
     LOCAL_MODE ? loadMerged(STORAGE_KEYS.SPECIAL_EVENTS, INITIAL_SPECIAL_EVENTS, idOf) : INITIAL_SPECIAL_EVENTS
@@ -278,6 +281,8 @@ export function useStoreState() {
     setBadges,
     milestones,
     setMilestones,
+    partner,
+    setPartner,
     specialEvents,
     setSpecialEvents,
     notifications,

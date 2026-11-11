@@ -22,6 +22,8 @@ import { EventsTab } from './admin/EventsTab';
 import { BadgesTab } from './admin/BadgesTab';
 import { CheckinsTab } from './admin/CheckinsTab';
 import { MilestonesTab } from './admin/MilestonesTab';
+import { PartnerTab } from './admin/PartnerTab';
+import type { ClubPartner } from '../data/partner';
 import { runnerLookup } from '../utils/runnerLookup';
 import { alertHasGear } from '../utils/milestones';
 import { MembersTab } from './admin/MembersTab';
@@ -63,6 +65,9 @@ export interface AdminDashboardProps {
   users: UserProfile[];
   legacyMembers: LegacyMember[];
   milestoneAlerts?: MilestoneAlert[];
+  /** The club's home-base partner (name, links, thank-you line); admins can edit it. */
+  partner?: ClubPartner;
+  onSavePartner?: (partner: ClubPartner) => Promise<unknown>;
   /** Club milestones (gear tiers); admins can add their own. Separate from badges. */
   milestones?: MilestoneReward[];
   onCreateMilestone?: (data: { name: string; measure?: 'runs' | 'miles'; target: number; icon: string; description: string; gear: string; perks?: string }) => Promise<unknown>;
@@ -107,7 +112,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = (props) => {
     milestoneAlerts = [],
     badges = INITIAL_BADGES,
   } = props;
-  const [adminTab, setAdminTab] = useState<'events' | 'badges' | 'checkins' | 'milestones' | 'members' | 'notifications'>('events');
+  const [adminTab, setAdminTab] = useState<'events' | 'badges' | 'checkins' | 'milestones' | 'members' | 'notifications' | 'partner'>('events');
 
   // Quick stats
   const totalCheckinsLogged = checkins.length;
@@ -258,6 +263,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = (props) => {
           <Bell className="w-4 h-4 text-indigo-500" />
           <span>Push Alerts</span>
         </button>
+
+        <button
+          onClick={() => setAdminTab('partner')}
+          className={`flex items-center gap-2 px-4 py-2.5 font-bold text-xs rounded-t-xl transition ${
+            adminTab === 'partner'
+              ? 'bg-white text-stone-900 border-t-2 border-amber-500 shadow-xs'
+              : 'text-stone-500 hover:text-stone-800'
+          }`}
+        >
+          <span aria-hidden="true">🍺</span>
+          <span>Partner</span>
+        </button>
       </div>
 
       {/* ============================================================== */}
@@ -285,6 +302,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = (props) => {
       {/* TAB 4: PUSH ANNOUNCEMENTS */}
       {/* ============================================================== */}
       {adminTab === 'notifications' && <NotificationsTab {...props} />}
+      {adminTab === 'partner' && <PartnerTab {...props} />}
     </div>
   );
 };

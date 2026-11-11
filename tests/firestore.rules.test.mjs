@@ -835,6 +835,19 @@ test('milestones can be earned by miles; ids must match the target and measure',
   await assertSucceeds(setDoc(doc(admin, 'milestones', 'milestone-25'), { ...base, id: 'milestone-25', runsRequired: 25 })); // runs stays the default
 });
 
+test('the partner setting is admin-only, https links only, and nothing else sneaks in', async () => {
+  const good = { name: 'Blue Note Brewing Company', website: 'https://example.com', instagram: 'https://instagram.com/x', address: '750 Dead Cat Alley', thanks: 'Thank you!' };
+  const admin = ctx(BOOTSTRAP);
+  await assertSucceeds(setDoc(doc(admin, 'settings', 'partner'), good));
+  await assertFails(setDoc(doc(admin, 'settings', 'partner'), { ...good, website: 'http://example.com' }));
+  await assertFails(setDoc(doc(admin, 'settings', 'partner'), { ...good, facebook: 'javascript:alert(1)' }));
+  await assertFails(setDoc(doc(admin, 'settings', 'partner'), { ...good, extra: 'nope' }));
+  await assertFails(setDoc(doc(admin, 'settings', 'partner'), { website: 'https://example.com' })); // name is required
+  await assertFails(setDoc(doc(ctx(ORGANIZER), 'settings', 'partner'), good));
+  await assertSucceeds(getDoc(doc(env.unauthenticatedContext().firestore(), 'settings', 'partner'))); // public to read
+  await assertSucceeds(setDoc(doc(admin, 'settings', 'other'), { anything: true })); // other settings are unchanged
+});
+
 // ---- Push devices ----
 
 test('runners record their own push device; only admins can read the list', async () => {
