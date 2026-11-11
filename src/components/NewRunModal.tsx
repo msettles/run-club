@@ -28,7 +28,7 @@ export const NewRunModal: React.FC<NewRunModalProps> = ({
   const [title, setTitle] = useState('');
   const [specialEvent, setSpecialEvent] = useState<SpecialEventType>('none');
   const [date, setDate] = useState(() => nextClubRunDate());
-  const [time, setTime] = useState('06:00 PM');
+  const [time, setTime] = useState('06:30 PM');
   const [locationName, setLocationName] = useState('Blue Note Brewing Company');
   const [address, setAddress] = useState('Woodland, CA');
   const [routeChoices, setRouteChoices] = useState<RunRouteChoice[]>(() => defaultChoices(routes));

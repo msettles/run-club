@@ -128,6 +128,6 @@ export function nextClubRunDate(now = new Date()): string {
   const day = new Date(Date.UTC(+value.year, +value.month - 1, +value.day));
   day.setUTCDate(day.getUTCDate() + (3 - day.getUTCDay() + 7) % 7);
   let date = day.toISOString().slice(0, 10);
-  if (eventStart(date, '18:00') <= now) { day.setUTCDate(day.getUTCDate() + 7); date = day.toISOString().slice(0, 10); }
+  if (eventStart(date, '18:30') <= now) { day.setUTCDate(day.getUTCDate() + 7); date = day.toISOString().slice(0, 10); }
   return date;
 }

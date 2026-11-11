@@ -18,3 +18,14 @@ it('folds Unicode text by UTF-8 bytes without corrupting the title', () => {
   expect(ics.replace(/\r\n /g, '')).toContain(`SUMMARY:Woodchuckers: ${title}`);
   expect(ics).toContain('DTSTART:20260709T010000Z');
 });
+
+it('builds a subscribable feed with one event per run and refresh hints', async () => {
+  const { buildCalendarFeed } = await import('./calendar');
+  const run = (id: string, date: string) => ({ id, title: 'Wednesday Run', date, time: '06:30 PM', description: '', locationName: 'Blue Note', address: '', surface: 'Pavement' as const, distanceMiles: 3.1 });
+  const ics = buildCalendarFeed([run('a', '2026-11-11'), run('b', '2026-11-18')], new Date('2026-11-09T12:00:00Z'));
+  expect(ics.match(/BEGIN:VEVENT/g)).toHaveLength(2);
+  expect(ics).toContain('X-WR-CALNAME:Woodland Woodchuckers Runs');
+  expect(ics).toContain('DTSTART:20261112T023000Z');
+  expect(ics).toContain('REFRESH-INTERVAL;VALUE=DURATION:PT6H');
+  expect(ics.endsWith('END:VCALENDAR\r\n')).toBe(true);
+});

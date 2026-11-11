@@ -49,3 +49,5 @@ firebase-debug.log
 # Browser regression artifacts
 /playwright-report/
 /test-results/
+functions/lib
+functions/node_modules
