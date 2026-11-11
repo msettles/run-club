@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { buildImportCommit, type ImportCommit } from '../../utils/importCommit';
+import type { ClubImportResult } from '../../services/store/clubImport';
 import {
   IMPORT_EXAMPLES, IMPORT_FILES, detectImportFile, planCheckinsImport, planProfilesImport, planRunsImport,
   type CheckinsPlan, type ImportFileKind, type ImportIssue, type ProfilesPlan, type RunsPlan,
@@ -24,7 +26,104 @@ const download = (filename: string, csv: string) => {
 const requiredLabel = (r: 'one-of' | 'always' | 'no') => (r === 'one-of' ? 'Email or Name' : r === 'always' ? 'Required' : 'Optional');
 
 /** Admin: the import formats (three files). Download the examples, then check a file before anything is imported. */
-export const UnifiedImportPanel: React.FC<{ specialEvents?: { id: string; name: string }[] }> = ({ specialEvents }) => {
+interface PanelProps {
+  specialEvents?: { id: string; name: string }[];
+  onImportClubData?: (commit: ImportCommit, onProgress?: (msg: string) => void) => Promise<ClubImportResult>;
+  onRecomputeRewards?: (emails?: string[], onProgress?: (msg: string) => void) => Promise<{ updated: number; failed: { email: string; reason: string }[] }>;
+}
+
+/** Admin: import the three files into the club, and recompute everyone's rewards from their check-ins. */
+const ImportRunner: React.FC<PanelProps> = ({ specialEvents, onImportClubData, onRecomputeRewards }) => {
+  const [files, setFiles] = useState<Record<ImportFileKind, File | null>>({ profiles: null, runs: null, checkins: null });
+  const [review, setReview] = useState<{ commit: ImportCommit; errors: number; notes: string[] } | null>(null);
+  const [confirmed, setConfirmed] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState('');
+  const [done, setDone] = useState('');
+  const [problem, setProblem] = useState('');
+
+  const reviewFiles = async () => {
+    setReview(null); setConfirmed(false); setDone(''); setProblem('');
+    try {
+      const text = async (f: File | null) => (f ? f.text() : '');
+      const [pText, rText, cText] = await Promise.all([text(files.profiles), text(files.runs), text(files.checkins)]);
+      const profiles = pText ? planProfilesImport(pText) : undefined;
+      const runs = rText ? planRunsImport(rText, new Date(), specialEvents) : undefined;
+      const checkins = cText ? planCheckinsImport(cText, runs?.runs || []) : undefined;
+      const errors = [profiles, runs, checkins].reduce((n, p) => n + (p ? p.issues.filter((i) => i.level === 'error').length : 0), 0);
+      const notes = [profiles, runs, checkins].flatMap((p) => (p ? p.issues.filter((i) => i.level === 'warning').map((i) => i.message) : []));
+      setReview({ commit: buildImportCommit(profiles, runs, checkins), errors, notes });
+    } catch (error) { setProblem(error instanceof Error ? error.message : 'Could not read the files.'); }
+  };
+
+  const run = async (job: () => Promise<string>) => {
+    setBusy(true); setDone(''); setProblem(''); setProgress('');
+    try { setDone(await job()); }
+    catch (error) { setProblem(error instanceof Error ? error.message : 'It did not finish.'); }
+    finally { setBusy(false); setProgress(''); }
+  };
+
+  const doImport = () => run(async () => {
+    const r = await onImportClubData!(review!.commit, setProgress);
+    const part = (label: string, made: number, changed: number, same: number) => `${label}: ${made} new, ${changed} updated, ${same} unchanged`;
+    return [
+      part('Members', r.membersCreated, r.membersUpdated, r.membersUnchanged),
+      part('Runs', r.runsWritten, r.runsUpdated, r.runsUnchanged + r.runsLocked),
+      part('Check-ins', r.checkinsWritten, r.checkinsUpdated, r.checkinsUnchanged),
+      part('Past names', r.aliasesHeld, r.aliasesUpdated, r.aliasesUnchanged),
+    ].join('. ') + `. Rewards recomputed for ${r.rewards.updated} members${r.rewards.failed ? `; ${r.rewards.failed} need another try (use Recompute rewards)` : ''}.${r.codeWordsSkipped ? ` ${r.codeWordsSkipped} repeated code words were left off.` : ''}${r.runsLocked ? ` ${r.runsLocked} runs made in the app were left alone.` : ''}${r.aliasesClaimedUpdated ? ` ${r.aliasesClaimedUpdated} updated names were already claimed; their runners' totals were adjusted.` : ''} Reload the app to see everything.`;
+  });
+  const doRecompute = () => run(async () => {
+    const r = await onRecomputeRewards!(undefined, setProgress);
+    return `Rewards recomputed for ${r.updated} members${r.failed.length ? `; ${r.failed.length} could not be updated (${r.failed.slice(0, 3).map((f) => f.reason).join(' ')})` : ''}.`;
+  });
+
+  const c = review?.commit.stats;
+  return (
+    <div className="space-y-2 rounded-lg border border-woodland-200 bg-white p-3">
+      <p className="font-bold text-stone-900">Import into the club</p>
+      <p className="text-stone-600">
+        Choose any of the three files (run history first if you have it), review what would happen, then import. Importing the same file again changes nothing; an edited file updates what you edited. Nothing is ever deleted.
+        People with an email get a profile; people without one are held as past names until they are claimed. Totals, badges, milestones and streaks are worked out from the check-ins afterwards.
+      </p>
+      {(['profiles', 'runs', 'checkins'] as ImportFileKind[]).map((k) => (
+        <label key={k} className="block text-[11px] text-stone-600">
+          {IMPORT_FILES[k].title} file
+          <input type="file" accept=".csv,text/csv" aria-label={`${IMPORT_FILES[k].title} file to import`} disabled={busy}
+            onChange={(e) => { setFiles((prev) => ({ ...prev, [k]: e.target.files?.[0] || null })); setReview(null); }} className="block w-full text-[11px] mt-0.5" />
+        </label>
+      ))}
+      <button type="button" onClick={() => { void reviewFiles(); }} disabled={busy || !Object.values(files).some(Boolean)} className="px-3 py-1.5 bg-stone-800 text-white font-bold rounded-lg disabled:opacity-40 cursor-pointer">Review import</button>
+      {c && review && (
+        <div className="space-y-1" aria-label="Import review">
+          <ul className="list-disc pl-5">
+            <li><strong>{c.members}</strong> members (new ones get a profile; existing ones are updated only where the file gives a different value).</li>
+            <li><strong>{c.runs}</strong> runs{c.placeholderRuns ? ` (${c.placeholderRuns} made for check-in dates the run history does not list)` : ''}.</li>
+            <li><strong>{c.checkins}</strong> check-ins for members.</li>
+            <li><strong>{c.aliases}</strong> past names held to claim, with <strong>{c.heldSignIns}</strong> dated sign-ins. No profile is made for them.</li>
+          </ul>
+          {review.errors > 0 && <p role="alert" className="font-semibold text-red-700">{review.errors} problem{review.errors === 1 ? '' : 's'} in the files. Fix them with the checker above first.</p>}
+          {review.notes.length > 0 && <p className="text-amber-900">{review.notes.length} warning{review.notes.length === 1 ? '' : 's'} (see the checker above for details).</p>}
+          <label className="flex items-start gap-2 text-stone-800">
+            <input type="checkbox" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} disabled={busy || review.errors > 0} className="mt-0.5" />
+            <span>I have reviewed this. Write it to the club database.</span>
+          </label>
+          <button type="button" onClick={() => { void doImport(); }} disabled={busy || !confirmed || review.errors > 0 || !onImportClubData} className="px-3 py-1.5 bg-woodland-700 hover:bg-woodland-800 text-white font-bold rounded-lg disabled:opacity-40 cursor-pointer">Import</button>
+        </div>
+      )}
+      <div className="border-t border-stone-200 pt-2 space-y-1">
+        <p className="font-semibold text-stone-900">Recompute rewards</p>
+        <p className="text-stone-600">Rebuilds every member&apos;s totals, badges, streaks and reward proofs from their check-ins. Use it after changing the badge catalog. It does not create gear alerts.</p>
+        <button type="button" onClick={() => { void doRecompute(); }} disabled={busy || !onRecomputeRewards} className="px-3 py-1.5 bg-white border border-stone-300 text-stone-800 font-bold rounded-lg hover:bg-stone-100 disabled:opacity-40 cursor-pointer">Recompute rewards for everyone</button>
+      </div>
+      {progress && <p role="status">{progress}</p>}
+      {done && <p role="status" className="font-semibold text-emerald-800">{done}</p>}
+      {problem && <p role="alert" className="font-semibold text-red-700">{problem}</p>}
+    </div>
+  );
+};
+
+export const UnifiedImportPanel: React.FC<PanelProps> = ({ specialEvents, onImportClubData, onRecomputeRewards }) => {
   const [shown, setShown] = useState<ImportFileKind>('profiles');
   const [result, setResult] = useState<Result | null>(null);
   const [message, setMessage] = useState('');
@@ -171,10 +270,12 @@ export const UnifiedImportPanel: React.FC<{ specialEvents?: { id: string; name: 
                   {errors.length + warnings.length > 25 && <li className="text-stone-500">…and {errors.length + warnings.length - 25} more.</li>}
                 </ul>
               )}
-              <p className="text-stone-500">This only checks the file. Importing in this format isn&apos;t switched on yet.</p>
+              <p className="text-stone-500">This only checks the file. To import, use &ldquo;Import into the club&rdquo; below.</p>
             </div>
           )}
         </div>
+
+        <ImportRunner specialEvents={specialEvents} onImportClubData={onImportClubData} onRecomputeRewards={onRecomputeRewards} />
       </div>
     </details>
   );

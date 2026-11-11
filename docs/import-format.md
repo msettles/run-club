@@ -51,6 +51,42 @@ The code word lives here, not in the check-ins. It names the run and tells two r
 
 A check-in finds its run by `Run ID`, else by `Date`. A date with no run gets a placeholder run. A repeat of the same person at the same run is dropped.
 
-## Status
+## Importing (Admin > Members > Import formats)
 
-The formats, examples and checker are in place. **Importing is not switched on yet**; the older two-file import is unchanged.
+Choose any of the three files, press **Review import**, tick the confirmation and press **Import**.
+
+**Importing the same file again changes nothing. Importing an edited file updates what you edited.** Nothing is ever deleted: a row missing from a file leaves its record as it is.
+
+| What the file says | What the club gets | On a later import |
+|---|---|---|
+| A person **with an email** | A member profile, their check-ins, and totals, badges, streaks and reward proofs worked out from those check-ins | Name, shirt size, birthday and no-check-in runs are updated when the file gives a different value. A blank cell never erases anything, and a name made from an email never replaces a real one |
+| A person **without an email** | Held as an unclaimed past name with their dated sign-ins. **No profile is made** | Updated if it changed. If someone has already claimed the name, their totals follow |
+| A run | A run and its check-in event, which nobody can check in to. The first run on a date is `run-<date>`; a second run that day also uses its code word | Title, time, place, special event and code word are updated. Runs made in the app are left alone |
+| A check-in | A record at that run | Changed rows are updated; a check-in whose run's title or special event changed is replaced. The app's own check-ins are never replaced |
+
+Totals, badges, milestones and streaks are **never** read from a file and **never** written by the import. They are computed from the check-ins, at the end of an import and again on every check-in.
+
+### Special events on past names
+
+A run's **Special Event** tag and **Code Word** import with the run. When a held name is claimed, each of its sign-ins on a tagged run counts toward that special event (its badge goes up). Sign-ins on runs with no tag still match the old code-word keywords (Turkey, Halloween, Spooky, Anniversary).
+
+### Gear
+
+Importing and recomputing **never** create gear alerts (so history never sends members a pile of old shirts to hand out). There is one exception, **claiming past names**:
+
+1. Claiming a single name owes nothing: the old app already handed out its gear.
+2. When a runner has claimed two or more names, the one with the most runs is treated as their main name, with everything up to its count already given.
+3. The other names are added to it, biggest first. A run on a day an earlier name already signed in is not counted again (they signed in twice to one run). Runs with no sign-in date are counted.
+4. Every run-count milestone the count crosses while adding them is owed, as an **unfulfilled** gear alert. An alert is never made twice.
+
+Only run-count milestones apply (old sign-ins have no mileage). The runner's run total itself still adds up every claimed name's runs; the day check only decides gear.
+
+### Recompute rewards
+
+**Recompute rewards for everyone** rebuilds every member's totals, badges, streaks and reward proofs from their check-ins. Use it after you add, change or delete a badge or special event, so members are current without waiting for them to sign in. It is safe to repeat.
+
+### Known limits
+
+- Check-ins are credited by miles only (one loop). Loops in a file are not kept.
+- Imported runs carry no RSVP list.
+- A second run on one date is told apart by its code word, so keep each run's code word the same between imports.

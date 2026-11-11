@@ -1,5 +1,7 @@
 import type { StaffSearchResult, StaffSearchRole } from '../services/store/staffLoading';
 import { roundMiles } from '../utils/miles';
+import type { ImportCommit } from '../utils/importCommit';
+import type { ClubImportResult } from '../services/store/clubImport';
 import React, { useState } from 'react';
 import { 
   GPXRoute, 
@@ -101,6 +103,8 @@ export interface AdminDashboardProps {
     checkinsCsv: string,
     onProgress?: (msg: string) => void
   ) => Promise<{ names: number; events: number; duplicatesDropped: number; oldRuns: number }>;
+  onImportClubData?: (commit: ImportCommit, onProgress?: (msg: string) => void) => Promise<ClubImportResult>;
+  onRecomputeRewards?: (emails?: string[], onProgress?: (msg: string) => void) => Promise<{ updated: number; failed: { email: string; reason: string }[] }>;
   onReloadLegacyPool?: () => Promise<unknown>;
   onCountPushDevices?: () => Promise<number>;
   onDeleteAnnouncement?: (id: string) => Promise<void>;

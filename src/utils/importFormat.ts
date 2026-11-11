@@ -52,7 +52,7 @@ export const RUN_COLUMNS = {
   distance: { header: 'Distance', aliases: ['Miles'], required: 'no', meaning: 'The run’s distance in miles.', whenBlank: 'Unknown.' },
   surface: { header: 'Surface', aliases: [], required: 'no', meaning: 'Pavement, Trail or Mixed.', whenBlank: 'Pavement.' },
   notes: { header: 'Notes', aliases: ['Description'], required: 'no', meaning: 'Anything to remember about the run.', whenBlank: 'Left empty.' },
-  runId: { header: 'Run ID', aliases: ['ID'], required: 'no', meaning: 'Only when restoring this app’s own export: the run’s id, so check-ins reattach exactly.', whenBlank: 'Made from the date (and code word).' },
+  runId: { header: 'Run ID', aliases: ['ID'], required: 'no', meaning: 'Only when restoring this app’s own export: the run’s id, so check-ins reattach exactly.', whenBlank: 'Made from the date (and code word when two runs share a date).' },
 } satisfies Record<string, ImportColumn>;
 
 export const CHECKIN_COLUMNS = {
@@ -299,7 +299,9 @@ export function planRunsImport(csvText: string, now = new Date(), knownSpecialEv
     if (seen.has(dup)) { plan.stats.duplicateRuns++; plan.issues.push({ row, level: 'warning', message: `A run on ${date}${codeWord ? ` with code word ${codeWord}` : ''} is already listed. This row was dropped.` }); continue; }
     seen.add(dup);
     // An id: the one given, otherwise made from the date (and the code word when two runs share a day).
-    let runId = cell('runId') || `run-${date}${codeWord ? `-${codeWord.toLowerCase()}` : ''}`;
+    // The first run on a date is run-<date>, so correcting its code word or title in a later file updates the same run.
+    // A second run on the same date adds its code word (or a number).
+    let runId = cell('runId') || (ids.has(`run-${date}`) && codeWord ? `run-${date}-${codeWord.toLowerCase()}` : `run-${date}`);
     for (let n = 2; ids.has(runId); n++) runId = `${cell('runId') || `run-${date}`}-${n}`;
     ids.add(runId);
     const timeText = cell('time');

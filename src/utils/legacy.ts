@@ -17,6 +17,8 @@ export interface LegacyEvent {
   d: string; // YYYY-MM-DD
   t: string; // HH:MM:SS
   c: string; // event code word (old events only; identifies the event)
+  /** The special event this sign-in counts for (an id such as 'halloween'), set when it was imported from a tagged run. */
+  s?: string;
 }
 
 export interface LegacyImport {
@@ -311,13 +313,14 @@ export function specialEventIdsFor(specialEvent?: string): string[] {
  * Old-app sign-ins carry only a code word (no run to tag), so they are still matched by keyword.
  * Same keywords as before; revisit when deciding how old sign-ins should count.
  */
-export function legacySpecialEventIds(codeWord: string): string[] {
+export function legacySpecialEventIds(codeWord: string, tag?: string): string[] {
   const cw = (codeWord || '').toUpperCase();
-  const ids: string[] = [];
+  // A tag from an imported run counts directly; the code-word keywords still count for untagged old sign-ins.
+  const ids: string[] = tag && tag !== 'none' ? [tag] : [];
   if (cw.includes('TURKEY')) ids.push('turkey_trot');
   if (cw.includes('HALLOWEEN') || cw.includes('SPOOKY')) ids.push('halloween');
   if (cw.includes('ANNIVERSARY')) ids.push('anniversary');
-  return ids;
+  return [...new Set(ids)];
 }
 
 // ---------- badge recompute ----------
@@ -337,7 +340,7 @@ export function datedEventsFrom(
   const byId = new Map(meetupEvents.map((e) => [e.id, e]));
   const byDate = new Map(meetupEvents.map((e) => [e.date, e]));
   return [
-    ...legacyEvents.map((e) => ({ date: e.d, specialEventIds: legacySpecialEventIds(e.c) })),
+    ...legacyEvents.map((e) => ({ date: e.d, specialEventIds: legacySpecialEventIds(e.c, e.s) })),
     ...appCheckins.map((c) => {
       const ev = c.runId ? byId.get(c.runId) : byDate.get(c.date);
       return { date: c.date, specialEventIds: specialEventIdsFor(c.eventSpecial ?? ev?.specialEvent) };

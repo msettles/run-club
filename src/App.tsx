@@ -102,6 +102,8 @@ export function App() {
     loadLegacyPool,
     adminSetLegacyClaim,
     importLegacyData,
+    importClubData,
+    recomputeRewards,
     users,
     staffRosterLoaded, refreshStaffUsers, refreshGearHistory, loadMoreStaffUsers, searchStaffUsers, findStaffUser, loadRunRoster, exportStaffUsers, staffRosterLoading, staffRosterError, hasMoreStaffUsers,
     loadMoreGearHistory, gearHistoryLoading, gearHistoryError, hasMoreGearHistory,
@@ -962,6 +964,8 @@ export function App() {
               onDeleteRunner={adminDeleteRunner}
               onSetLegacyClaim={adminSetLegacyClaim}
               onImportLegacyData={importLegacyData}
+              onImportClubData={importClubData}
+              onRecomputeRewards={recomputeRewards}
               onReloadLegacyPool={loadLegacyPool}
               onCountPushDevices={countPushDevices}
               onLoadPriorRuns={loadPriorRuns} priorRunsLoading={priorRunsLoading} hasMorePriorRuns={hasMorePriorRuns} priorRunsError={priorRunsError}

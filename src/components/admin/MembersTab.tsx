@@ -404,7 +404,7 @@ export const MembersTab: React.FC<AdminDashboardProps> = (props) => {
         </div>
 
         {/* Import format: one set of columns, with an example and a checker */}
-        <UnifiedImportPanel specialEvents={props.specialEvents} />
+        <UnifiedImportPanel specialEvents={props.specialEvents} onImportClubData={props.onImportClubData} onRecomputeRewards={props.onRecomputeRewards} />
 
         {/* Import */}
         {onImportLegacyData && (

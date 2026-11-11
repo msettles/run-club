@@ -52,7 +52,7 @@ describe('run history file', () => {
   it('needs only a Date; code words and ids are made when absent', () => {
     const plan = planRunsImport('Date,Code Word,Title\n2026-10-07,Apple,Wednesday Run\n10/14/26,,\n', NOW);
     expect(plan.runs).toMatchObject([
-      { runId: 'run-2026-10-07-apple', date: '2026-10-07', codeWord: 'APPLE', title: 'Wednesday Run', time: '18:30:00' },
+      { runId: 'run-2026-10-07', date: '2026-10-07', codeWord: 'APPLE', title: 'Wednesday Run', time: '18:30:00' },
       { runId: 'run-2026-10-14', date: '2026-10-14', title: 'Group run', surface: 'Pavement' },
     ]);
     expect(plan.stats.timesDefaulted).toBe(2);
@@ -60,7 +60,7 @@ describe('run history file', () => {
 
   it('keeps two runs on one day apart by code word, and drops a true repeat', () => {
     const plan = planRunsImport('Date,Code Word\n2026-10-07,APPLE\n2026-10-07,PEAR\n2026-10-07,apple\n', NOW);
-    expect(plan.runs.map((r) => r.runId)).toEqual(['run-2026-10-07-apple', 'run-2026-10-07-pear']);
+    expect(plan.runs.map((r) => r.runId)).toEqual(['run-2026-10-07', 'run-2026-10-07-pear']);
     expect(plan.stats.duplicateRuns).toBe(1);
   });
 
@@ -109,7 +109,7 @@ describe('check-ins file', () => {
   it('matches a check-in to its run by date, using the code word when two runs share a day', () => {
     const plan = planCheckinsImport('Email,Date,Code Word\na@x.com,2026-10-07,\na@x.com,2026-10-14,pear\nb@x.com,10/14/26,GOLDEN\n', runs, NOW);
     expect(plan.checkins.map((c) => [c.person.email, c.runId])).toEqual([
-      ['a@x.com', 'run-2026-10-07-apple'], ['a@x.com', 'run-2026-10-14-pear'], ['b@x.com', 'run-2026-10-14-golden'],
+      ['a@x.com', 'run-2026-10-07'], ['a@x.com', 'run-2026-10-14-pear'], ['b@x.com', 'run-2026-10-14'],
     ]);
   });
 
@@ -123,7 +123,7 @@ describe('check-ins file', () => {
   it('reads this app\'s own check-in export (Excel dates, totals ignored) and the old-app columns', () => {
     const exported = 'Date,Time,Code Word,User Email,Runner Name,Activity,With Pet,Loops,Route Choice,Actual GPS Miles,Route Name,Source\n10/7/26,18:35:00,APPLE,t2@example.test,Test Runner 2,running,No,1,route-test,3.1,Test 3.1 mi,admin\n';
     const plan = planCheckinsImport(exported, runs, NOW);
-    expect(plan.checkins[0]).toMatchObject({ date: '2026-10-07', time: '18:35:00', miles: 3.1, route: 'Test 3.1 mi', runId: 'run-2026-10-07-apple' });
+    expect(plan.checkins[0]).toMatchObject({ date: '2026-10-07', time: '18:35:00', miles: 3.1, route: 'Test 3.1 mi', runId: 'run-2026-10-07' });
     expect(plan.checkins[0].person).toMatchObject({ email: 't2@example.test', name: 'Test Runner 2' });
     expect(plan.ignoredColumns).toEqual(expect.arrayContaining(['Route Choice', 'Source']));
     const old = planCheckinsImport('Name,Date,Time,Checkin,Code Name,Shirt Size\nABBY MIKSITS,2023-10-04,18:29:01,1,PUMPKIN PATCH,Small\n', [], NOW);

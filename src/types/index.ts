@@ -260,7 +260,8 @@ export interface UserProfile {
   };
   preferredPace?: string;
   // Attendance & Miles
-  pre2021Runs: number;       // Sum of claimed legacy names' pre-2021 OldCounts
+  pre2021Runs: number;       // Sum of claimed legacy names' pre-2021 OldCounts, plus importedRuns
+  importedRuns?: number;     // Runs with no check-in record that an import gave this member (part of pre2021Runs)
   legacyEventRuns?: number;  // Sum of claimed legacy names' sign-ins since 2021
   loggedRuns: number;        // Check-ins in this app
   totalRuns: number;         // pre2021Runs + legacyEventRuns + loggedRuns
