@@ -1,3 +1,5 @@
+import { RouteSearch } from './components/RouteSearch';
+import { emptyRouteFilters, filterRoutes } from './utils/routeSearch';
 import { authReturnUrl } from './utils/authReturn';
 import { Modal } from './components/Modal';
 import { ModalLoadBoundary } from './components/ModalLoadBoundary';
@@ -160,6 +162,14 @@ export function App() {
   const toggleBell = () => setShowNotificationsDrawer((open) => !open);
 
   // Selected route for viewing
+  const [routeFilters, setRouteFilters] = useState({ ...emptyRouteFilters });
+  const [routeSearchError, setRouteSearchError] = useState(false);
+  const filteredLibraryRoutes = filterRoutes(routes, routeFilters);
+  useEffect(() => {
+    if (activeTab !== 'routes' || !hasMoreRoutes || routesLoading || routeSearchError) return;
+    void loadMoreRoutes().catch(() => setRouteSearchError(true));
+  }, [activeTab, hasMoreRoutes, routesLoading, routes.length, routeSearchError, loadMoreRoutes]);
+
   const [selectedRoute, setSelectedRoute] = useState<GPXRoute | undefined>(routes[0]);
 
   // Keep selectedRoute valid and in sync when routes load or change
@@ -753,37 +763,12 @@ export function App() {
               )}
             </div>
 
-            {/* Route Selector Tabs */}
-            <div className="flex items-center gap-2 overflow-x-auto pb-2">
-              {routes.map((r) => (
-                <button
-                  key={r.id}
-                  onClick={() => setSelectedRoute(r)}
-                  className={`px-4 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap flex items-center gap-2 ${
-                    selectedRoute?.id === r.id
-                      ? 'bg-woodland-800 text-white shadow-sm'
-                      : 'bg-white text-stone-700 border border-stone-200 hover:bg-stone-50'
-                  }`}
-                >
-                  <span>{r.name}{r.updatedAt && <span className="block text-[10px] font-normal">{routeVersionLabel(r)}</span>}</span>
-                  <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-semibold ${
-                    selectedRoute?.id === r.id ? 'bg-woodland-950 text-woodland-200' : 'bg-stone-100 text-stone-600'
-                  }`}>
-                    {r.distanceMiles} mi
-                  </span>
-                </button>
-              ))}
-            </div>
-
-            {isFirebaseConfigured && <button type="button" disabled={routesLoading} onClick={() => { void refreshRoutes().catch(() => {}); }} className="rounded-xl border border-stone-200 bg-white px-4 py-2 text-sm font-bold disabled:opacity-50">Refresh route library</button>}
-            {hasMoreRoutes && <button type="button" disabled={routesLoading} onClick={() => { void loadMoreRoutes().catch(() => {}); }} className="rounded-xl border border-stone-200 bg-white px-4 py-2 text-sm font-bold disabled:opacity-50">{routesLoading ? 'Loading routes…' : 'Load more library routes'}</button>}
-
             {routeActionId && <p role="status" className="text-sm text-stone-600">Loading route details…</p>}
             {routeActionError && <p role="alert" className="text-sm text-amber-900">{routeActionError}</p>}
 
             {/* Selected Route Map Viewer */}
             {selectedRoute && (
-              <Suspense
+              <div id="selected-library-route" className="scroll-mt-20"><Suspense
                 fallback={<div className="h-[480px] rounded-2xl bg-white border border-stone-200 animate-pulse" aria-label="Loading map" />}
               >
                 <LazyRouteMap
@@ -797,23 +782,27 @@ export function App() {
                     setIsRouteStudioOpen(true);
                   }}
                 />
-              </Suspense>
+              </Suspense></div>
             )}
 
+            <RouteSearch filters={routeFilters} onChange={setRouteFilters} routes={routes} count={filteredLibraryRoutes.length} incomplete={hasMoreRoutes && !routeSearchError} />
+            {routeSearchError && <p role="alert" className="text-sm text-amber-900">Search covers loaded routes only because the rest of the library could not be loaded. <button type="button" onClick={() => setRouteSearchError(false)} className="underline font-bold">Retry loading routes</button></p>}
+            {isFirebaseConfigured && <button type="button" disabled={routesLoading} onClick={() => { setRouteSearchError(false); void refreshRoutes().catch(() => setRouteSearchError(true)); }} className="rounded-xl border border-stone-200 bg-white px-4 py-2 text-sm font-bold disabled:opacity-50">Refresh route library</button>}
+            {filteredLibraryRoutes.length === 0 && <p className="rounded-xl border border-stone-200 bg-white p-6 text-sm text-stone-600">No routes match these filters. Try a different name or mileage range.</p>}
+
             {/* Route Cards Carousel / Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
-              {routes.map((r) => (
+            <div id="library-route-cards" className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
+              {filteredLibraryRoutes.map((r) => (
                 <div
                   key={r.id}
-                  onClick={() => setSelectedRoute(r)}
-                  className={`p-4 rounded-xl border bg-white cursor-pointer transition ${
+                  className={`p-4 rounded-xl border bg-white transition ${
                     selectedRoute?.id === r.id
                       ? 'border-woodland-600 ring-2 ring-woodland-500/20 shadow-sm'
                       : 'border-stone-200 hover:border-woodland-300'
                   }`}
                 >
                   <div className="flex items-start justify-between gap-2 mb-2">
-                    <h4 className="text-sm font-bold text-stone-900 leading-snug">{r.name}</h4>
+                    <h4 className="text-sm font-bold text-stone-900 leading-snug"><button type="button" onClick={() => { setSelectedRoute(r); document.getElementById('selected-library-route')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }} aria-pressed={selectedRoute?.id === r.id} className="text-left underline-offset-4 hover:underline">{r.name}</button></h4>
                     {r.updatedAt && <p className="text-[10px] text-stone-500">{routeVersionLabel(r)}</p>}
                     <span className="text-[10px] bg-stone-100 text-stone-700 px-2 py-0.5 rounded-full font-semibold shrink-0">
                       {r.surface}
