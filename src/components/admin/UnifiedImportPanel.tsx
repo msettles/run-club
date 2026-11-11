@@ -24,7 +24,7 @@ const download = (filename: string, csv: string) => {
 const requiredLabel = (r: 'one-of' | 'always' | 'no') => (r === 'one-of' ? 'Email or Name' : r === 'always' ? 'Required' : 'Optional');
 
 /** Admin: the import formats (three files). Download the examples, then check a file before anything is imported. */
-export const UnifiedImportPanel: React.FC = () => {
+export const UnifiedImportPanel: React.FC<{ specialEvents?: { id: string; name: string }[] }> = ({ specialEvents }) => {
   const [shown, setShown] = useState<ImportFileKind>('profiles');
   const [result, setResult] = useState<Result | null>(null);
   const [message, setMessage] = useState('');
@@ -44,9 +44,9 @@ export const UnifiedImportPanel: React.FC = () => {
       if (!kind) { setMessage('I couldn’t tell what kind of file this is. It needs an Email or Name column, a Date column, or both.'); return; }
       setShown(kind);
       if (kind === 'profiles') setResult({ kind, plan: planProfilesImport(text) });
-      else if (kind === 'runs') setResult({ kind, plan: planRunsImport(text) });
+      else if (kind === 'runs') setResult({ kind, plan: planRunsImport(text, new Date(), specialEvents) });
       else {
-        const known = runs ? planRunsImport(await runs.text()).runs : [];
+        const known = runs ? planRunsImport(await runs.text(), new Date(), specialEvents).runs : [];
         setResult({ kind, plan: planCheckinsImport(text, known) });
       }
     } finally {
@@ -143,6 +143,9 @@ export const UnifiedImportPanel: React.FC = () => {
                   <>
                     <li><strong>{result.plan.runs.length}</strong> runs{result.plan.stats.earliest ? ` from ${result.plan.stats.earliest} to ${result.plan.stats.latest}` : ''}.</li>
                     {result.plan.stats.duplicateRuns > 0 && <li>{result.plan.stats.duplicateRuns} repeated runs dropped.</li>}
+                    {Object.keys(result.plan.specialEvents).length > 0 && (
+                      <li>Special events: {Object.entries(result.plan.specialEvents).map(([name, n]) => `${name} (${n})`).join(', ')}.</li>
+                    )}
                     {result.plan.stats.timesDefaulted > 0 && <li>{result.plan.stats.timesDefaulted} with no start time (18:30 used).</li>}
                   </>
                 )}

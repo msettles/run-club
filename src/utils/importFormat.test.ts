@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  IMPORT_EXAMPLES, defaultNameFromEmail, detectImportFile, normalizeShirtSize, parseBirthday, planCheckinsImport, planProfilesImport, planRunsImport,
+  matchSpecialEvent, IMPORT_EXAMPLES, defaultNameFromEmail, detectImportFile, normalizeShirtSize, parseBirthday, planCheckinsImport, planProfilesImport, planRunsImport,
 } from './importFormat';
 
 const NOW = new Date('2026-11-12T12:00:00Z');
@@ -40,7 +40,7 @@ describe('profiles file', () => {
   });
 
   it('understands shirt sizes and birthdays', () => {
-    expect(['Small', 'Xl', 'medium', 'LARGE', 'xxl', 'Youth', 'weird'].map(normalizeShirtSize)).toEqual(['S', 'XL', 'M', 'L', '2XL', 'Youth', 'weird']);
+    expect(['Small', 'Xl', 'medium', 'LARGE', 'xxl', 'Youth', 'weird', 'Xxsmall', 'Med', 'Xsmall'].map(normalizeShirtSize)).toEqual(['S', 'XL', 'M', 'L', '2XL', 'Youth', 'weird', 'XS', 'M', 'XS']);
     expect(normalizeShirtSize('')).toBeUndefined();
     expect(parseBirthday('9/25/83', NOW)).toBe('1983-09-25');
     expect(parseBirthday('2/25/05', NOW)).toBe('2005-02-25');
@@ -70,6 +70,36 @@ describe('run history file', () => {
     expect(plan.issues.map((i) => i.message).join('|')).toContain('before the club was established');
     expect(plan.issues.map((i) => i.message).join('|')).toContain('in the future');
     expect(planRunsImport('Title\nx\n', NOW).issues[0].message).toContain('needs a Date column');
+  });
+});
+
+describe('special event tags on the run history', () => {
+  const club = [{ id: 'turkey_trot', name: 'Turkey Trot' }, { id: 'halloween', name: 'Halloween Costume Run' }, { id: 'anniversary', name: 'Anniversary Run' }];
+
+  it('matches a tag to the club\'s special events by id, name, or a unique part of the name', () => {
+    expect(matchSpecialEvent('turkey_trot', club)?.id).toBe('turkey_trot');
+    expect(matchSpecialEvent('Turkey Trot', club)?.id).toBe('turkey_trot');
+    expect(matchSpecialEvent('Halloween', club)?.id).toBe('halloween');
+    expect(matchSpecialEvent('anniversary run', club)?.id).toBe('anniversary');
+    expect(matchSpecialEvent('Run', club)).toBeUndefined(); // matches two of them, so no guess
+    expect(matchSpecialEvent('St. Patrick', club)).toBeUndefined();
+    expect(matchSpecialEvent('', club)).toBeUndefined();
+  });
+
+  it('tags runs, counts them per event, and warns about a tag the club does not have', () => {
+    const plan = planRunsImport('Date,Code Word,Special Event\n2024-11-27,TURKEY,Turkey Trot\n2025-11-26,TURKEY,turkey_trot\n2025-10-29,SPOOKY,Halloween\n2025-03-17,SHAMROCK,St. Patricks\n2025-03-12,PLAIN,\n', NOW, club);
+    expect(plan.runs.filter((r) => r.specialEventId === 'turkey_trot')).toHaveLength(2);
+    expect(plan.runs.find((r) => r.codeWord === 'SPOOKY')?.specialEventId).toBe('halloween');
+    expect(plan.runs.find((r) => r.codeWord === 'SHAMROCK')?.specialEventId).toBeUndefined();
+    expect(plan.runs.find((r) => r.codeWord === 'PLAIN')?.specialEventId).toBeUndefined();
+    expect(plan.specialEvents).toEqual({ 'Turkey Trot': 2, 'Halloween Costume Run': 1, 'St. Patricks': 1 });
+    expect(plan.issues.filter((i) => i.level === 'warning').map((i) => i.message).join('|')).toContain('St. Patricks" is not one of your special events');
+  });
+
+  it('without the club\'s events to check against, the tag is just carried along', () => {
+    const plan = planRunsImport('Date,Special Event\n2025-03-17,St. Patricks\n', NOW);
+    expect(plan.runs[0]).toMatchObject({ specialEvent: 'St. Patricks', specialEventId: undefined });
+    expect(plan.issues).toEqual([]);
   });
 });
 

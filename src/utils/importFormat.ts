@@ -45,7 +45,7 @@ export const RUN_COLUMNS = {
   time: { header: 'Time', aliases: ['Start Time'], required: 'no', meaning: 'When the run started, such as 18:30.', whenBlank: '18:30.' },
   title: { header: 'Title', aliases: ['Run Title', 'Event', 'Event Title'], required: 'no', meaning: 'The run’s name.', whenBlank: '"Group run".' },
   codeWord: { header: 'Code Word', aliases: ['Code Name', 'CodeWord', 'Code'], required: 'no', meaning: 'The code word used at that run. It identifies the run, and tells two runs on the same day apart.', whenBlank: 'Left empty.' },
-  specialEvent: { header: 'Special Event', aliases: ['Special'], required: 'no', meaning: 'A special event this run counted for, such as Turkey Trot (its name or id).', whenBlank: 'Not a special event.' },
+  specialEvent: { header: 'Special Event', aliases: ['Special'], required: 'no', meaning: 'The special event this run was, such as Turkey Trot (one of your special events, by name or id). Check-ins at the run count toward it, so the tag lives here and not in the check-ins file.', whenBlank: 'Not a special event.' },
   location: { header: 'Location', aliases: ['Venue'], required: 'no', meaning: 'Where it met.', whenBlank: 'The club’s usual location.' },
   address: { header: 'Address', aliases: [], required: 'no', meaning: 'The street address.', whenBlank: 'Left empty.' },
   route: { header: 'Route', aliases: ['Route Name'], required: 'no', meaning: 'The route (its name).', whenBlank: 'Left empty.' },
@@ -97,7 +97,7 @@ export function normalizeShirtSize(value: string): string | undefined {
   const k = v.toLowerCase().replace(/[^a-z0-9]/g, '');
   const map: Record<string, string> = {
     youth: 'Youth', ys: 'Youth', ym: 'Youth', yl: 'Youth', kids: 'Youth', child: 'Youth',
-    xs: 'XS', extrasmall: 'XS', xsmall: 'XS', s: 'S', small: 'S', sm: 'S', m: 'M', medium: 'M', med: 'M', l: 'L', large: 'L', lg: 'L',
+    xs: 'XS', extrasmall: 'XS', xsmall: 'XS', xxs: 'XS', xxsmall: 'XS', '2xs': 'XS', s: 'S', small: 'S', sm: 'S', m: 'M', medium: 'M', med: 'M', l: 'L', large: 'L', lg: 'L',
     xl: 'XL', xlarge: 'XL', extralarge: 'XL', '2xl': '2XL', xxl: '2XL', '2x': '2XL', xx: '2XL', xxlarge: '2XL',
   };
   return map[k] || v;
@@ -243,7 +243,10 @@ export interface ImportedRun {
   timeDefaulted: boolean;
   title: string;
   codeWord: string;
+  /** What the file said, e.g. "Halloween". */
   specialEvent: string;
+  /** The club's special event it matched (by id or name), when the club's events were supplied and one matched. */
+  specialEventId?: string;
   location: string;
   address: string;
   route: string;
@@ -256,11 +259,23 @@ export interface RunsPlan {
   runs: ImportedRun[];
   issues: ImportIssue[];
   ignoredColumns: string[];
+  /** How many runs are tagged with each special event (by the club's event name, or the file's own wording when unmatched). */
+  specialEvents: Record<string, number>;
   stats: { rows: number; skippedRows: number; duplicateRuns: number; timesDefaulted: number; earliest?: string; latest?: string };
 }
 
-export function planRunsImport(csvText: string, now = new Date()): RunsPlan {
-  const plan: RunsPlan = { runs: [], issues: [], ignoredColumns: [], stats: { rows: 0, skippedRows: 0, duplicateRuns: 0, timesDefaulted: 0 } };
+/** Match a Special Event cell to one of the club's special events: by id, by name, or by one name containing the other. */
+export function matchSpecialEvent(value: string, known: { id: string; name: string }[]): { id: string; name: string } | undefined {
+  const v = headerKey(value);
+  if (!v) return undefined;
+  const exact = known.find((e) => headerKey(e.id) === v || headerKey(e.name) === v);
+  if (exact) return exact;
+  const loose = known.filter((e) => headerKey(e.name).includes(v) || v.includes(headerKey(e.name)));
+  return loose.length === 1 ? loose[0] : undefined;
+}
+
+export function planRunsImport(csvText: string, now = new Date(), knownSpecialEvents?: { id: string; name: string }[]): RunsPlan {
+  const plan: RunsPlan = { runs: [], issues: [], ignoredColumns: [], specialEvents: {}, stats: { rows: 0, skippedRows: 0, duplicateRuns: 0, timesDefaulted: 0 } };
   const table = readTable(csvText, RUN_COLUMNS);
   if (table.error) { plan.issues.push({ row: 0, level: 'error', message: table.error }); return plan; }
   plan.ignoredColumns = table.ignoredColumns;
@@ -294,9 +309,15 @@ export function planRunsImport(csvText: string, now = new Date()): RunsPlan {
     const distance = distanceText === '' ? undefined : Number(distanceText);
     if (distance !== undefined && (!Number.isFinite(distance) || distance < 0)) plan.issues.push({ row, level: 'warning', message: `Distance "${distanceText}" was not understood and was left empty.` });
     const surface = /^(trail)/i.test(cell('surface')) ? 'Trail' : /^(mixed)/i.test(cell('surface')) ? 'Mixed' : 'Pavement';
+    const specialText = cell('specialEvent');
+    const matched = specialText && knownSpecialEvents ? matchSpecialEvent(specialText, knownSpecialEvents) : undefined;
+    if (specialText && knownSpecialEvents && !matched) {
+      plan.issues.push({ row, level: 'warning', message: 'Special Event "' + specialText + '" is not one of your special events (' + (knownSpecialEvents.map((e) => e.name).join(', ') || 'none yet') + '). That run would have no special event. Add it under Admin > Badges first, or fix the name.' });
+    }
+    if (specialText) { const label = matched?.name || specialText; plan.specialEvents[label] = (plan.specialEvents[label] || 0) + 1; }
     plan.runs.push({
       runId, date, time: time ?? '18:30:00', timeDefaulted: !time, title: cell('title') || 'Group run', codeWord,
-      specialEvent: cell('specialEvent'), location: cell('location'), address: cell('address'), route: cell('route'),
+      specialEvent: specialText, specialEventId: matched?.id, location: cell('location'), address: cell('address'), route: cell('route'),
       distance: distance !== undefined && Number.isFinite(distance) && distance >= 0 ? distance : undefined, surface, notes: cell('notes'),
     });
     if (!plan.stats.earliest || date < plan.stats.earliest) plan.stats.earliest = date;
