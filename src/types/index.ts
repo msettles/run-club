@@ -127,7 +127,11 @@ export type BadgeCategory =
   | 'attendance'
   | 'activity'
   | 'distance'
-  | 'pet';
+  | 'pet'
+  | 'incremental';
+
+/** What an incremental badge counts: walking check-ins, running check-ins, or check-ins with a pet. */
+export type IncrementalCounter = 'walks' | 'runs' | 'pet';
 
 export type BadgeTriggerType =
   | 'milestone'      // Total runs milestone (5, 25, 50, 100, etc.)
@@ -136,7 +140,8 @@ export type BadgeTriggerType =
   | 'special_event'  // Event marked as special event
   | 'streak'         // Consecutive attendance streak
   | 'pet'            // Running or walking with a pet
-  | 'attendance';    // General attendance (e.g. first run)
+  | 'attendance'     // General attendance (e.g. first run)
+  | 'incremental';   // Levels up every N of something (walks, runs or pet check-ins)
 
 export interface BadgeTriggerConfig {
   type: BadgeTriggerType;
@@ -153,6 +158,8 @@ export interface BadgeTriggerConfig {
   distanceCount?: number;
   // Special Event:
   specialEventId?: string;
+  // Incremental: what is counted (uses `step` for the level size)
+  counter?: IncrementalCounter;
   // Streak:
   streakWeeks?: number;
   // Incremental multiplier:
@@ -168,7 +175,7 @@ export interface Badge {
   requirement: string;
   category?: BadgeCategory;
   isIncremental?: boolean; // Can be leveled up or earned multiple times (e.g. x2, x3)
-  maxMultiplier?: number; // e.g. 10 (renders as 10+)
+  maxMultiplier?: number; // Display cap: levels above it show as e.g. 10+ (none = no cap)
   triggerConfig?: BadgeTriggerConfig;
   isDefault?: boolean;
   createdAt?: string;
@@ -298,13 +305,18 @@ export type Member = UserProfile & {
 };
 
 export interface MilestoneReward {
-  runsRequired: number; // 5, 50, 100, 200
+  id: string;           // Firestore doc ID (milestones/{id}); built-in ones are 'milestone-<runs>'
+  runsRequired: number; // Total runs that earns it (1, 5, 50, 100, 200, ...). Unique per club.
   name: string;
   reward: string;
   perks: string;
   icon: string;
   imagePlaceholder?: string;
   description: string;
+  /** false = recognition only (e.g. a runner's first run): organizers see it, but there is nothing to hand out. */
+  hasGear?: boolean;
+  isDefault?: boolean;  // Built in to the app; admins can add their own
+  createdAt?: string;
 }
 
 export interface MilestoneAlert {
@@ -316,6 +328,7 @@ export interface MilestoneAlert {
   milestoneName: string;
   reward: string;
   perks: string;
+  hasGear?: boolean;  // false = recognition only (nothing to hand out); missing = gear
   date: string;
   time: string;
   runId?: string;     // The run whose check-in reached the milestone

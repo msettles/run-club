@@ -24,7 +24,7 @@ export function createCheckInOps(ctx: StoreState & ReturnType<typeof createLegac
         // claim mutations also change that profile, so concurrent writes retry
         // the complete calculation, including these history queries.
         const [history, legacy] = await Promise.all([ctx.fetchRunnerCheckins(email), ctx.fetchLegacyEvents(user.linkedLegacyIds || [])]);
-        return calculateCheckIn(params, user, event, existing, history, legacy, ctx.badges, ctx.meetupEvents);
+        return calculateCheckIn(params, user, event, existing, history, legacy, ctx.badges, ctx.meetupEvents, ctx.milestones);
       };
       let result: Awaited<ReturnType<typeof prepare>>;
       let attendees: Attendee[];

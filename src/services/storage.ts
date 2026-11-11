@@ -1,7 +1,7 @@
 import { createStaffLoadingOps } from './store/staffLoading';
 import { useEffect } from 'react';
-import { RunEvent, Badge, SpecialEventDefinition } from '../types';
-import { INITIAL_BADGES, INITIAL_SPECIAL_EVENTS } from '../data/catalog';
+import { RunEvent, Badge, MilestoneReward, SpecialEventDefinition } from '../types';
+import { INITIAL_BADGES, INITIAL_SPECIAL_EVENTS, CLUB_MILESTONES } from '../data/catalog';
 import { isFirebaseConfigured, db } from './firebase';
 import { doc, collection, type DocumentData, orderBy, limit, onSnapshot, query } from 'firebase/firestore';
 import { ClubNotification, showLocalNotification } from './notifications';
@@ -14,9 +14,10 @@ import { createMemberOps } from './store/members';
 import { createCheckInOps } from './store/checkIn';
 import { createEventOps } from './store/events';
 import { createBadgeOps } from './store/badges';
+import { createMilestoneOps } from './store/milestones';
 import { createRunOps } from './store/runs';
 import { createAnnouncementOps } from './store/announcements';
-import { meetupFromPublicDoc, memberFromPublicDoc } from './store/helpers';
+import { isBadge, meetupFromPublicDoc, memberFromPublicDoc } from './store/helpers';
 // Re-exported for existing importers.
 export { cleanFirestoreData, formatRouteForFirestore, hydrateRouteFromFirestore, toPublicMember, RECENT_CHECKIN_DAYS } from './store/helpers';
 
@@ -30,6 +31,7 @@ export function useClubStore({ loadLeaderboard = true } = {}) {
   const s = useStoreState();
   const {
     setBadges,
+    setMilestones,
     setSpecialEvents,
     setNotifications,
     setIsSyncing,
@@ -46,7 +48,7 @@ export function useClubStore({ loadLeaderboard = true } = {}) {
   const c3 = Object.assign(c2, createMemberOps(c2));
   const c4 = Object.assign(c3, createCheckInOps(c3));
   const c5 = Object.assign(c4, createEventOps(c4));
-  const c6 = Object.assign(c5, createBadgeOps(c5));
+  const c6 = Object.assign(c5, createBadgeOps(c5), createMilestoneOps(c5));
   const c7 = Object.assign(c6, createRunOps(c6));
   const store = Object.assign(c7, createAnnouncementOps(c7));
 
@@ -62,7 +64,8 @@ export function useClubStore({ loadLeaderboard = true } = {}) {
     const errors = new Set<string>();
     const subscriptions: Array<() => void> = [];
     const handlers = {
-      badges: (docs: DocumentData[]) => setBadges(withCatalog(docs as Badge[], INITIAL_BADGES)),
+      badges: (docs: DocumentData[]) => setBadges(withCatalog(docs as Badge[], INITIAL_BADGES).filter(isBadge)),
+      milestones: (docs: DocumentData[]) => setMilestones(withCatalog(docs as MilestoneReward[], CLUB_MILESTONES).sort((a, b) => a.runsRequired - b.runsRequired)),
       special_events: (docs: DocumentData[]) => setSpecialEvents(withCatalog(docs as SpecialEventDefinition[], INITIAL_SPECIAL_EVENTS)),
 
     };
@@ -76,6 +79,9 @@ export function useClubStore({ loadLeaderboard = true } = {}) {
         setIsSyncing(loaded.size + errors.size < Object.keys(handlers).length);
       }, (err) => {
         console.warn(`${name} subscription failed:`, err);
+        // Milestones fall back to the built-in list, so a failed load is not worth a warning banner
+        // (it happens when the app is newer than the deployed rules).
+        if (name === 'milestones') { loaded.add(name); setIsSyncing(loaded.size + errors.size < Object.keys(handlers).length); return; }
         errors.add(name);
         setSyncError(`Club data could not be loaded (${[...errors].join(', ')}). Please retry.`);
         if (name === 'badges') setBadgeCatalogLoaded(false);
@@ -172,6 +178,9 @@ export function useClubStore({ loadLeaderboard = true } = {}) {
     members: store.members,
     leaderboardLoaded: store.leaderboardLoaded, leaderboardError: store.leaderboardError,
     badges: store.badges,
+    milestones: store.milestones,
+    createMilestone: store.createMilestone,
+    deleteMilestone: store.deleteMilestone,
     notifications: store.notifications,
     bellItems: store.bellItems,
     users: store.users,

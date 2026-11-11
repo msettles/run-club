@@ -4,7 +4,7 @@ import { afterAll, beforeAll, beforeEach, expect, it, vi } from 'vitest';
 import { initializeTestEnvironment, type RulesTestEnvironment } from '@firebase/rules-unit-testing';
 import { readFileSync } from 'node:fs';
 import { collection, doc, deleteDoc, getDoc, getDocs, query, setDoc, updateDoc, Timestamp, where, type Firestore } from 'firebase/firestore';
-import { GUEST_USER, INITIAL_BADGES } from '../../data/catalog';
+import { GUEST_USER, INITIAL_BADGES, CLUB_MILESTONES } from '../../data/catalog';
 import { codeKeyFor, memberKeyFor } from '../../utils/memberKey';
 import { clubYmd } from '../../utils/dateUtils';
 import { createMemberOps } from './members';
@@ -46,7 +46,7 @@ beforeEach(async () => {
 afterAll(async () => { if (enabled) await env.cleanup(); });
 
 function operations() {
-  const ctx = { privateSyncEpoch: { current: 0 }, users: [user], currentUser: user, currentUserEmail: email, meetupEvents: events, badges: INITIAL_BADGES, checkins: [], milestoneAlerts: [],
+  const ctx = { privateSyncEpoch: { current: 0 }, users: [user], currentUser: user, currentUserEmail: email, meetupEvents: events, badges: INITIAL_BADGES, milestones: CLUB_MILESTONES, checkins: [], milestoneAlerts: [],
     setOwnLegacyEvents: vi.fn(), setUsers: vi.fn(), setMembers: vi.fn(), setRuns: vi.fn(), setCheckins: vi.fn(), setMilestoneAlerts: vi.fn(),
     fetchLegacyEvents: async () => [],
     fetchRunnerCheckins: async () => (await getDocs(query(collection(backend.current!, 'checkins'), where('userEmail', '==', email)))).docs.map((d) => d.data() as CheckInRecord) };
@@ -128,7 +128,6 @@ it.skipIf(!enabled)('attendance-backed rewards work and arbitrary badge/streak g
   const refreshed = await ops.refreshDerivedStats(current);
   expect(refreshed.currentStreakWeeks).toBe(1);
   expect(refreshed.longestStreakWeeks).toBe(1);
-  expect(refreshed.badgeCounts?.['first-chuck']).toBe(1);
   expect(refreshed.badgeCounts?.['special-turkey']).toBe(1);
   const specialRef = doc(backend.current!, 'reward_proofs', `${email}_0_special_turkey_trot`);
   const special = (await getDoc(specialRef)).data()!;
@@ -137,6 +136,20 @@ it.skipIf(!enabled)('attendance-backed rewards work and arbitrary badge/streak g
   await expect(getDocs(collection(anonymous, 'reward_proofs'))).rejects.toHaveProperty('code', 'permission-denied');
   await expect(updateDoc(doc(backend.current!, 'users', email), { currentStreakWeeks: 9999, longestStreakWeeks: 9999 })).rejects.toHaveProperty('code', 'permission-denied');
   await expect(updateDoc(doc(backend.current!, 'users', email), { unlockedBadgeIds: [...refreshed.unlockedBadgeIds, 'milestone-200'], badgeCounts: { ...refreshed.badgeCounts, 'milestone-200': 100 }, rewardChanges: ['milestone-200'] })).rejects.toHaveProperty('code', 'permission-denied');
+});
+
+it.skipIf(!enabled)('incremental badges are verified by the rules: Power Walker every 10 walks, Woodchuck Hound every pet check-in', async () => {
+  await env.withSecurityRulesDisabled(async (context) => {
+    await setDoc(doc(context.firestore() as unknown as Firestore, 'users', email), { ...user, totalRuns: 25, walkCount: 25, runCount: 0, petRunCount: 3 });
+  });
+  const ctx = { privateSyncEpoch: { current: 0 }, currentUserEmail: email, meetupEvents: events, badges: INITIAL_BADGES, checkins: [],
+    setOwnLegacyEvents: vi.fn(), setUsers: vi.fn(), setMembers: vi.fn(), setMeetupEvents: vi.fn(), fetchRunnerCheckins: async () => [] };
+  const ops = createLegacyOps(ctx as unknown as Parameters<typeof createLegacyOps>[0]);
+  const current = (await getDoc(doc(backend.current!, 'users', email))).data() as UserProfile;
+  const refreshed = await ops.refreshDerivedStats(current);
+  expect(refreshed.badgeCounts).toMatchObject({ 'power-walker': 2, 'pet-runner': 3 });
+  // A forged level is refused.
+  await expect(updateDoc(doc(backend.current!, 'users', email), { badgeCounts: { ...refreshed.badgeCounts, 'power-walker': 9 }, rewardChanges: ['power-walker'] })).rejects.toHaveProperty('code', 'permission-denied');
 });
 
 it.skipIf(!enabled)('a first reward sync proves several separate streaks, ignores superseded proofs and writes nothing the second time', async () => {
@@ -156,7 +169,9 @@ it.skipIf(!enabled)('a first reward sync proves several separate streaks, ignore
   const profile = async () => (await getDoc(doc(backend.current!, 'users', email))).data() as UserProfile;
   const refreshed = await ops.refreshDerivedStats(await profile());
   expect(refreshed).toMatchObject({ longestStreakWeeks: 3, currentStreakWeeks: 0 });
-  expect(refreshed.badgeCounts).toMatchObject({ 'first-chuck': 1, 'milestone-5': 1 });
+  // Milestones (like the 5-run shirt) are not badges, so reaching them awards no badge.
+  expect(refreshed.badgeCounts?.['milestone-5']).toBeUndefined();
+  expect(refreshed.badgeCounts?.['first-chuck']).toBeUndefined();
   const proofs = async () => (await getDocs(query(collection(backend.current!, 'reward_proofs'), where('userEmail', '==', email), where('epoch', '==', 1)))).docs.map((d) => d.data());
   expect((await proofs()).filter((proof) => proof.kind === 'week').map((proof) => proof.count).sort()).toEqual([1, 1, 1, 1, 2, 2, 3]);
   const before = JSON.stringify(await proofs());
@@ -267,6 +282,15 @@ it.skipIf(!enabled)('a full fifth check-in creates gear once and preserves fulfi
   expect(second.success).toBe(true);
   await second.rewardsReady;
   expect((await getDoc(doc(backend.current!, 'milestone_alerts', alertId))).data()).toMatchObject({ fulfilled: true, fulfilledBy: 'Organizer' });
+});
+
+it.skipIf(!enabled)('a first-ever check-in creates the First Chuck Run alert through the rules', async () => {
+  const fresh = { ...user, totalRuns: 0, loggedRuns: 0, runCount: 0, totalMiles: 0, distanceCounts: {} };
+  await env.withSecurityRulesDisabled(async (context) => { await setDoc(doc(context.firestore() as unknown as Firestore, 'users', email), fresh); });
+  const result = await operations().checkInRunner({ eventId: 'first', userEmail: email, codeWordEntered: 'FIRST', activity: 'running', distanceChoice: 'route' });
+  expect(result.success, result.message).toBe(true);
+  await result.rewardsReady;
+  expect((await getDoc(doc(backend.current!, 'milestone_alerts', `m1_${email}`))).data()).toMatchObject({ milestoneRuns: 1, milestoneName: 'First Chuck Run', fulfilled: false });
 });
 
 it.skipIf(!enabled)('credits each run using its own loop-choice limit rather than the library default', async () => {

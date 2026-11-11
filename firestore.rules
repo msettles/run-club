@@ -544,17 +544,19 @@ service cloud.firestore {
          s.event in get(/databases/$(database)/documents/legacy_history/$(s.legacyId)).data.events)
       );
     }
+    // App check-ins count toward a special event only when the run was tagged with it ("Is Special Event?").
+    // Old-app sign-ins have no run to tag, so they still match by code word.
     function proofSpecial(s, email, specialId) {
-      let word = proofWord(s, email).upper();
-      let runId = s.get('checkinId', null) is string ? get(/databases/$(database)/documents/checkins/$(s.checkinId)).data.get('runId', '') : '';
+      let isCheckin = s.get('checkinId', null) is string;
+      let c = isCheckin ? get(/databases/$(database)/documents/checkins/$(s.checkinId)).data : {};
+      let runId = c.get('runId', '');
       let event = runId != '' ? get(eventPath(runId)).data : {};
-      let c = s.get('checkinId', null) is string ? get(/databases/$(database)/documents/checkins/$(s.checkinId)).data : {};
-      let title = c.get('eventTitle', event.get('title', '')).lower();
       let special = c.get('eventSpecial', event.get('specialEvent', ''));
-      return (specialId != 'none' && special == specialId) ||
-        (specialId == 'turkey_trot' && (word.matches('.*TURKEY.*') || title.matches('.*turkey.*'))) ||
-        (specialId == 'halloween' && (word.matches('.*HALLOWEEN.*') || word.matches('.*SPOOKY.*') || title.matches('.*halloween.*'))) ||
-        (specialId == 'anniversary' && (word.matches('.*ANNIVERSARY.*') || title.matches('.*anniversary.*')));
+      let word = isCheckin ? '' : proofWord(s, email).upper();
+      return isCheckin ? (specialId != 'none' && special == specialId) :
+        ((specialId == 'turkey_trot' && word.matches('.*TURKEY.*')) ||
+         (specialId == 'halloween' && (word.matches('.*HALLOWEEN.*') || word.matches('.*SPOOKY.*'))) ||
+         (specialId == 'anniversary' && word.matches('.*ANNIVERSARY.*')));
     }
     function validWeekProof(d, id) {
       let previous = rewardPath(d.userEmail, d.epoch, 'week', d.week - 1);
@@ -597,13 +599,8 @@ service cloud.firestore {
         (current == 0 || (week >= today - 1 && week <= today && get(rewardPath(email, epoch, 'week', week)).data.count == current));
     }
     function builtinBadgeConfig(id) {
-      return id == "first-chuck" ? {"type":"attendance"} :
-        id == "milestone-5" ? {"type":"milestone","minTotalRuns":5,"isIncremental":true,"step":5} :
-        id == "milestone-50" ? {"type":"milestone","minTotalRuns":50,"isIncremental":true,"step":50} :
-        id == "milestone-100" ? {"type":"milestone","minTotalRuns":100,"isIncremental":true,"step":100} :
-        id == "milestone-200" ? {"type":"milestone","minTotalRuns":200,"isIncremental":true,"step":200} :
-        id == "power-walker" ? {"type":"activity","activityType":"walking","activityCount":10,"isIncremental":true,"step":10} :
-        id == "pet-runner" ? {"type":"pet","isIncremental":true,"step":1} :
+      return id == "power-walker" ? {"type":"incremental","counter":"walks","isIncremental":true,"step":10} :
+        id == "pet-runner" ? {"type":"incremental","counter":"pet","isIncremental":true,"step":1} :
         id == "streak-4" ? {"type":"streak","streakWeeks":4,"isIncremental":true,"step":4} :
         id == "streak-10" ? {"type":"streak","streakWeeks":10,"isIncremental":true,"step":10} :
         id == "special-turkey" ? {"type":"special_event","specialEventId":"turkey_trot","isIncremental":true,"step":1} :
@@ -625,6 +622,15 @@ service cloud.firestore {
       let key = cfg.get('distanceChoice', cfg.get('distanceTier', '3.1'));
       return key is string ? key : string(key);
     }
+    // Incremental badges: first earned at `step`, then a level every `step` more of what they count.
+    function incrementalCount(cfg, d) {
+      let counter = cfg.get('counter', 'walks');
+      return counter == 'pet' ? d.get('petRunCount', 0) : (counter == 'runs' ? d.runCount : d.walkCount);
+    }
+    function incrementalLevel(cfg, d) {
+      let step = cfg.get('step', 1);
+      return rewardSteps(incrementalCount(cfg, d), step, {'isIncremental': true, 'step': step});
+    }
     function expectedBadgeCount(id, cfg, d, email) {
       let type = cfg.get('type', '');
       return type == 'attendance' ? (d.totalRuns >= 1 ? 1 : 0) :
@@ -632,6 +638,7 @@ service cloud.firestore {
         type == 'activity' ? rewardSteps(cfg.get('activityType', 'running') == 'walking' ? d.walkCount : d.runCount, cfg.get('activityCount', 10), cfg) :
         type == 'distance' ? rewardSteps(d.get('distanceCounts', {}).get(badgeDistanceKey(cfg), 0), cfg.get('distanceCount', 1), cfg) :
         type == 'pet' ? d.get('petRunCount', 0) :
+        type == 'incremental' ? incrementalLevel(cfg, d) :
         type == 'streak' ? rewardSteps(d.get('longestStreakWeeks', 0), cfg.get('streakWeeks', 4), {'isIncremental': cfg.get('isIncremental', false), 'step': cfg.get('streakWeeks', 4)}) :
         type == 'special_event' ? get(rewardPath(email, d.get('rewardEpoch', 0), 'special', cfg.get('specialEventId', id.matches('^special-.*') ? id.split('special-')[1] : id))).data.count : -1;
     }
@@ -848,7 +855,33 @@ service cloud.firestore {
     // 6. BADGES / 7. SPECIAL EVENTS — public catalog, admin-managed.
     match /badges/{badgeId} {
       allow read: if true;
-      allow create, update, delete: if isAdmin();
+      // An incremental badge needs a whole-number level size (>= 1), a known counter, and an optional display cap.
+      allow create, update: if isAdmin() &&
+        (request.resource.data.get('triggerConfig', {}).get('type', '') != 'incremental' ||
+         (request.resource.data.triggerConfig.get('step', 0) is int && request.resource.data.triggerConfig.step >= 1 &&
+          request.resource.data.triggerConfig.step <= 100000 &&
+          request.resource.data.triggerConfig.get('counter', '') in ['walks', 'runs', 'pet'] &&
+          (!('maxMultiplier' in request.resource.data) || (request.resource.data.maxMultiplier is int && request.resource.data.maxMultiplier >= 1))));
+      allow delete: if isAdmin();
+    }
+
+    // Milestones (gear tiers like the 5-run shirt) are admin-managed and public; they are not badges.
+    // The doc ID is 'milestone-<runsRequired>', so each run count can be a milestone only once.
+    match /milestones/{milestoneId} {
+      allow read: if true;
+      allow create, update: if isAdmin() &&
+                               request.resource.data.keys().hasOnly(['id', 'runsRequired', 'name', 'reward', 'perks', 'icon', 'description', 'hasGear', 'isDefault', 'createdAt']) &&
+                               request.resource.data.keys().hasAll(['id', 'runsRequired', 'name', 'reward', 'icon']) &&
+                               request.resource.data.id == milestoneId &&
+                               request.resource.data.runsRequired is int && request.resource.data.runsRequired >= 1 && request.resource.data.runsRequired <= 100000 &&
+                               milestoneId == 'milestone-' + string(request.resource.data.runsRequired) &&
+                               request.resource.data.name is string && request.resource.data.name.size() >= 1 && request.resource.data.name.size() <= 100 &&
+                               request.resource.data.reward is string && request.resource.data.reward.size() >= 1 && request.resource.data.reward.size() <= 150 &&
+                               request.resource.data.icon is string && request.resource.data.icon.size() <= 16 &&
+                               (!('perks' in request.resource.data) || (request.resource.data.perks is string && request.resource.data.perks.size() <= 200)) &&
+                               (!('description' in request.resource.data) || (request.resource.data.description is string && request.resource.data.description.size() <= 500)) &&
+                               (!('hasGear' in request.resource.data) || request.resource.data.hasGear is bool);
+      allow delete: if isAdmin();
     }
 
     match /special_events/{eventId} {
@@ -868,8 +901,9 @@ service cloud.firestore {
                        (hasVerifiedEmail() &&
                         request.resource.data.keys().hasOnly([
                           'id', 'userEmail', 'runnerName', 'shirtSize', 'milestoneRuns',
-                          'milestoneName', 'reward', 'perks', 'date', 'time', 'fulfilled', 'runId'
+                          'milestoneName', 'reward', 'perks', 'hasGear', 'date', 'time', 'fulfilled', 'runId'
                         ]) &&
+                        (!('hasGear' in request.resource.data) || request.resource.data.hasGear is bool) &&
                         request.resource.data.id == alertId &&
                         request.resource.data.userEmail == tokenEmail() &&
                         request.resource.data.milestoneRuns is int &&

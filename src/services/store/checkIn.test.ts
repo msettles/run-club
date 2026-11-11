@@ -1,6 +1,6 @@
 import { beforeEach, expect, it, vi } from 'vitest';
 import { createCheckInOps } from './checkIn';
-import { GUEST_USER } from '../../data/initialData';
+import { GUEST_USER, CLUB_MILESTONES } from '../../data/initialData';
 
 const firestore = vi.hoisted(() => ({
   docs: {} as Record<string, unknown>, runTransaction: vi.fn(), set: vi.fn(), update: vi.fn(), attendees: [] as { memberId: string; name: string; checkedIn: boolean; rsvpDate: string }[],
@@ -16,7 +16,7 @@ function context() {
   const event = { id: 'run', date: '2026-11-11', codeWord: 'ACORN', routes: { short: { name: 'Short', actualMiles: 3.1, routeId: 'short' } } };
   return {
     users: [user], currentUser: user, currentUserEmail: user.email, meetupEvents: [event],
-    badges: [], checkins: [], ownLegacyEvents: [], milestoneAlerts: [],
+    badges: [], milestones: CLUB_MILESTONES, checkins: [], ownLegacyEvents: [], milestoneAlerts: [],
     setRuns: vi.fn(), setMembers: vi.fn(), setUsers: vi.fn(), setCheckins: vi.fn(), setMilestoneAlerts: vi.fn(),
     refreshDerivedStats: vi.fn().mockResolvedValue(user), syncMemberProjection: vi.fn().mockResolvedValue(undefined),
     fetchLegacyEvents: vi.fn().mockResolvedValue([]), fetchRunnerCheckins: vi.fn().mockResolvedValue([]),
@@ -142,4 +142,14 @@ it('explains uncertain network failures without claiming the save failed or queu
   const result = await createCheckInOps(ctx as unknown as Parameters<typeof createCheckInOps>[0]).checkInRunner(params);
   expect(result).toMatchObject({ success: false, message: expect.stringContaining('Could not confirm') });
   expect(ctx.setCheckins).not.toHaveBeenCalled();
+});
+
+it('a runner\'s very first check-in creates a recognition-only First Chuck Run alert', async () => {
+  const ctx = context();
+  const fresh = { ...ctx.users[0], totalRuns: 0, loggedRuns: 0, totalMiles: 0, runCount: 0 };
+  firestore.docs['users/alice@example.com'] = fresh;
+  Object.assign(ctx, { users: [fresh], currentUser: fresh, refreshDerivedStats: vi.fn().mockResolvedValue(fresh) });
+  const result = await createCheckInOps(ctx as unknown as Parameters<typeof createCheckInOps>[0]).checkInRunner(params);
+  expect(result.success).toBe(true);
+  expect(firestore.set).toHaveBeenCalledWith('milestone_alerts/m1_alice@example.com', expect.objectContaining({ milestoneRuns: 1, milestoneName: 'First Chuck Run', fulfilled: false }));
 });

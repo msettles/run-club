@@ -1,13 +1,16 @@
 import React, { useState } from 'react';
-import { UserProfile, Badge } from '../types';
+import { UserProfile, Badge, MilestoneReward } from '../types';
+import { isBadge } from '../services/store/helpers';
 import { CLUB_MILESTONES, INITIAL_BADGES } from '../data/catalog';
 import { milestoneProgress } from '../utils/milestones';
-import { badgeProgress } from '../utils/badgeProgress';
+import { badgeProgress, levelTag } from '../utils/badgeProgress';
 import { CheckCircle, Gift, Sparkles, Beer, Award, Lock, UserPlus, ChevronDown } from 'lucide-react';
 
 interface MilestonesPageProps {
   currentUser: UserProfile;
   badges?: Badge[];
+  /** The club's milestones (gear tiers), including any an admin added. */
+  milestones?: MilestoneReward[];
   /** Signed-in runners see their own progress; everyone else sees the catalog with a join prompt. */
   isSignedIn?: boolean;
   onJoin?: () => void;
@@ -17,30 +20,32 @@ const FILTERS = [
   { id: 'all', label: 'All', emoji: '🌟' },
   { id: 'special_event', label: 'Special Events', emoji: '🦃' },
   { id: 'streak', label: 'Streaks', emoji: '🔥' },
+  { id: 'incremental', label: 'Level-ups', emoji: '🔼' },
   { id: 'walking', label: 'Walking Pack', emoji: '🚶' },
   { id: 'pet', label: 'Pet Runners', emoji: '🐕' },
   { id: 'attendance', label: 'Attendance', emoji: '🦫' },
-  { id: 'milestone', label: 'Gear Milestones', emoji: '👕' },
   { id: 'distance', label: 'Distance', emoji: '🗺️' },
 ];
 
 const Multiplier: React.FC<{ badge: Badge; count: number }> = ({ badge, count }) =>
   badge.isIncremental && count > 1 ? (
     <span className="px-1.5 bg-amber-400 text-stone-950 font-black text-[10px] rounded-full shrink-0 font-mono">
-      x{badge.maxMultiplier && count >= badge.maxMultiplier ? `${badge.maxMultiplier}+` : count}
+      {levelTag(badge, count)}
     </span>
   ) : null;
 
 export const MilestonesPage: React.FC<MilestonesPageProps> = ({
   currentUser,
   badges = INITIAL_BADGES,
+  milestones = CLUB_MILESTONES,
   isSignedIn = true,
   onJoin,
 }) => {
   const [selectedCategory, setSelectedCategory] = useState('all');
-  const allBadges = badges && badges.length > 0 ? badges : INITIAL_BADGES;
+  // Milestones are shown in their own section; they are never also badges.
+  const allBadges = (badges && badges.length > 0 ? badges : INITIAL_BADGES).filter(isBadge);
   const totalRuns = isSignedIn ? currentUser.totalRuns : 0;
-  const { nextMilestone, runsRemaining, progressPercent } = milestoneProgress(totalRuns);
+  const { nextMilestone, runsRemaining, progressPercent } = milestoneProgress(totalRuns, milestones);
 
   const unlockedIds = new Set(isSignedIn ? currentUser.unlockedBadgeIds || [] : []);
   const earned = allBadges.filter((b) => unlockedIds.has(b.id));
@@ -119,10 +124,10 @@ export const MilestonesPage: React.FC<MilestonesPageProps> = ({
       {/* Milestone path */}
       <section className="bg-white rounded-3xl border border-stone-200 shadow-sm p-5 sm:p-6 space-y-4">
         <h3 className="font-extrabold text-lg text-stone-900 font-display flex items-center gap-2">
-          <Gift className="w-5 h-5 text-amber-500" /> Gear Milestones
+          <Gift className="w-5 h-5 text-amber-500" /> Club Milestones
         </h3>
         <ol className="space-y-3">
-          {CLUB_MILESTONES.map((m) => {
+          {milestones.map((m) => {
             const unlocked = isSignedIn && totalRuns >= m.runsRequired;
             const isNext = isSignedIn && nextMilestone?.runsRequired === m.runsRequired;
             return (

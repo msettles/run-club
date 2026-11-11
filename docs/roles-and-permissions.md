@@ -64,7 +64,7 @@ Signed-in access always requires a **verified email**: the rules check `email_ve
 | Change anyone's role | ➖ | ➖ | ➖ | ✅ |
 | Delete a runner (profile, leaderboard row, check-ins, gear alerts, RSVPs) | ➖ | ➖ | ➖ | ✅ |
 | Delete check-ins | ➖ | ➖ | ➖ | ✅ |
-| Create and edit badges and special events | ➖ | ➖ | ➖ | ✅ |
+| Create and edit badges, special events and milestones (gear tiers) | ➖ | ➖ | ➖ | ✅ |
 | Post and delete announcements; send phone notifications | ➖ | ➖ | ➖ | ✅ |
 | See how many devices are signed up for notifications | ➖ | ➖ | ➖ | ✅ |
 | Change club settings; manage the legacy name index and unclaim names | ➖ | ➖ | ➖ | ✅ |
@@ -96,7 +96,7 @@ Organizers run event night. Beyond a Runner, an Organizer can:
 1. **Create, edit and delete runs.** Deleting is only allowed **until the run's check-in opens**; after that only an Admin can delete it, because check-ins, run totals and gear alerts depend on it (enforced by the rules). Editing stays available after check-in opens, but the run's date and check-in window are then locked. A run that is over can only have its RSVP list changed.
 2. **Create, edit and delete routes**, except a route that is **in use** by a run (a referenced route is retained and can't be edited or deleted).
 3. **Look up who checked in to a run and open their profile.** Each run card shows a **Check-ins** button listing the runners who checked in (with a search box). Tapping a runner shows their **emergency contact** (with a tap-to-call number), shirt size, pace, age and run count. The check-ins load for that run only, however old it is.
-4. **See the milestones reached at a run and mark off gear handouts.** The same **Check-ins** window lists the milestone gear earned at that run, with the runner's current shirt size, and a **Mark handed out** button. Runners who reached a milestone are listed first.
+4. **See the milestones reached at a run and mark off gear handouts.** The same **Check-ins** window lists the milestone gear earned at that run, with the runner's current shirt size, and a **Mark handed out** button. Runners who reached a milestone are listed first. A runner's **first run** shows as a **First Chuck Run** welcome (🦫) so organizers can recognize new runners; it has no gear, so there is no handout button and it never appears in the gear queue.
 
 Also allowed by the rules for Organizers: setting or changing a run's code word until check-in opens, deleting a run's check-in event before check-in opens, recording a check-in on a runner's behalf (no screen for it yet), and read access to the runner roster, the check-in log, reward proofs and legacy history.
 
@@ -108,7 +108,7 @@ Admins have full control: everything an Organizer has, plus:
 
 - **Roles:** promote and demote runners, organizers and admins (not themselves, not the owner).
 - **Deletion:** delete runners (with their dependent records) and check-ins, and delete runs whose check-in has opened or that have already happened. Retention rules in [go-live-policy.md](go-live-policy.md) still apply: records are kept indefinitely unless an Admin explicitly deletes them, and referenced routes and attendance rollbacks have integrity safeguards.
-- **Content:** badges, special events and club settings.
+- **Content:** badges, special events, milestones and club settings. **Milestones** (run-count tiers such as the 5-run shirt, with optional gear) and **badges** (attendance, streak, walking and similar achievements) are separate: a milestone is never also a badge. Milestones are added under **Admin → Milestones & Gear**, badges under **Admin → Badges**.
 - **Communication:** post and delete announcements and see how many devices are subscribed to phone notifications. Phone pushes themselves are sent from the Firebase console today (see [push-notifications-plan-b.md](push-notifications-plan-b.md)).
 - **Legacy data:** manage the old-app name index and unclaim names.
 - **Admin dashboard:** Meetups & Code Words, Check-In Log, Milestones & Gear, Badges, Members, Notifications, with CSV exports.

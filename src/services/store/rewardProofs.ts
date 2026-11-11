@@ -1,7 +1,7 @@
 /** Private, rule-validated attendance proofs for client-calculated rewards. */
 import { collection, doc, getDocs, query, runTransaction, where, type Firestore } from 'firebase/firestore';
 import type { CheckInRecord, MeetupEvent, UserProfile } from '../../types';
-import { specialEventIdsFor, type LegacyEvent } from '../../utils/legacy';
+import { legacySpecialEventIds, specialEventIdsFor, type LegacyEvent } from '../../utils/legacy';
 
 export const attendanceWeek = (date: string): number => Math.floor(Date.parse(`${date}T00:00:00Z`) / 604800000 + 3 / 7);
 /** How many separate streaks are written at once on a first sync. */
@@ -18,11 +18,11 @@ export async function prepareRewardProofs(db: Firestore, user: UserProfile, chec
     ...checkins.map((c) => {
       const event = byId.get(c.runId || '');
       return { date: c.date, source: { checkinId: c.id }, id: `checkin:${c.id}`,
-        specialIds: specialEventIdsFor(c.codeWord || '', c.eventTitle ?? event?.title, c.eventSpecial ?? event?.specialEvent) };
+        specialIds: specialEventIdsFor(c.eventSpecial ?? event?.specialEvent) };
     }),
     ...legacy.filter((e) => e.legacyId).map((e) => ({ date: e.d,
       source: { legacyId: e.legacyId!, event: { d: e.d, t: e.t, c: e.c } },
-      id: `legacy:${e.legacyId}:${e.d}:${e.t}:${e.c}`, specialIds: specialEventIdsFor(e.c) })),
+      id: `legacy:${e.legacyId}:${e.d}:${e.t}:${e.c}`, specialIds: legacySpecialEventIds(e.c) })),
   ];
   const weeks = new Map<number, Attendance>();
   attendance.forEach((a) => { const week = attendanceWeek(a.date); if (Number.isFinite(week)) weeks.set(week, a); });

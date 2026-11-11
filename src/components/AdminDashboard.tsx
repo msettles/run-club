@@ -8,6 +8,7 @@ import {
   UserProfile, 
   LegacyMember,
   MilestoneAlert,
+  MilestoneReward,
   Badge,
   SpecialEventDefinition,
   BadgeCategory,
@@ -22,6 +23,7 @@ import { BadgesTab } from './admin/BadgesTab';
 import { CheckinsTab } from './admin/CheckinsTab';
 import { MilestonesTab } from './admin/MilestonesTab';
 import { runnerLookup } from '../utils/runnerLookup';
+import { alertHasGear } from '../utils/milestones';
 import { MembersTab } from './admin/MembersTab';
 import { NotificationsTab } from './admin/NotificationsTab';
 import { 
@@ -61,6 +63,10 @@ export interface AdminDashboardProps {
   users: UserProfile[];
   legacyMembers: LegacyMember[];
   milestoneAlerts?: MilestoneAlert[];
+  /** Club milestones (gear tiers); admins can add their own. Separate from badges. */
+  milestones?: MilestoneReward[];
+  onCreateMilestone?: (data: { name: string; runsRequired: number; icon: string; description: string; gear: string; perks?: string }) => Promise<unknown>;
+  onDeleteMilestone?: (id: string) => Promise<void>;
   currentUser?: UserProfile;
   badges?: Badge[];
   specialEvents?: SpecialEventDefinition[];
@@ -107,7 +113,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = (props) => {
   const totalCheckinsLogged = checkins.length;
   const totalLifetimeMiles = roundMiles(users.reduce((sum, u) => sum + u.totalMiles, 0));
   const totalLegacyClaimed = legacyMembers.filter(isLegacyClaimed).length;
-  const pendingMilestones = milestoneAlerts.filter((a) => !a.fulfilled);
+  // Recognition-only milestones (first run) are never a gear handout.
+  const pendingMilestones = milestoneAlerts.filter((a) => !a.fulfilled && alertHasGear(a));
 
 
 

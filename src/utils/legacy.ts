@@ -284,16 +284,25 @@ export function liveStreak(streak: number, lastCheckInDate: string | undefined, 
 
 // ---------- special events ----------
 
-/** Which special-event ids an event counts toward (same rules as live check-ins). */
-export function specialEventIdsFor(codeWord: string, title = '', specialEvent?: string): string[] {
+/**
+ * The special event an app check-in counts toward: only the one picked on the run ("Is Special Event?").
+ * No guessing from the run title or code word.
+ */
+export function specialEventIdsFor(specialEvent?: string): string[] {
+  return specialEvent && specialEvent !== 'none' ? [specialEvent] : [];
+}
+
+/**
+ * Old-app sign-ins carry only a code word (no run to tag), so they are still matched by keyword.
+ * Same keywords as before; revisit when deciding how old sign-ins should count.
+ */
+export function legacySpecialEventIds(codeWord: string): string[] {
   const cw = (codeWord || '').toUpperCase();
-  const t = title.toLowerCase();
-  const ids = new Set<string>();
-  if (specialEvent && specialEvent !== 'none') ids.add(specialEvent);
-  if (cw.includes('TURKEY') || t.includes('turkey')) ids.add('turkey_trot');
-  if (cw.includes('HALLOWEEN') || cw.includes('SPOOKY') || t.includes('halloween')) ids.add('halloween');
-  if (cw.includes('ANNIVERSARY') || t.includes('anniversary')) ids.add('anniversary');
-  return [...ids];
+  const ids: string[] = [];
+  if (cw.includes('TURKEY')) ids.push('turkey_trot');
+  if (cw.includes('HALLOWEEN') || cw.includes('SPOOKY')) ids.push('halloween');
+  if (cw.includes('ANNIVERSARY')) ids.push('anniversary');
+  return ids;
 }
 
 // ---------- badge recompute ----------
@@ -313,10 +322,10 @@ export function datedEventsFrom(
   const byId = new Map(meetupEvents.map((e) => [e.id, e]));
   const byDate = new Map(meetupEvents.map((e) => [e.date, e]));
   return [
-    ...legacyEvents.map((e) => ({ date: e.d, specialEventIds: specialEventIdsFor(e.c) })),
+    ...legacyEvents.map((e) => ({ date: e.d, specialEventIds: legacySpecialEventIds(e.c) })),
     ...appCheckins.map((c) => {
       const ev = c.runId ? byId.get(c.runId) : byDate.get(c.date);
-      return { date: c.date, specialEventIds: specialEventIdsFor(c.codeWord || '', c.eventTitle ?? ev?.title, c.eventSpecial ?? ev?.specialEvent) };
+      return { date: c.date, specialEventIds: specialEventIdsFor(c.eventSpecial ?? ev?.specialEvent) };
     }),
   ];
 }
@@ -402,6 +411,13 @@ export function recomputeBadges(
       case 'pet':
         award(b.id, pets);
         break;
+      case 'incremental': {
+        // First earned at `step`, then a level every `step` more.
+        const count = cfg.counter === 'pet' ? pets : cfg.counter === 'runs' ? runs : walks;
+        const step = Math.max(1, cfg.step || 1);
+        award(b.id, steps(count, step, true, step));
+        break;
+      }
       case 'streak': {
         const weeks = cfg.streakWeeks || 4;
         award(b.id, steps(longest, weeks, cfg.isIncremental, weeks));
