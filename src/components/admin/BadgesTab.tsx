@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { 
   BadgeCategory,
   BadgeTriggerConfig,
-  ActivityType,
+  IncrementalCounter,
   DistanceChoice
 } from '../../types';
 import { INITIAL_BADGES, INITIAL_SPECIAL_EVENTS } from '../../data/catalog';
@@ -14,6 +14,12 @@ import {
   CheckCheck
 } from 'lucide-react';
 import type { AdminDashboardProps } from '../AdminDashboard';
+
+const COUNTER_LABEL: Record<IncrementalCounter, { plural: string }> = {
+  walks: { plural: 'walking check-ins' },
+  runs: { plural: 'running check-ins' },
+  pet: { plural: 'check-ins with a pet' },
+};
 
 export const BadgesTab: React.FC<AdminDashboardProps> = (props) => {
   const {
@@ -33,15 +39,12 @@ export const BadgesTab: React.FC<AdminDashboardProps> = (props) => {
   
   // Specific trigger parameters
   const [triggerSpecialSlug, setTriggerSpecialSlug] = useState<string>('');
-  const [triggerMilestoneRuns, setTriggerMilestoneRuns] = useState<number>(25);
-  const [triggerMilestoneReward, setTriggerMilestoneReward] = useState<string>('Woodchucker Club Pin');
-  const [triggerMilestonePerks, setTriggerMilestonePerks] = useState<string>('$1 off draft beers at Blue Note');
-  const [triggerActivityType, setTriggerActivityType] = useState<ActivityType>('walking');
-  const [triggerActivityThreshold, setTriggerActivityThreshold] = useState<number>(10);
+  const [triggerCounter, setTriggerCounter] = useState<IncrementalCounter>('walks');
+  const [triggerStep, setTriggerStep] = useState<number>(10);
   const [triggerDistanceChoice, setTriggerDistanceChoice] = useState<DistanceChoice>('3.1');
   const [triggerDistanceThreshold, setTriggerDistanceThreshold] = useState<number>(10);
   const [triggerStreakWeeks, setTriggerStreakWeeks] = useState<number>(4);
-  const [triggerMaxMultiplier, setTriggerMaxMultiplier] = useState<number>(10);
+  const [triggerMaxDisplay, setTriggerMaxDisplay] = useState<string>(''); // blank = no cap
   const [badgeSavedToast, setBadgeSavedToast] = useState<string | null>(null);
   const [badgeFilterCategory, setBadgeFilterCategory] = useState<string>('all');
   const [isSubmittingBadge, setIsSubmittingBadge] = useState<boolean>(false);
@@ -59,7 +62,7 @@ export const BadgesTab: React.FC<AdminDashboardProps> = (props) => {
               Woodchucker Badges &amp; Special Events Studio
             </h3>
             <p className="text-xs text-stone-300 mt-0.5">
-              Create new "Is Special Event?" options, Milestone gear, walking/running achievements, and route distance mastery badges.
+              Create new "Is Special Event?" options, walking/running achievements, and route distance mastery badges. (Gear milestones are managed separately under Milestones & Gear.)
             </p>
           </div>
         </div>
@@ -96,26 +99,22 @@ export const BadgesTab: React.FC<AdminDashboardProps> = (props) => {
               setIsSubmittingBadge(true);
               try {
                 const triggerConfig: BadgeTriggerConfig = {
-                  type: newBadgeCategory === 'walking' ? 'activity' : (newBadgeCategory as any),
+                  type: newBadgeCategory as BadgeTriggerConfig['type'],
                   isIncremental: newBadgeIncremental,
                 };
 
-                let categoryToSave: BadgeCategory = newBadgeCategory;
+                const categoryToSave: BadgeCategory = newBadgeCategory;
 
                 if (newBadgeCategory === 'special_event') {
                   const slug = triggerSpecialSlug.trim() || newBadgeName.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
                   triggerConfig.specialEventId = slug;
                   triggerConfig.step = 1;
-                } else if (newBadgeCategory === 'milestone') {
-                  triggerConfig.minTotalRuns = Number(triggerMilestoneRuns);
-                  triggerConfig.reward = triggerMilestoneReward;
-                  triggerConfig.perks = triggerMilestonePerks;
-                  triggerConfig.step = Number(triggerMilestoneRuns);
-                } else if (newBadgeCategory === 'activity' || newBadgeCategory === 'walking') {
-                  categoryToSave = 'activity';
-                  triggerConfig.activityType = triggerActivityType;
-                  triggerConfig.activityCount = Number(triggerActivityThreshold);
-                  triggerConfig.step = Number(triggerActivityThreshold);
+                } else if (newBadgeCategory === 'incremental') {
+                  const step = Math.floor(Number(triggerStep));
+                  if (!Number.isFinite(step) || step < 1) throw new Error('"Level up every" must be a whole number of 1 or more.');
+                  triggerConfig.counter = triggerCounter;
+                  triggerConfig.step = step;
+                  triggerConfig.isIncremental = true;
                 } else if (newBadgeCategory === 'distance') {
                   triggerConfig.distanceTier = triggerDistanceChoice;
                   triggerConfig.distanceCount = Number(triggerDistanceThreshold);
@@ -123,10 +122,6 @@ export const BadgesTab: React.FC<AdminDashboardProps> = (props) => {
                 } else if (newBadgeCategory === 'streak') {
                   triggerConfig.streakWeeks = Number(triggerStreakWeeks);
                   triggerConfig.step = Number(triggerStreakWeeks);
-                } else if (newBadgeCategory === 'pet') {
-                  categoryToSave = 'pet';
-                  triggerConfig.type = 'pet';
-                  triggerConfig.step = 1;
                 }
 
                 if (onCreateBadge) {
@@ -136,8 +131,8 @@ export const BadgesTab: React.FC<AdminDashboardProps> = (props) => {
                     description: newBadgeDesc.trim() || `Achievement badge for ${newBadgeName.trim()}`,
                     requirement: newBadgeReq.trim() || newBadgeName.trim(),
                     category: categoryToSave,
-                    isIncremental: newBadgeIncremental,
-                    maxMultiplier: triggerMaxMultiplier,
+                    isIncremental: newBadgeCategory === 'incremental' ? true : newBadgeIncremental,
+                    maxMultiplier: newBadgeCategory === 'incremental' && triggerMaxDisplay.trim() ? Math.floor(Number(triggerMaxDisplay)) : undefined,
                     triggerConfig,
                     createSpecialEventOption: newBadgeCategory === 'special_event',
                   });
@@ -295,12 +290,9 @@ export const BadgesTab: React.FC<AdminDashboardProps> = (props) => {
                     setTriggerSpecialSlug(val.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, ''));
                     setNewBadgeDesc(`Ran the annual ${val} with the Woodchuckers at Blue Note Brewing!`);
                     setNewBadgeReq(`Attended the ${val}`);
-                  } else if (newBadgeCategory === 'milestone') {
-                    setNewBadgeDesc(`Hit ${triggerMilestoneRuns} group runs with the Woodchuckers and earned the ${triggerMilestoneReward}!`);
-                    setNewBadgeReq(`${triggerMilestoneRuns} group runs`);
-                  } else if (newBadgeCategory === 'activity' || newBadgeCategory === 'walking') {
-                    setNewBadgeDesc(`Completed ${triggerActivityThreshold} group ${triggerActivityType === 'walking' ? 'walks' : 'runs'} with the crew!`);
-                    setNewBadgeReq(`Every ${triggerActivityThreshold} ${triggerActivityType === 'walking' ? 'walking' : 'running'} check-ins`);
+                  } else if (newBadgeCategory === 'incremental') {
+                    setNewBadgeDesc(`Levels up every ${triggerStep} ${COUNTER_LABEL[triggerCounter].plural}!`);
+                    setNewBadgeReq(`Every ${triggerStep} ${COUNTER_LABEL[triggerCounter].plural}`);
                   } else if (newBadgeCategory === 'distance') {
                     const distStr = typeof triggerDistanceChoice === 'number' ? `${triggerDistanceChoice.toFixed(1)} mi` : `${triggerDistanceChoice}`;
                     setNewBadgeDesc(`Completed ${triggerDistanceThreshold} ${distStr} routes with the club!`);
@@ -310,7 +302,7 @@ export const BadgesTab: React.FC<AdminDashboardProps> = (props) => {
                     setNewBadgeReq(`${triggerStreakWeeks}-week consecutive streak`);
                   }
                 }}
-                placeholder="e.g. St. Patrick's Day Run, 5-Mile Beast, 25-Run Club"
+                placeholder="e.g. St. Patrick's Day Run, 5-Mile Beast, Pet Pack"
                 className="w-full px-3.5 py-2.5 text-sm border border-stone-300 rounded-xl font-bold outline-none focus:ring-2 focus:ring-amber-500"
               />
             </div>
@@ -323,10 +315,8 @@ export const BadgesTab: React.FC<AdminDashboardProps> = (props) => {
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                 {[
                   { id: 'special_event', label: '🌟 Special Event', desc: 'Adds to "Is Special Event?" dropdown' },
-                  { id: 'milestone', label: '🏆 Runs Milestone', desc: 'Total runs reached (5, 25, 50...)' },
-                  { id: 'activity', label: '🚶 Walk / 🏃 Run Pack', desc: 'Walk or run input count' },
+                  { id: 'incremental', label: '🔼 Incremental', desc: 'Levels up every N walks, runs or pet check-ins (x2, x3…)' },
                   { id: 'distance', label: '📍 Route Distance', desc: 'Route choices completed (e.g. 1.2 mi, 3.1 mi, 5.2 mi)' },
-                  { id: 'pet', label: '🐕 Pet Run', desc: 'Running or walking with a pet (up to 10+)' },
                   { id: 'streak', label: '🔥 Streak', desc: 'Consecutive weekly runs' },
                   { id: 'attendance', label: '🦫 Attendance', desc: 'General attendance milestone' },
                 ].map((cat) => (
@@ -340,19 +330,13 @@ export const BadgesTab: React.FC<AdminDashboardProps> = (props) => {
                         if (catId === 'special_event') {
                           setNewBadgeDesc(`Ran the annual ${newBadgeName} with the Woodchuckers at Blue Note!`);
                           setNewBadgeReq(`Attended the ${newBadgeName}`);
-                        } else if (catId === 'milestone') {
-                          setNewBadgeDesc(`Hit ${triggerMilestoneRuns} group runs with the Woodchuckers!`);
-                          setNewBadgeReq(`${triggerMilestoneRuns} group runs`);
-                        } else if (catId === 'activity') {
-                          setNewBadgeDesc(`Completed ${triggerActivityThreshold} group walks/runs with the crew!`);
-                          setNewBadgeReq(`Every ${triggerActivityThreshold} check-ins`);
+                        } else if (catId === 'incremental') {
+                          setNewBadgeDesc(`Levels up every ${triggerStep} ${COUNTER_LABEL[triggerCounter].plural}!`);
+                          setNewBadgeReq(`Every ${triggerStep} ${COUNTER_LABEL[triggerCounter].plural}`);
                         } else if (catId === 'distance') {
                           const distStr = typeof triggerDistanceChoice === 'number' ? `${triggerDistanceChoice.toFixed(1)} mi` : `${triggerDistanceChoice}`;
                           setNewBadgeDesc(`Completed ${triggerDistanceThreshold} ${distStr} routes!`);
                           setNewBadgeReq(`${triggerDistanceThreshold} times completing ${distStr} route`);
-                        } else if (catId === 'pet') {
-                          setNewBadgeDesc(`Ran or walked the club route with your four-legged running buddy!`);
-                          setNewBadgeReq(`Running or walking with a pet (multiplier up to ${triggerMaxMultiplier}+)`);
                         }
                       }
                     }}
@@ -395,77 +379,50 @@ export const BadgesTab: React.FC<AdminDashboardProps> = (props) => {
                 </div>
               )}
 
-              {newBadgeCategory === 'milestone' && (
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div>
-                    <label className="block text-xs font-bold text-stone-700 mb-1">
-                      Total Runs Required *
-                    </label>
-                    <input
-                      type="number"
-                      required
-                      min={1}
-                      value={triggerMilestoneRuns}
-                      onChange={(e) => setTriggerMilestoneRuns(Number(e.target.value))}
-                      className="w-full px-3 py-1.5 text-xs border rounded-lg bg-white font-bold"
-                    />
+              {newBadgeCategory === 'incremental' && (
+                <div className="space-y-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-xs font-bold text-stone-700 mb-1">What to count</label>
+                      <select
+                        value={triggerCounter}
+                        onChange={(e) => setTriggerCounter(e.target.value as IncrementalCounter)}
+                        className="w-full px-3 py-1.5 text-xs border rounded-lg bg-white font-bold"
+                      >
+                        <option value="walks">🚶 Walking check-ins</option>
+                        <option value="runs">🏃 Running check-ins</option>
+                        <option value="pet">🐕 Check-ins with a pet</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-stone-700 mb-1">Level up every *</label>
+                      <input
+                        type="number"
+                        required
+                        min={1}
+                        step={1}
+                        value={triggerStep}
+                        onChange={(e) => setTriggerStep(Number(e.target.value))}
+                        className="w-full px-3 py-1.5 text-xs border rounded-lg bg-white font-bold"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-stone-700 mb-1">Max display (optional)</label>
+                      <input
+                        type="number"
+                        min={1}
+                        step={1}
+                        value={triggerMaxDisplay}
+                        onChange={(e) => setTriggerMaxDisplay(e.target.value)}
+                        placeholder="No cap"
+                        className="w-full px-3 py-1.5 text-xs border rounded-lg bg-white font-bold"
+                      />
+                    </div>
                   </div>
-                  <div>
-                    <label className="block text-xs font-bold text-stone-700 mb-1">
-                      Reward / Gear *
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={triggerMilestoneReward}
-                      onChange={(e) => setTriggerMilestoneReward(e.target.value)}
-                      placeholder="e.g. Club Pin / Pint Glass"
-                      className="w-full px-3 py-1.5 text-xs border rounded-lg bg-white font-semibold"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-stone-700 mb-1">
-                      Perks / Brewery Benefit
-                    </label>
-                    <input
-                      type="text"
-                      value={triggerMilestonePerks}
-                      onChange={(e) => setTriggerMilestonePerks(e.target.value)}
-                      placeholder="e.g. $1 off beers at Blue Note"
-                      className="w-full px-3 py-1.5 text-xs border rounded-lg bg-white"
-                    />
-                  </div>
-                </div>
-              )}
-
-              {newBadgeCategory === 'activity' && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-bold text-stone-700 mb-1">
-                      Activity Input
-                    </label>
-                    <select
-                      value={triggerActivityType}
-                      onChange={(e) => setTriggerActivityType(e.target.value as ActivityType)}
-                      className="w-full px-3 py-1.5 text-xs border rounded-lg bg-white font-bold"
-                    >
-                      <option value="walking">🚶 Walking Pack (Walks)</option>
-                      <option value="running">🏃 Running Pack (Runs)</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-stone-700 mb-1">
-                      Check-Ins Count Threshold *
-                    </label>
-                    <input
-                      type="number"
-                      required
-                      min={1}
-                      value={triggerActivityThreshold}
-                      onChange={(e) => setTriggerActivityThreshold(Number(e.target.value))}
-                      className="w-full px-3 py-1.5 text-xs border rounded-lg bg-white font-bold"
-                    />
-                  </div>
+                  <p className="text-[10px] text-stone-500">
+                    First earned at {triggerStep} {COUNTER_LABEL[triggerCounter].plural}, then it levels up every {triggerStep} more (x2, x3…).
+                    {triggerMaxDisplay.trim() ? ` Levels above ${triggerMaxDisplay} show as ${triggerMaxDisplay}+ (${triggerMaxDisplay} itself shows as ${triggerMaxDisplay}).` : ' With no max, the level always shows its full number.'}
+                  </p>
                 </div>
               )}
 
@@ -535,25 +492,8 @@ export const BadgesTab: React.FC<AdminDashboardProps> = (props) => {
                 </div>
               )}
 
-              {newBadgeCategory === 'pet' && (
-                <div className="space-y-2">
-                  <label className="block text-xs font-bold text-stone-700">
-                    Max Multiplier Cap (levels up each run with a pet)
-                  </label>
-                  <input
-                    type="number"
-                    min={1}
-                    value={triggerMaxMultiplier}
-                    onChange={(e) => setTriggerMaxMultiplier(Number(e.target.value))}
-                    className="w-full px-3 py-1.5 text-xs border rounded-lg bg-white font-bold"
-                  />
-                  <p className="text-[10px] text-stone-500">
-                    Runners level up this badge each time they check in with a pet, capped visually at {triggerMaxMultiplier}+ (e.g. x{triggerMaxMultiplier}+).
-                  </p>
-                </div>
-              )}
-
-              {/* Incremental Multiplier Toggle */}
+              {/* Incremental Multiplier Toggle (always on for Incremental badges) */}
+              {newBadgeCategory !== 'incremental' && (
               <div className="pt-2 border-t border-amber-200/80 flex items-center justify-between">
                 <div>
                   <span className="text-xs font-bold text-stone-800 block">
@@ -570,6 +510,7 @@ export const BadgesTab: React.FC<AdminDashboardProps> = (props) => {
                   className="w-5 h-5 text-amber-600 rounded focus:ring-amber-500 cursor-pointer"
                 />
               </div>
+              )}
             </div>
 
             {/* 5. Requirement and Description */}
@@ -733,7 +674,7 @@ export const BadgesTab: React.FC<AdminDashboardProps> = (props) => {
 
           {/* Filter chips */}
           <div className="flex bg-stone-100 p-1 rounded-xl text-xs font-semibold gap-1 flex-wrap">
-            {['all', 'milestone', 'special_event', 'activity', 'distance', 'pet', 'streak'].map((f) => (
+            {['all', 'special_event', 'incremental', 'distance', 'streak'].map((f) => (
               <button
                 key={f}
                 onClick={() => setBadgeFilterCategory(f)}
@@ -743,7 +684,7 @@ export const BadgesTab: React.FC<AdminDashboardProps> = (props) => {
                     : 'text-stone-600 hover:text-stone-900'
                 }`}
               >
-                {f === 'special_event' ? 'Special Events' : f === 'pet' ? '🐕 Pet Runs' : f}
+                {f === 'special_event' ? 'Special Events' : f === 'incremental' ? '🔼 Incremental' : f}
               </button>
             ))}
           </div>
@@ -801,7 +742,7 @@ export const BadgesTab: React.FC<AdminDashboardProps> = (props) => {
                   </span>
                   {b.isIncremental && (
                     <span className="font-bold text-amber-800 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
-                      Multiplier {b.maxMultiplier ? `(Max ${b.maxMultiplier}+)` : 'Enabled'}
+                      Level-up {b.maxMultiplier ? `(shows up to ${b.maxMultiplier}+)` : '(no cap)'}
                     </span>
                   )}
                 </div>

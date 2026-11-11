@@ -61,3 +61,43 @@ it('keeps private profile fields out of deferred public leaderboard state', asyn
   expect(row.emergencyContact).toBeUndefined();
   expect(row.name).toBe('Runner');
 });
+
+it('a recognition-only milestone (the first run) is never a gear handout', async () => {
+  const { alertHasGear } = await import('./milestones');
+  expect(alertHasGear({ hasGear: false })).toBe(false);
+  expect(alertHasGear({ hasGear: true })).toBe(true);
+  expect(alertHasGear({})).toBe(true); // alerts saved before this field existed were gear
+});
+
+it('milestone progress only counts toward gear milestones and honors admin-made ones', () => {
+  const custom = [
+    { id: 'a', runsRequired: 1, name: 'First', reward: 'First', perks: '', icon: '🦫', description: '', hasGear: false },
+    { id: 'b', runsRequired: 10, name: '10 runs', reward: 'Socks', perks: '', icon: '🧦', description: '', hasGear: true },
+  ];
+  expect(milestoneProgress(0, custom)).toMatchObject({ runsRemaining: 10, progressPercent: 0 });
+  expect(milestoneProgress(5, custom).progressPercent).toBe(50);
+});
+
+describe('incremental badges', () => {
+  it('levels up every step of the chosen counter and caps only the display', async () => {
+    const { recomputeBadges } = await import('./legacy');
+    const { levelTag } = await import('./badgeProgress');
+    const { INITIAL_BADGES } = await import('../data/catalog');
+    const user = { totalRuns: 30, walkCount: 25, runCount: 5, petRunCount: 11, unlockedBadgeIds: [], badgeCounts: {} } as unknown as import('../types').UserProfile;
+    const counts = recomputeBadges(user, INITIAL_BADGES, []).badgeCounts!;
+    expect(counts['power-walker']).toBe(2);   // 25 walks, every 10
+    expect(counts['pet-runner']).toBe(11);    // 11 pet check-ins, every 1
+    const walker = INITIAL_BADGES.find((b) => b.id === 'power-walker')!;
+    const hound = INITIAL_BADGES.find((b) => b.id === 'pet-runner')!;
+    expect(levelTag(walker, 25)).toBe('x25');      // no cap
+    expect(levelTag(hound, 10)).toBe('x10');       // the cap itself shows as is
+    expect(levelTag(hound, 11)).toBe('x10+');      // beyond it shows 10+
+  });
+  it('supports admin-made incremental badges for walks, runs and pet check-ins', async () => {
+    const { recomputeBadges } = await import('./legacy');
+    const user = { totalRuns: 20, walkCount: 4, runCount: 14, petRunCount: 0, unlockedBadgeIds: [], badgeCounts: {} } as unknown as import('../types').UserProfile;
+    const badge = (id: string, counter: 'walks' | 'runs' | 'pet', step: number) => ({ id, name: id, emoji: '🏅', description: '', requirement: '', category: 'incremental' as const, isIncremental: true, triggerConfig: { type: 'incremental' as const, counter, step, isIncremental: true } });
+    const counts = recomputeBadges(user, [badge('r', 'runs', 5), badge('w', 'walks', 5), badge('p', 'pet', 1)], []).badgeCounts!;
+    expect(counts).toEqual({ r: 2 }); // 14 runs / 5 = 2; 4 walks is short of 5; no pet check-ins
+  });
+});

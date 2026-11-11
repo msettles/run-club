@@ -3,8 +3,10 @@ import { formatMiles } from '../utils/miles';
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { celebrate } from '../utils/celebrate';
 import { milestoneProgress } from '../utils/milestones';
+import { levelTag } from '../utils/badgeProgress';
 import { RunEvent, MeetupEvent, UserProfile, RouteOption, ActivityType, DistanceChoice, CheckInRecord, Badge, GPXRoute } from '../types';
 import { CLUB_MILESTONES } from '../data/catalog';
+import type { MilestoneReward } from '../types';
 import { checkInStatus, checkInWindow, formatOpening } from '../utils/checkInWindow';
 import { MapViewer } from './MapViewer';
 import { downloadGPXFile } from '../utils/gpxParser';
@@ -32,6 +34,7 @@ interface CheckInModalProps {
   runs?: RunEvent[]; // For showing day, time and start location of candidate runs
   onResolveCodeWord?: (date: string, codeWord: string) => Promise<string | null>;
   currentUser: UserProfile;
+  milestones?: MilestoneReward[]; // The club's milestones (defaults to the built-in ones)
   routes?: GPXRoute[];
   checkins?: CheckInRecord[];
   onCheckInRunner: (params: {
@@ -64,6 +67,7 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
   runs = [],
   onResolveCodeWord,
   currentUser,
+  milestones = CLUB_MILESTONES,
   routes,
   checkins,
   onCheckInRunner,
@@ -495,10 +499,8 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
 
   // Milestone helpers
   const activeUserRuns = successResult?.user?.totalRuns ?? currentUser.totalRuns;
-  const { nextMilestone, runsRemaining, progressPercent: progressPct } = milestoneProgress(activeUserRuns);
-  const justUnlockedMilestone = [5, 50, 100, 200].includes(activeUserRuns)
-    ? CLUB_MILESTONES.find((m) => m.runsRequired === activeUserRuns)
-    : null;
+  const { nextMilestone, runsRemaining, progressPercent: progressPct } = milestoneProgress(activeUserRuns, milestones);
+  const justUnlockedMilestone = milestones.find((m) => m.runsRequired === activeUserRuns) || null;
 
   const activeCheckIn = successResult?.checkIn || existingCheckIn;
 
@@ -757,7 +759,7 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
                                 <span className="font-extrabold text-sm text-stone-900 truncate">{badge.name}</span>
                                 {badge.isIncremental && count > 1 && (
                                   <span className="px-1.5 py-0.2 bg-amber-400 text-stone-950 font-black text-[10px] rounded-full shrink-0">
-                                    x{badge.maxMultiplier && count >= badge.maxMultiplier ? `${badge.maxMultiplier}+` : count}
+                                    {levelTag(badge, count)}
                                   </span>
                                 )}
                               </div>
@@ -777,13 +779,17 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
                     <div className="bg-gradient-to-r from-amber-500 to-amber-400 text-stone-950 rounded-xl p-3.5 shadow-md border border-amber-600 space-y-1.5 animate-in zoom-in-95">
                       <div className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-stone-950">
                         <Sparkles className="w-4 h-4 text-stone-950 shrink-0" />
-                        <span>🎉 Major Milestone Unlocked!</span>
+                        <span>{justUnlockedMilestone.hasGear === false ? '🎉 Welcome to the pack!' : '🎉 Major Milestone Unlocked!'}</span>
                       </div>
                       <div className="font-extrabold text-sm sm:text-base font-display uppercase tracking-tight">
-                        {justUnlockedMilestone.name}: {justUnlockedMilestone.reward}
+                        {justUnlockedMilestone.hasGear === false ? justUnlockedMilestone.name : `${justUnlockedMilestone.name}: ${justUnlockedMilestone.reward}`}
                       </div>
                       <p className="text-xs text-stone-900 font-medium leading-snug">
-                        Tonight's run organizer has been alerted with your shirt size (<strong className="font-bold">{successResult?.user?.shirtSize || currentUser.shirtSize}</strong>). Pick up your gear at the organizer table, and show your phone for {justUnlockedMilestone.perks}!
+                        {justUnlockedMilestone.hasGear === false ? (
+                          <>That&apos;s your first Woodchucker run. Say hi to tonight&apos;s run organizer, who will welcome you to the club!</>
+                        ) : (
+                          <>Tonight&apos;s run organizer has been alerted with your shirt size (<strong className="font-bold">{successResult?.user?.shirtSize || currentUser.shirtSize}</strong>). Pick up your gear at the organizer table, and show your phone for {justUnlockedMilestone.perks}!</>
+                        )}
                       </p>
                     </div>
                   )}

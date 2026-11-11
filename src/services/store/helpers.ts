@@ -110,6 +110,13 @@ export function hydrateRouteFromFirestore(data: any): GPXRoute {
   } as GPXRoute;
 }
 
+/**
+ * Milestones (gear tiers like the 5-run shirt) are their own thing, never badges. Older saved copies of the
+ * old "milestone badges" are hidden so they don't show up twice.
+ */
+export const isBadge = (b: { category?: string; triggerConfig?: { type?: string } }): boolean =>
+  b.category !== 'milestone' && b.triggerConfig?.type !== 'milestone';
+
 export const STORAGE_KEYS = {
   RUNS: 'woodchuckers_runs_v1',
   ROUTES: 'woodchuckers_routes_v1',
@@ -123,6 +130,7 @@ export const STORAGE_KEYS = {
   CURRENT_USER_EMAIL: 'woodchuckers_current_user_email_v2',
   MILESTONE_ALERTS: 'woodchuckers_milestone_alerts_v2',
   BADGES: 'woodchuckers_badges_v2',
+  MILESTONES: 'woodchuckers_milestones_v2',
   SPECIAL_EVENTS: 'woodchuckers_special_events_v2',
 };
 

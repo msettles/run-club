@@ -68,6 +68,9 @@ export function App() {
     routes,
     loadRoute, refreshRoutes, loadMoreRoutes, hasMoreRoutes, routesLoading,
     badges,
+    milestones,
+    createMilestone,
+    deleteMilestone,
     notifications,
     currentMember,
     toggleRSVP,
@@ -864,6 +867,7 @@ export function App() {
           <MilestonesPage
             currentUser={currentUser}
             badges={badges}
+            milestones={milestones}
             isSignedIn={isUserLoggedIn}
             onJoin={handleOpenRegister}
           />
@@ -905,6 +909,9 @@ export function App() {
               onMarkMilestoneFulfilled={markMilestoneFulfilled}
               currentUser={currentUser}
               specialEvents={specialEvents}
+              milestones={milestones}
+              onCreateMilestone={createMilestone}
+              onDeleteMilestone={deleteMilestone}
               onCreateBadge={createBadge}
               onDeleteBadge={deleteBadge}
               onOpenNewRun={() => setIsNewRunOpen(true)}
@@ -1124,6 +1131,7 @@ export function App() {
             runs={runs}
             onResolveCodeWord={resolveRunByCodeWord}
             currentUser={currentUser}
+            milestones={milestones}
             routes={routes}
             checkins={checkins}
             onCheckInRunner={checkInRunner}

@@ -11,12 +11,13 @@ import {
   CheckInRecord,
   LegacyMember,
   MilestoneAlert,
+  MilestoneReward,
   SpecialEventDefinition,
 } from '../../types';
 import {
   type LegacyEvent,
 } from '../../utils/legacy';
-import { INITIAL_BADGES, INITIAL_SPECIAL_EVENTS, GUEST_USER } from '../../data/catalog';
+import { INITIAL_BADGES, INITIAL_SPECIAL_EVENTS, CLUB_MILESTONES, GUEST_USER } from '../../data/catalog';
 import { createRouteCatalogClient, RouteDetailsCache } from '../routeCatalog';
 import type { DocumentData, QueryDocumentSnapshot } from 'firebase/firestore';
 import { clubYmd } from '../../utils/dateUtils';
@@ -30,7 +31,7 @@ import {
   getStoredNotifications,
 } from '../notifications';
 import { onPushReceived, readReceivedPushes, type ReceivedPush } from '../push';
-import { STORAGE_KEYS, hydrateRouteFromFirestore, loadFromStorage, memberFromUser, saveToStorage } from './helpers';
+import { STORAGE_KEYS, hydrateRouteFromFirestore, isBadge, loadFromStorage, memberFromUser, saveToStorage } from './helpers';
 
 /**
  * Local (no-Firebase) mode keeps everything in this browser, starting from the
@@ -103,7 +104,9 @@ export function useStoreState() {
   const [hasMoreGearHistory, setHasMoreGearHistory] = useState(!LOCAL_MODE);
   const [members, setMembers] = useState<Member[]>(() => (LOCAL_MODE ? loadMerged<Member>(STORAGE_KEYS.MEMBERS, [], emailOf) : []));
   // The built-in badge catalog is part of the app; admin-made badges come from Firestore.
-  const [badges, setBadges] = useState<Badge[]>(() => (LOCAL_MODE ? loadMerged(STORAGE_KEYS.BADGES, INITIAL_BADGES, idOf) : INITIAL_BADGES));
+  // Milestones (gear tiers) and badges are separate: a milestone is never also a badge.
+  const [badges, setBadges] = useState<Badge[]>(() => (LOCAL_MODE ? loadMerged(STORAGE_KEYS.BADGES, INITIAL_BADGES, idOf).filter(isBadge) : INITIAL_BADGES));
+  const [milestones, setMilestones] = useState<MilestoneReward[]>(() => (LOCAL_MODE ? loadMerged(STORAGE_KEYS.MILESTONES, CLUB_MILESTONES, idOf) : CLUB_MILESTONES));
   const [specialEvents, setSpecialEvents] = useState<SpecialEventDefinition[]>(() =>
     LOCAL_MODE ? loadMerged(STORAGE_KEYS.SPECIAL_EVENTS, INITIAL_SPECIAL_EVENTS, idOf) : INITIAL_SPECIAL_EVENTS
   );
@@ -228,6 +231,7 @@ export function useStoreState() {
   usePersist(STORAGE_KEYS.CURRENT_USER_EMAIL, currentUserEmail, localReady);
   usePersist(STORAGE_KEYS.MILESTONE_ALERTS, milestoneAlerts, localReady);
   usePersist(STORAGE_KEYS.BADGES, badges, localReady);
+  usePersist(STORAGE_KEYS.MILESTONES, milestones, localReady);
   usePersist(STORAGE_KEYS.SPECIAL_EVENTS, specialEvents, localReady);
 
   // Derived current user (Falls back to GUEST_USER if not logged in)
@@ -272,6 +276,8 @@ export function useStoreState() {
     leaderboardLoaded, setLeaderboardLoaded, leaderboardError, setLeaderboardError,
     badges,
     setBadges,
+    milestones,
+    setMilestones,
     specialEvents,
     setSpecialEvents,
     notifications,

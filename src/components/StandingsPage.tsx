@@ -44,6 +44,8 @@ export const StandingsPage: React.FC<StandingsPageProps> = ({ members, badges, c
     { label: 'Best streak', value: `${bestStreak} wk` },
   ];
 
+  // Only count badges that still exist (removed or retired ones don't show or count).
+  const knownBadges = (m: Member) => m.unlockedBadgeIds.filter((id) => badges.some((b) => b.id === id));
   const row = (m: Member, index: number) => (
     <div key={m.id} className={`px-4 py-3 flex items-center justify-between gap-3 ${m.id === me.id ? 'bg-woodland-50/70' : ''}`}>
       <div className="flex items-center gap-3 min-w-0">
@@ -57,11 +59,11 @@ export const StandingsPage: React.FC<StandingsPageProps> = ({ members, badges, c
             {m.id === me.id && <span className="text-[10px] bg-woodland-100 text-woodland-900 px-1.5 rounded font-semibold border border-woodland-200">You</span>}
           </div>
           <div className="flex items-center gap-1 mt-0.5">
-            {m.unlockedBadgeIds.slice(0, 3).map((id) => {
+            {knownBadges(m).slice(0, 3).map((id) => {
               const b = badges.find((x) => x.id === id);
               return b ? <span key={id} title={b.name} className="text-sm">{b.emoji}</span> : null;
             })}
-            {m.unlockedBadgeIds.length > 3 && <span className="text-[10px] text-stone-400 font-bold">+{m.unlockedBadgeIds.length - 3}</span>}
+            {knownBadges(m).length > 3 && <span className="text-[10px] text-stone-400 font-bold">+{knownBadges(m).length - 3}</span>}
           </div>
         </div>
       </div>

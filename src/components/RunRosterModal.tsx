@@ -3,6 +3,7 @@ import { CheckInRecord, MilestoneAlert, RunEvent, UserProfile } from '../types';
 import { Modal } from './Modal';
 import { calculateAge } from '../utils/dateUtils';
 import { runnerLookup } from '../utils/runnerLookup';
+import { alertHasGear } from '../utils/milestones';
 import { CheckCircle, ChevronDown, Gift, Phone, Search, Shirt, X } from 'lucide-react';
 
 interface RunRosterModalProps {
@@ -47,12 +48,13 @@ export const RunRosterModal: React.FC<RunRosterModalProps> = ({ run, alerts: liv
   // Runners who reached a milestone come first (gear still to hand out before handed out), then by check-in time.
   const forRun = useMemo(() => {
     const rank = new Map<string, number>();
-    for (const a of gear) rank.set(a.userEmail.toLowerCase(), Math.min(rank.get(a.userEmail.toLowerCase()) ?? 2, a.fulfilled ? 1 : 0));
+    for (const a of gear) rank.set(a.userEmail.toLowerCase(), Math.min(rank.get(a.userEmail.toLowerCase()) ?? 2, a.fulfilled && alertHasGear(a) ? 1 : 0));
     return [...(loaded?.checkins || [])].sort((a, b) =>
       (rank.get(a.userEmail.toLowerCase()) ?? 2) - (rank.get(b.userEmail.toLowerCase()) ?? 2) || a.time.localeCompare(b.time));
   }, [loaded, gear]);
-  const pending = gear.filter((a) => !a.fulfilled);
-  const done = gear.filter((a) => a.fulfilled);
+  const pending = gear.filter((a) => !a.fulfilled && alertHasGear(a));
+  const welcome = gear.filter((a) => !alertHasGear(a)); // recognition only, nothing to hand out
+  const done = gear.filter((a) => a.fulfilled && alertHasGear(a));
   const gearByEmail = new Map(gear.map((a) => [a.userEmail.toLowerCase(), a]));
 
   const q = query.trim().toLowerCase();
@@ -101,6 +103,15 @@ export const RunRosterModal: React.FC<RunRosterModalProps> = ({ run, alerts: liv
             <h3 className="text-xs font-black uppercase tracking-wider text-amber-800 flex items-center gap-1.5"><Gift className="w-4 h-4" /> Milestones reached at this run ({gear.length})</h3>
             {gear.length === 0 && <p className="text-sm text-stone-500">No milestone gear from this run.</p>}
             {gearError && <p role="alert" className="text-sm text-amber-900">{gearError}</p>}
+            {welcome.map((a) => (
+              <div key={a.id} className="flex items-center gap-2 rounded-2xl border border-emerald-300 bg-emerald-50 px-3 py-2.5">
+                <span className="text-2xl">🦫</span>
+                <div className="min-w-0">
+                  <div className="font-black text-stone-900 truncate">{runner.name(a.userEmail, a.runnerName)}</div>
+                  <div className="text-xs text-emerald-900">{a.milestoneName}: welcome them to the club! No gear for this one.</div>
+                </div>
+              </div>
+            ))}
             {pending.map((a) => (
               <div key={a.id} className="rounded-2xl border border-amber-300 bg-amber-50 p-3 space-y-2">
                 <div className="flex items-start justify-between gap-2">
@@ -148,7 +159,7 @@ export const RunRosterModal: React.FC<RunRosterModalProps> = ({ run, alerts: liv
                       <span className="min-w-0">
                         <span className="block truncate text-sm font-bold text-stone-900">
                           {runner.name(c.userEmail, c.runnerName) || 'Woodchuck Runner'}
-                          {alert && <span className="ml-1.5 text-xs">{alert.fulfilled ? '🎁✓' : '🎁'}</span>}
+                          {alert && <span className="ml-1.5 text-xs">{!alertHasGear(alert) ? '🦫' : alert.fulfilled ? '🎁✓' : '🎁'}</span>}
                         </span>
                         <span className="block text-[11px] text-stone-500">{c.time.slice(0, 5)} · {c.activity}{c.routeName ? ` · ${c.routeName}` : ''}</span>
                       </span>

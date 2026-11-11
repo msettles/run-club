@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { adjustDistanceCounts, computeStreaks, datedEventsFrom, distanceCountKeys, liveStreak, parseCsv, recomputeBadges, specialEventIdsFor } from './legacy';
+import { adjustDistanceCounts, computeStreaks, datedEventsFrom, distanceCountKeys, liveStreak, parseCsv, recomputeBadges, specialEventIdsFor, legacySpecialEventIds } from './legacy';
 import { GUEST_USER } from '../data/initialData';
 import type { Badge, BadgeTriggerConfig, CheckInRecord } from '../types';
 
@@ -23,12 +23,20 @@ describe('legacy parsing and attendance history', () => {
   });
   it('matches special events by run ID when two runs share a date', () => {
     const checkin = { runId: 'normal', date: '2026-11-11', codeWord: 'ACORN' } as CheckInRecord;
-    const events = [{ id: 'normal', date: checkin.date, title: 'Social Run' }, { id: 'special', date: checkin.date, title: 'Turkey Trot' }];
+    const events = [
+      { id: 'normal', date: checkin.date, title: 'Social Run' },
+      { id: 'special', date: checkin.date, title: 'Turkey Trot', specialEvent: 'turkey_trot' },
+      { id: 'untagged', date: checkin.date, title: 'Turkey Trot' }, // looks special by name, but wasn't picked from the dropdown
+    ];
     expect(datedEventsFrom([], [checkin], events)[0].specialEventIds).toEqual([]);
     expect(datedEventsFrom([], [{ ...checkin, runId: 'special' }], events)[0].specialEventIds).toEqual(['turkey_trot']);
+    expect(datedEventsFrom([], [{ ...checkin, runId: 'untagged', codeWord: 'TURKEY' }], events)[0].specialEventIds).toEqual([]);
   });
   it('does not count an explicitly marked special event twice', () => {
-    expect(specialEventIdsFor('TURKEY', 'Turkey Trot', 'turkey_trot')).toEqual(['turkey_trot']);
+    expect(specialEventIdsFor('turkey_trot')).toEqual(['turkey_trot']);
+    expect(specialEventIdsFor('none')).toEqual([]);
+    expect(specialEventIdsFor(undefined)).toEqual([]); // a run titled Turkey Trot without the tag no longer counts
+    expect(legacySpecialEventIds('SPOOKY')).toEqual(['halloween']); // old-app sign-ins still match by code word for now
   });
 });
 

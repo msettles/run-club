@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { 
   CheckCircle, 
   Check, 
@@ -10,10 +10,22 @@ import {
 } from 'lucide-react';
 import type { AdminDashboardProps } from '../AdminDashboard';
 import { runnerLookup } from '../../utils/runnerLookup';
+import { alertHasGear } from '../../utils/milestones';
 
 export const MilestonesTab: React.FC<AdminDashboardProps> = (props) => {
+  const [mName, setMName] = useState('');
+  const [mRuns, setMRuns] = useState('');
+  const [mIcon, setMIcon] = useState('');
+  const [mDesc, setMDesc] = useState('');
+  const [mGear, setMGear] = useState('');
+  const [mPerks, setMPerks] = useState('');
+  const [milestoneError, setMilestoneError] = useState('');
+  const [savingMilestone, setSavingMilestone] = useState(false);
   const {
     milestoneAlerts = [],
+    milestones = [],
+    onCreateMilestone,
+    onDeleteMilestone,
     users = [],
     currentUser,
     onMarkMilestoneFulfilled,
@@ -21,7 +33,7 @@ export const MilestonesTab: React.FC<AdminDashboardProps> = (props) => {
   // Names and sizes follow the runner's current profile, not the copy saved with the alert.
   const runner = runnerLookup(users);
   const currentShirtSize = (alert: { userEmail: string; shirtSize: string }) => runner.shirtSize(alert.userEmail, alert.shirtSize);
-  const pendingMilestones = milestoneAlerts.filter((a) => !a.fulfilled);
+  const pendingMilestones = milestoneAlerts.filter((a) => !a.fulfilled && alertHasGear(a));
   const fulfilledMilestones = milestoneAlerts.filter((a) => a.fulfilled);
 
   return (
@@ -38,7 +50,7 @@ export const MilestonesTab: React.FC<AdminDashboardProps> = (props) => {
               Milestone Awards &amp; Gear Queue
             </h3>
             <p className="text-xs text-stone-500 mt-0.5">
-              When a runner checks into their 5th, 50th, 100th, or 200th run, an alert appears here with their shirt size so organizers can hand them their gear at Blue Note!
+              When a runner reaches a milestone with gear, an alert appears here with their shirt size so organizers can hand them their gear at Blue Note. Milestones are separate from badges.
             </p>
           </div>
 
@@ -54,24 +66,81 @@ export const MilestonesTab: React.FC<AdminDashboardProps> = (props) => {
           </div>
         </div>
 
-        {/* Club Milestone Rules Summary Bar */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-4 text-xs font-sans">
-          <div className="p-2.5 bg-stone-50 rounded-xl border border-stone-200">
-            <strong className="text-amber-800 font-black block">5 Runs:</strong>
-            <span className="text-stone-700">Official Club Shirt + $1 off draft beers</span>
+        {/* Club milestones (separate from badges) */}
+        <div className="pt-4 space-y-2 text-xs font-sans">
+          <h4 className="text-[11px] font-black uppercase tracking-wider text-stone-600">Club milestones ({milestones.length})</h4>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {milestones.map((m) => (
+              <div key={m.id} className="flex items-start gap-2.5 p-2.5 bg-stone-50 rounded-xl border border-stone-200">
+                <span className="text-xl leading-none">{m.icon}</span>
+                <div className="min-w-0 flex-1">
+                  <strong className="text-amber-800 font-black block">{m.runsRequired} {m.runsRequired === 1 ? 'run' : 'runs'}: {m.name}</strong>
+                  <span className="text-stone-700">{m.hasGear === false ? 'No gear (organizers see it as a welcome)' : m.reward}{m.perks ? ` · ${m.perks}` : ''}</span>
+                </div>
+                {!m.isDefault && onDeleteMilestone && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (window.confirm(`Delete the ${m.name} milestone? Alerts already created are kept.`)) {
+                        onDeleteMilestone(m.id).catch(() => window.alert("Couldn't delete that milestone. Please try again."));
+                      }
+                    }}
+                    className="text-[11px] font-bold text-red-700 hover:underline cursor-pointer"
+                  >
+                    Delete
+                  </button>
+                )}
+              </div>
+            ))}
           </div>
-          <div className="p-2.5 bg-stone-50 rounded-xl border border-stone-200">
-            <strong className="text-amber-800 font-black block">50 Runs:</strong>
-            <span className="text-stone-700">Woodchucker Running Hat</span>
-          </div>
-          <div className="p-2.5 bg-stone-50 rounded-xl border border-stone-200">
-            <strong className="text-amber-800 font-black block">100 Runs:</strong>
-            <span className="text-stone-700">Woodchucker Beer Mug</span>
-          </div>
-          <div className="p-2.5 bg-stone-50 rounded-xl border border-stone-200">
-            <strong className="text-amber-800 font-black block">200 Runs:</strong>
-            <span className="text-stone-700">Custom Name Water Bottle</span>
-          </div>
+
+          {onCreateMilestone && (
+            <form
+              className="mt-2 space-y-3 rounded-2xl border border-amber-200 bg-amber-50/50 p-4"
+              onSubmit={async (e) => {
+                e.preventDefault();
+                setMilestoneError('');
+                setSavingMilestone(true);
+                try {
+                  await onCreateMilestone({ name: mName, runsRequired: Number(mRuns), icon: mIcon, description: mDesc, gear: mGear, perks: mPerks });
+                  setMName(''); setMRuns(''); setMIcon(''); setMDesc(''); setMGear(''); setMPerks('');
+                } catch (err) {
+                  setMilestoneError(err instanceof Error ? err.message : 'Could not save the milestone.');
+                } finally {
+                  setSavingMilestone(false);
+                }
+              }}
+            >
+              <h5 className="text-xs font-black uppercase tracking-wider text-amber-900">Add a milestone</h5>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <label className="block text-xs font-bold text-stone-700">Name *
+                  <input required value={mName} onChange={(e) => setMName(e.target.value)} placeholder="e.g. 25 Runs Milestone" className="mt-1 w-full rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-xs font-semibold" />
+                </label>
+                <label className="block text-xs font-bold text-stone-700">Total runs required *
+                  <input required type="number" min={1} step={1} value={mRuns} onChange={(e) => setMRuns(e.target.value)} className="mt-1 w-full rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-xs font-bold" />
+                </label>
+                <label className="block text-xs font-bold text-stone-700">Icon (emoji)
+                  <input value={mIcon} maxLength={8} onChange={(e) => setMIcon(e.target.value)} placeholder="🏆" className="mt-1 w-full rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-xs" />
+                </label>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <label className="block text-xs font-bold text-stone-700">Gear to hand out
+                  <input value={mGear} onChange={(e) => setMGear(e.target.value)} placeholder="e.g. Club pin. Leave blank for no gear" className="mt-1 w-full rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-xs font-semibold" />
+                </label>
+                <label className="block text-xs font-bold text-stone-700">Perks (optional)
+                  <input value={mPerks} onChange={(e) => setMPerks(e.target.value)} placeholder="e.g. $1 off beers at Blue Note" className="mt-1 w-full rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-xs" />
+                </label>
+              </div>
+              <label className="block text-xs font-bold text-stone-700">Description
+                <input value={mDesc} onChange={(e) => setMDesc(e.target.value)} placeholder="Shown to runners on the Milestones page" className="mt-1 w-full rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-xs" />
+              </label>
+              <p className="text-[11px] text-stone-500">With no gear, organizers still see the runner when they reach it, but there is nothing to hand out. Each run count can only be a milestone once.</p>
+              {milestoneError && <p role="alert" className="text-xs font-semibold text-amber-900">{milestoneError}</p>}
+              <button type="submit" disabled={savingMilestone} className="rounded-xl bg-stone-950 px-4 py-2 text-xs font-bold uppercase tracking-wider text-amber-300 hover:bg-stone-800 disabled:opacity-50 cursor-pointer">
+                {savingMilestone ? 'Saving…' : 'Add milestone'}
+              </button>
+            </form>
+          )}
         </div>
       </div>
 
@@ -87,7 +156,7 @@ export const MilestonesTab: React.FC<AdminDashboardProps> = (props) => {
             <CheckCircle className="w-10 h-10 text-emerald-500 mx-auto" />
             <h5 className="font-bold text-stone-800 text-sm">All Milestone Gear is Fulfilled!</h5>
             <p className="text-xs text-stone-500 max-w-md mx-auto">
-              When runners check into tonight's run and hit 5, 50, 100, or 200 runs, their name, milestone, and shirt size will automatically show up here.
+              When runners reach a milestone with gear, their name, milestone, and shirt size will automatically show up here.
             </p>
           </div>
         ) : (

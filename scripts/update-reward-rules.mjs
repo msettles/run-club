@@ -1,7 +1,7 @@
 /** Synchronize the built-in reward defaults used by Firestore authorization. */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { INITIAL_BADGES } from '../src/data/catalog.ts';
-const fields = new Set(['type', 'minTotalRuns', 'isIncremental', 'step', 'activityType', 'activityCount', 'distanceChoice', 'distanceTier', 'distanceCount', 'streakWeeks', 'specialEventId']);
+const fields = new Set(['type', 'minTotalRuns', 'isIncremental', 'step', 'activityType', 'activityCount', 'distanceChoice', 'distanceTier', 'distanceCount', 'streakWeeks', 'specialEventId', 'counter']);
 const choices = INITIAL_BADGES.filter((badge) => badge.triggerConfig).map((badge) => {
   const config = Object.fromEntries(Object.entries(badge.triggerConfig).filter(([key]) => fields.has(key)));
   return `id == ${JSON.stringify(badge.id)} ? ${JSON.stringify(config)}`;

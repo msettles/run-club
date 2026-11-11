@@ -784,6 +784,19 @@ test('organizer can delete a run until check-in opens; only an admin after', asy
   await assertSucceeds(deleteDoc(doc(ctx(ORGANIZER), 'runs', 'run-1')));
 });
 
+test('milestones are public to read and admin-only to change; one per run count', async () => {
+  const m = { id: 'milestone-25', runsRequired: 25, name: '25 Runs', reward: 'Club Pin', perks: '', icon: '📌', description: 'x', hasGear: true, isDefault: false, createdAt: '2026-11-11T00:00:00Z' };
+  const admin = ctx(BOOTSTRAP);
+  await assertSucceeds(setDoc(doc(admin, 'milestones', 'milestone-25'), m));
+  await assertFails(setDoc(doc(admin, 'milestones', 'other'), { ...m, id: 'other' })); // ID must match the run count
+  await assertFails(setDoc(doc(admin, 'milestones', 'milestone-26'), { ...m, id: 'milestone-26' }));
+  await assertFails(setDoc(doc(ctx(ORGANIZER), 'milestones', 'milestone-25'), m));
+  await assertFails(setDoc(doc(ctx(ALICE), 'milestones', 'milestone-25'), m));
+  await assertSucceeds(getDoc(doc(env.unauthenticatedContext().firestore(), 'milestones', 'milestone-25')));
+  await assertFails(deleteDoc(doc(ctx(ORGANIZER), 'milestones', 'milestone-25')));
+  await assertSucceeds(deleteDoc(doc(admin, 'milestones', 'milestone-25')));
+});
+
 // ---- Push devices ----
 
 test('runners record their own push device; only admins can read the list', async () => {
@@ -922,4 +935,15 @@ test('the loop setting on a loop route caps what a runner can log', async () => 
   // A route saved without a setting allows the default of 4.
   await assertSucceeds(attempt(4));
   await assertFails(attempt(5));
+});
+
+test('incremental badges: admin-defined level size, counter and display cap are validated', async () => {
+  const admin = ctx(BOOTSTRAP);
+  const badge = (id, trigger, extra = {}) => ({ id, name: id, emoji: '🏅', description: 'd', requirement: 'r', category: 'incremental', isIncremental: true, triggerConfig: trigger, ...extra });
+  await assertSucceeds(setDoc(doc(admin, 'badges', 'b-runs'), badge('b-runs', { type: 'incremental', counter: 'runs', step: 5, isIncremental: true }, { maxMultiplier: 10 })));
+  await assertFails(setDoc(doc(admin, 'badges', 'b-zero'), badge('b-zero', { type: 'incremental', counter: 'runs', step: 0, isIncremental: true })));
+  await assertFails(setDoc(doc(admin, 'badges', 'b-frac'), badge('b-frac', { type: 'incremental', counter: 'runs', step: 1.5, isIncremental: true })));
+  await assertFails(setDoc(doc(admin, 'badges', 'b-bad'), badge('b-bad', { type: 'incremental', counter: 'swims', step: 5, isIncremental: true })));
+  await assertFails(setDoc(doc(admin, 'badges', 'b-max'), badge('b-max', { type: 'incremental', counter: 'pet', step: 1, isIncremental: true }, { maxMultiplier: 0 })));
+  await assertFails(setDoc(doc(ctx(ORGANIZER), 'badges', 'b-org'), badge('b-org', { type: 'incremental', counter: 'pet', step: 1, isIncremental: true })));
 });

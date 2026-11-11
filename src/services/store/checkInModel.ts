@@ -1,10 +1,9 @@
-import type { ActivityType, DistanceChoice, UserProfile, MeetupEvent, CheckInRecord, RouteOption, Badge, MilestoneAlert } from '../../types';
+import type { ActivityType, DistanceChoice, UserProfile, MeetupEvent, CheckInRecord, RouteOption, Badge, MilestoneAlert, MilestoneReward } from '../../types';
 import { adjustDistanceCounts, recomputeBadges, datedEventsFrom, type LegacyEvent } from '../../utils/legacy';
-import { CLUB_MILESTONES } from '../../data/catalog';
 
 export interface CheckInParams { eventId: string; userEmail: string; codeWordEntered: string; activity: ActivityType; distanceChoice: DistanceChoice; loops?: number; withPet?: boolean; now?: Date }
 
-export function calculateCheckIn(params: CheckInParams, u: UserProfile, event: MeetupEvent, existingCheckIn: CheckInRecord | undefined, history: CheckInRecord[], legacyEvents: LegacyEvent[], badges: Badge[], meetupEvents: MeetupEvent[]) {
+export function calculateCheckIn(params: CheckInParams, u: UserProfile, event: MeetupEvent, existingCheckIn: CheckInRecord | undefined, history: CheckInRecord[], legacyEvents: LegacyEvent[], badges: Badge[], meetupEvents: MeetupEvent[], milestones: MilestoneReward[]) {
   const { eventId, activity, distanceChoice, loops, withPet, codeWordEntered } = params;
   const cleanEmail = params.userEmail.trim().toLowerCase();
   const checkinId = `${eventId}_${cleanEmail}`;
@@ -102,24 +101,22 @@ export function calculateCheckIn(params: CheckInParams, u: UserProfile, event: M
     const before = (id: string) => u.badgeCounts?.[id] ?? ((u.unlockedBadgeIds || []).includes(id) ? 1 : 0);
     const earnedBadges = badges.filter((b) => (derived.badgeCounts?.[b.id] || 0) > before(b.id));
 
-    // 7. Milestone gear alert — only when this check-in is what crossed the milestone
-    //    (never on a same-night edit), with a deterministic ID so it can't duplicate.
+    // 7. Milestone alert: only when this check-in is what crossed the milestone (never on a same-night
+    //    edit), with a deterministic ID so it can't duplicate. Milestones without gear are recognition only.
     let unlockedMilestone: MilestoneAlert | undefined;
     if (!isUpdate) {
-      const milestoneBadge = badges.find(
-        (b) => b.category === 'milestone' && Boolean(b.triggerConfig?.reward) && b.triggerConfig?.minTotalRuns === updatedUser.totalRuns
-      );
-      const mDef = milestoneBadge ? undefined : CLUB_MILESTONES.find((m) => m.runsRequired === updatedUser.totalRuns);
-      if (milestoneBadge || mDef) {
+      const mDef = milestones.find((m) => m.runsRequired === updatedUser.totalRuns);
+      if (mDef) {
         unlockedMilestone = {
           id: `m${updatedUser.totalRuns}_${cleanEmail}`,
           userEmail: cleanEmail,
           runnerName: updatedUser.displayName,
           shirtSize: updatedUser.shirtSize,
           milestoneRuns: updatedUser.totalRuns,
-          milestoneName: milestoneBadge ? milestoneBadge.name : mDef!.name,
-          reward: milestoneBadge ? milestoneBadge.triggerConfig!.reward! : mDef!.reward,
-          perks: milestoneBadge ? (milestoneBadge.triggerConfig?.perks || '$1 off draft beers at Blue Note') : mDef!.perks,
+          milestoneName: mDef.name,
+          reward: mDef.reward,
+          perks: mDef.perks,
+          hasGear: mDef.hasGear !== false,
           date: eventDate,
           time: timeStr,
           runId: eventId,
