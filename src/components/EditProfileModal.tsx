@@ -128,7 +128,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ user, onSave
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label htmlFor={`${id}-ecname`} className={label}>Emergency contact (optional)</label>
+              <label htmlFor={`${id}-ecname`} className={label}>Emergency contact</label>
               <input id={`${id}-ecname`} value={contactName} maxLength={100} onChange={(e) => setContactName(e.target.value)} placeholder="Name" className={input} />
             </div>
             <div>

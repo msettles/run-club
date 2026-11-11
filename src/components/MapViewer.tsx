@@ -339,7 +339,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
         <div ref={mapContainerRef} className="h-full w-full z-0" />
 
         {/* Floating GPS Location Button (Bottom Right - Clear of top-left zoom controls) */}
-        <div className="absolute bottom-3 right-3 z-[400]">
+        <div className="absolute bottom-8 right-3 z-[400]">
           <button
             type="button"
             onClick={toggleLocationTracking}

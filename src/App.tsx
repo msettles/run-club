@@ -536,7 +536,6 @@ export function App() {
         onEditProfile={isUserLoggedIn && isProfileVerified ? () => setIsEditProfileOpen(true) : undefined}
         authReady={authReady}
         unreadNotifsCount={bellItems.filter((n) => !isBellItemRead(n)).length}
-        onOpenNewRun={() => setIsNewRunOpen(true)}
         onOpenUploadGpx={() => {
           setEditingRoute(null);
           setIsRouteStudioOpen(true);

@@ -47,10 +47,10 @@ export function MapViewport({ title, height, onResize, children }: {
       </Modal>}
       {createPortal(<div className="relative h-full">
         {children}
-        <button ref={fullScreenButton} type="button" onClick={() => setIsFullScreen((value) => !value)} aria-expanded={isFullScreen} aria-label={isFullScreen ? 'Return map to normal size' : 'View map full screen'} className="absolute left-3 top-[88px] z-[500] flex min-h-11 items-center gap-2 rounded-xl border border-stone-300 bg-white px-3 py-2 text-xs font-bold text-stone-800 shadow-md hover:bg-stone-50">
-          {isFullScreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-          {isFullScreen ? 'Normal size' : 'Full screen'}
-        </button>
+        {!isFullScreen && <button ref={fullScreenButton} type="button" onClick={() => setIsFullScreen(true)} aria-label="View map full screen" className="absolute bottom-8 left-3 z-[500] flex min-h-11 items-center gap-2 rounded-xl border border-stone-300 bg-white px-3 py-2 text-xs font-bold text-stone-800 shadow-md hover:bg-stone-50">
+          <Maximize2 className="h-4 w-4" />
+          Full screen
+        </button>}
 
       </div>, mapHost)}
   </>;

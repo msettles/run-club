@@ -293,7 +293,7 @@ export const NewUserModal: React.FC<NewUserModalProps> = ({
           {/* Optional emergency contact */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label htmlFor={`${fieldId}-ecName`} className="block text-xs font-bold text-stone-700 mb-1">Emergency Contact <span className="font-medium text-stone-400">(optional)</span></label>
+              <label htmlFor={`${fieldId}-ecName`} className="block text-xs font-bold text-stone-700 mb-1">Emergency Contact</label>
               <input id={`${fieldId}-ecName`}
                 type="text"
                 value={contactName}
