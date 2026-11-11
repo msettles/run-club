@@ -77,9 +77,11 @@ test('a loop route offers exactly its allowed loop counts and credits the chosen
     localStorage.setItem('loop-fixture-ready', 'true');
   }, { key: STORAGE_KEYS.MEETUP_EVENTS, events: [loopEvent] });
   const dialog = await openCheckIn(page);
-  await expect(dialog.getByRole('button', { name: /^\d+\s*\(.*m\)$/ })).toHaveCount(3);
+  const loops = dialog.getByRole('group', { name: 'How many loops are you doing?' });
+  await expect(loops.getByRole('button')).toHaveCount(3);
   await expect(dialog.getByTitle('More loops')).toHaveCount(0);
-  await dialog.getByRole('button', { name: /^3\s*\(9/ }).click();
+  await loops.getByRole('button', { name: /^3 loops,/ }).click();
+  await expect(loops.getByRole('button', { name: /^3 loops,/ })).toHaveAttribute('aria-pressed', 'true');
   await dialog.getByPlaceholder(/Enter today's code word/).fill('ACORN');
   await dialog.getByRole('button', { name: /Check In for 3 Loops \(9\.0 mi\)/ }).click();
   await expect(dialog.getByText('Your check-in is saved.', { exact: false })).toBeVisible();
