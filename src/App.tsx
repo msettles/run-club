@@ -15,6 +15,8 @@ import { StandingsPage } from './components/StandingsPage';
 import { SubscribeMenu } from './components/SubscribeMenu';
 import { EditProfileModal } from './components/EditProfileModal';
 import { RunRosterModal } from './components/RunRosterModal';
+import { memberKeyFor } from './utils/memberKey';
+import { alertHasGear } from './utils/milestones';
 import { InstallPwaBanner } from './components/InstallPwaBanner';
 import { InstallAppLink } from './components/InstallAppLink';
 import { MobileBottomNav } from './components/MobileBottomNav';
@@ -43,7 +45,6 @@ const AuthModal = lazy(() => import('./components/AuthModal').then((m) => ({ def
 const NewUserModal = lazy(() => import('./components/NewUserModal').then((m) => ({ default: m.NewUserModal })));
 import {
   Plus,
-  Compass,
   AlertCircle,
   Mountain,
   Download,
@@ -51,7 +52,6 @@ import {
   Bell,
   X,
   Palette,
-  Gift,
   UserPlus,
   Edit3,
   CheckCircle,
@@ -217,6 +217,23 @@ export function App() {
   useEffect(() => {
     if (authReady && activeTab === 'leaderboard' && !isUserLoggedIn) setActiveTab('runs');
   }, [authReady, activeTab, isUserLoggedIn]);
+  // Gear still owed to a runner who checks in again: the run card counts it too. Alerts are keyed by email
+  // and RSVPs by member key, so keep a small email -> key map for the outstanding alerts.
+  const [alertKeys, setAlertKeys] = useState<Record<string, string>>({});
+  const owedEmails = milestoneAlerts.filter((a) => !a.fulfilled).map((a) => a.userEmail.toLowerCase()).sort().join(',');
+  useEffect(() => {
+    if (!isOrganizerOrAdmin || !owedEmails) { setAlertKeys({}); return; }
+    let live = true;
+    void Promise.all([...new Set(owedEmails.split(','))].map(async (email) => [email, await memberKeyFor(email)] as const))
+      .then((pairs) => { if (live) setAlertKeys(Object.fromEntries(pairs)); });
+    return () => { live = false; };
+  }, [isOrganizerOrAdmin, owedEmails]);
+  const milestoneAlertsFor = (run: RunEvent): number => {
+    const ids = new Set(milestoneAlerts.filter((a) => a.runId === run.id && !a.fulfilled).map((a) => a.id));
+    const here = new Set(run.attendees.filter((a) => a.checkedIn).map((a) => a.memberId));
+    for (const a of milestoneAlerts) if (!a.fulfilled && alertHasGear(a) && alertKeys[a.userEmail.toLowerCase()] && here.has(alertKeys[a.userEmail.toLowerCase()])) ids.add(a.id);
+    return ids.size;
+  };
   // RSVP lists keep the name saved at RSVP time; show the runner's current name where we know it.
   const nameForMember = (memberId: string, stored: string) =>
     memberId === currentMember.id ? currentMember.name : members.find((m) => m.id === memberId)?.name || stored;
@@ -644,21 +661,6 @@ export function App() {
                       </button>
                     )}
 
-                    <button
-                      onClick={() => setActiveTab('milestones')}
-                      className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 bg-amber-400/20 hover:bg-amber-400/30 text-amber-300 font-bold text-[11px] sm:text-sm rounded-xl border border-amber-400/30 transition backdrop-blur-xs"
-                    >
-                      <Gift className="hidden sm:block w-4 h-4 text-amber-300" />
-                      <span>Milestones<span className="hidden sm:inline"> 🏆</span></span>
-                    </button>
-
-                    <button
-                      onClick={() => setActiveTab('routes')}
-                      className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 bg-woodland-700/60 hover:bg-woodland-700 text-white font-semibold text-[11px] sm:text-sm rounded-xl border border-woodland-500/40 transition"
-                    >
-                      <Compass className="hidden sm:block w-4 h-4 text-woodland-300" />
-                      <span><span className="hidden sm:inline">Explore </span>Routes</span>
-                    </button>
                   </div>
                 </div>
               </div>
@@ -700,6 +702,7 @@ export function App() {
                     isCheckedIn={myCheckedInRunIds.has(run.id)}
                     notLive={!isRunLive(run, meetupEvents)}
                     onOpenRoster={isOrganizerOrAdmin ? setRosterRun : undefined}
+                    milestoneAlertCount={isOrganizerOrAdmin && !past ? milestoneAlertsFor(run) : 0}
                     onEdit={isOrganizerOrAdmin && !past ? setEditingRun : undefined}
                     onDelete={isAdmin && past ? confirmDeletePastRun : undefined}
                   />
@@ -805,7 +808,6 @@ export function App() {
 
             <RouteSearch filters={routeFilters} onChange={setRouteFilters} routes={routes} count={filteredLibraryRoutes.length} incomplete={hasMoreRoutes && !routeSearchError} />
             {routeSearchError && <p role="alert" className="text-sm text-amber-900">Search covers loaded routes only because the rest of the library could not be loaded. <button type="button" onClick={() => setRouteSearchError(false)} className="underline font-bold">Retry loading routes</button></p>}
-            {isFirebaseConfigured && <button type="button" disabled={routesLoading} onClick={() => { setRouteSearchError(false); void refreshRoutes().catch(() => setRouteSearchError(true)); }} className="rounded-xl border border-stone-200 bg-white px-4 py-2 text-sm font-bold disabled:opacity-50">Refresh route library</button>}
             {filteredLibraryRoutes.length === 0 && <p className="rounded-xl border border-stone-200 bg-white p-6 text-sm text-stone-600">No routes match these filters. Try a different name or mileage range.</p>}
 
             {/* Route Cards Carousel / Grid */}
@@ -864,6 +866,8 @@ export function App() {
                 </div>
               ))}
             </div>
+
+            {isFirebaseConfigured && <div className="flex justify-center pt-2"><button type="button" disabled={routesLoading} onClick={() => { setRouteSearchError(false); void refreshRoutes().catch(() => setRouteSearchError(true)); }} className="rounded-xl border border-stone-200 bg-white px-4 py-2 text-sm font-bold disabled:opacity-50">Refresh route library</button></div>}
           </div>
         )}
 

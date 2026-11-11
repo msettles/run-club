@@ -20,6 +20,7 @@ interface RunCardProps {
   isCheckedIn?: boolean; // The signed-in runner has a check-in for this run
   notLive?: boolean;     // Missing its code word / check-in event: shown to staff only
   onOpenRoster?: (run: RunEvent) => void; // Organizers and admins: who checked in, gear to hand out
+  milestoneAlertCount?: number; // Organizers and admins: milestones reached at this run still to be recognized / handed out
   onEdit?: (run: RunEvent) => void; // Organizers and admins, upcoming runs only
   onDelete?: (run: RunEvent) => void; // Admins, past runs (which can't be edited)
 }
@@ -37,6 +38,7 @@ export const RunCard: React.FC<RunCardProps> = ({
   isCheckedIn = false,
   notLive = false,
   onOpenRoster,
+  milestoneAlertCount = 0,
   onEdit,
   onDelete,
 }) => {
@@ -389,6 +391,9 @@ export const RunCard: React.FC<RunCardProps> = ({
             >
               <Users className="w-3.5 h-3.5" />
               <span>Check-ins{checkedInCount > 0 ? ` (${checkedInCount})` : ''}</span>
+              {milestoneAlertCount > 0 && (
+                <span title="Milestones reached at this run" className="rounded-full bg-amber-400 px-1.5 text-[10px] font-black text-stone-950">🎉 {milestoneAlertCount}</span>
+              )}
             </button>
           )}
 

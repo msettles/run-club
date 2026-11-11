@@ -40,3 +40,16 @@ export function milestoneProgress(total: number, milestones: MilestoneReward[] =
     progressPercent: Math.min(100, Math.round((currentInSpan / span) * 100)),
   };
 }
+
+/**
+ * The milestone alerts an organizer should see for one run: those reached at this run, plus any gear earned at an
+ * EARLIER run that has not been handed out yet, for runners who checked in to this run too (so unclaimed gear is
+ * raised again the next time that runner shows up). `live` alerts (updated as gear is handed out) win over `loaded`.
+ */
+export function alertsForRoster(runId: string, loaded: MilestoneAlert[], live: MilestoneAlert[], checkedInEmails: Iterable<string>): MilestoneAlert[] {
+  const byId = new Map(loaded.map((a) => [a.id, a]));
+  for (const a of live) if (a.runId === runId) byId.set(a.id, a);
+  const here = new Set([...checkedInEmails].map((e) => e.toLowerCase()));
+  for (const a of live) if (a.runId !== runId && !a.fulfilled && alertHasGear(a) && here.has(a.userEmail.toLowerCase())) byId.set(a.id, a);
+  return [...byId.values()];
+}
