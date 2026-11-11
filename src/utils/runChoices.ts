@@ -7,6 +7,7 @@ export interface ResolvedChoice {
   miles: number; // distance rounded to 1 decimal point (e.g. 1.2)
   actualMiles: number; // exact GPS distance (e.g. 1.22)
   route: GPXRoute;
+  maxLoops?: number; // Run-specific override, without changing the library route.
 }
 
 /** A run's choices, falling back to the legacy single routeId. */
@@ -33,6 +34,7 @@ export function resolveChoices(choices: RunRouteChoice[], routes: GPXRoute[]): R
         miles,
         actualMiles,
         route: r,
+        maxLoops: r.isLoop ? (c.maxLoops ?? r.maxLoops ?? 4) : undefined,
       });
     }
   }
@@ -42,6 +44,8 @@ export function resolveChoices(choices: RunRouteChoice[], routes: GPXRoute[]): R
 /** Shared scheduling bounds, matched to the Firestore route/run limits. */
 export function routeChoiceError(choices: ResolvedChoice[]): string | null {
   if (!choices.length) return 'Add at least one distance option with a route.';
+  if (choices.some(({ route, maxLoops = route.maxLoops ?? 4 }) => route.isLoop && (!Number.isInteger(maxLoops) || maxLoops < 1 || maxLoops > 20)))
+    return 'Choose between 1 and 20 loop choices for each loop route.';
   if (choices.length > 20 || choices.some((choice) => !Number.isFinite(choice.actualMiles) || choice.actualMiles <= 0 || choice.actualMiles > 500))
     return 'Choose at most 20 routes, each with a positive measured distance of no more than 500 miles.';
   return null;
@@ -63,14 +67,14 @@ export function deriveRunStats(resolved: ResolvedChoice[]): {
   };
 }
 
-export function routeOptionFromRoute(route: GPXRoute): RouteOption {
+export function routeOptionFromRoute(route: GPXRoute, maxLoops = route.maxLoops || 4): RouteOption {
   return {
     name: route.name,
     actualMiles: route.distanceMiles,
     baseMiles: route.distanceMiles,
     routeId: route.id,
     isLoop: Boolean(route.isLoop),
-    maxLoops: route.maxLoops || 4,
+    maxLoops,
     externalLinks: route.externalLinks,
 
     // No geoJson here: its coordinates are nested arrays, which Firestore refuses,
@@ -95,7 +99,7 @@ export function buildMeetupFromRun(
   const activeKeys: string[] = [];
 
   resolved.forEach((c) => {
-    const routeOption = routeOptionFromRoute(c.route);
+    const routeOption = routeOptionFromRoute(c.route, c.maxLoops);
     // Key by route ID
     routeMap[c.route.id] = routeOption;
     activeKeys.push(c.route.id);

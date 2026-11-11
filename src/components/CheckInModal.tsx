@@ -1030,7 +1030,7 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
                                       setLoopSelections((prev) => ({ ...prev, [opt.key]: n }));
                                       setSelectedOptionKey(opt.key);
                                     }}
-                                    className={`min-h-[76px] rounded-xl border-2 px-3 py-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 focus-visible:ring-offset-2 ${
+                                    className={`${maxPresets > 1 && maxPresets % 2 === 1 && n === maxPresets ? 'col-span-2' : ''} min-h-[76px] rounded-xl border-2 px-3 py-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 focus-visible:ring-offset-2 ${
                                       isActive
                                         ? 'border-woodland-900 bg-woodland-900 text-white shadow-sm'
                                         : 'border-stone-300 bg-white text-stone-900 hover:border-woodland-600 hover:bg-woodland-50'

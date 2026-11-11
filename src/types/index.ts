@@ -56,7 +56,7 @@ export interface GPXRoute {
   difficulty: DifficultyType;
   customDistanceLabel?: string; // Optional label (e.g. "10K", "6-Mile Run")
   isLoop?: boolean;           // Whether route can be repeated for multiple laps/loops (e.g. The 1, 2, 3)
-  maxLoops?: number;          // Default max loop options to offer at check-in (e.g. 4)
+  maxLoops?: number;          // Legacy default; new loop-choice limits belong to RunRouteChoice.
   directions?: RouteTurnStep[];
   geoJson?: any;              // GeoJSON FeatureCollection with line track and turn points
   externalLinks?: RouteExternalLinks;
@@ -78,6 +78,7 @@ export interface Attendee {
 /** One distance option on a scheduled run, pointing at a route in the library. */
 export interface RunRouteChoice {
   routeId: string;
+  maxLoops?: number; // Run-specific number of loop choices (1–20) for a loop route.
   customLabel?: string;
 }
 

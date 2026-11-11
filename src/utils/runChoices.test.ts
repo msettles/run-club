@@ -40,3 +40,21 @@ it('keeps a full 20-route meetup below the document limit without copied directi
   expect(new TextEncoder().encode(JSON.stringify(event)).length).toBeLessThan(100_000);
   expect(Object.values(event.routes).every((option) => !option.directionsList)).toBe(true);
 });
+
+it('keeps loop choice counts on each run without mutating the shared library route', () => {
+  const loop = { ...route('loop', 1.2), isLoop: true, maxLoops: 4 };
+  const base = { id: 'run', title: 'Club run', date: '2026-11-11', time: '18:00' };
+  const three = buildMeetupFromRun({ ...base, routeChoices: [{ routeId: loop.id, maxLoops: 3 }] }, [loop], 'ACORN');
+  const five = buildMeetupFromRun({ ...base, id: 'other-run', routeChoices: [{ routeId: loop.id, maxLoops: 5 }] }, [loop], 'ACORN');
+  expect(three.routes.loop).toMatchObject({ maxLoops: 3, baseMiles: 1.2, actualMiles: 1.2 });
+  expect(five.routes.loop.maxLoops).toBe(5);
+  expect(loop.maxLoops).toBe(4);
+  expect(resolveChoices([{ routeId: loop.id, maxLoops: 3 }], [loop])[0].route).toBe(loop);
+  expect(buildMeetupFromRun({ ...base, routeChoices: [{ routeId: loop.id }] }, [loop], 'ACORN').routes.loop.maxLoops).toBe(4);
+});
+it('rejects out-of-range or fractional run loop limits', async () => {
+  const { routeChoiceError } = await import('./runChoices');
+  const loop = { ...route('loop', 1.2), isLoop: true };
+  for (const maxLoops of [0, 21, 1.5, NaN]) expect(routeChoiceError(resolveChoices([{ routeId: loop.id, maxLoops }], [loop]))).toContain('1 and 20');
+  expect(routeChoiceError(resolveChoices([{ routeId: loop.id, maxLoops: 5 }], [loop]))).toBeNull();
+});
