@@ -14,11 +14,10 @@ Columns a file has that aren't listed are ignored, so this app's own exports and
 |---|---|---|
 | `Email` (also `User Email`) | Email **or** Name | Past alias (needs a Name) |
 | `Name` (also `Display Name`, `Runner Name`) | Email **or** Name | Made from the email |
-| `Shirt Size` | No | Not specified |
 | `Birthday` | No | Empty |
 | `No Check-In Runs` (also `OldCounts`, `Pre-2021 Runs`) | No | 0 |
 
-City, zip and emergency contact aren't imported: members add them themselves after.
+Shirt size, city, zip and emergency contact aren't imported: members add them themselves after they sign in. A column with one of those names is ignored.
 
 ## 2. Run history (`woodchuckers-import-runs-example.csv`)
 
@@ -59,7 +58,7 @@ Choose any of the three files, press **Review import**, tick the confirmation an
 
 | What the file says | What the club gets | On a later import |
 |---|---|---|
-| A person **with an email** | A member profile, their check-ins, and totals, badges, streaks and reward proofs worked out from those check-ins | Name, shirt size, birthday and no-check-in runs are updated when the file gives a different value. A blank cell never erases anything, and a name made from an email never replaces a real one |
+| A person **with an email** | A member profile, their check-ins, and totals, badges, streaks and reward proofs worked out from those check-ins | Name, birthday and no-check-in runs are updated when the file gives a different value. A blank cell never erases anything, and a name made from an email never replaces a real one |
 | A person **without an email** | Held as an unclaimed past name with their dated sign-ins. **No profile is made** | Updated if it changed. If someone has already claimed the name, their totals follow |
 | A run | A run and its check-in event, which nobody can check in to. The first run on a date is `run-<date>`; a second run that day also uses its code word | Title, time, place, special event and code word are updated. Runs made in the app are left alone |
 | A check-in | A record at that run | Changed rows are updated; a check-in whose run's title or special event changed is replaced. The app's own check-ins are never replaced |

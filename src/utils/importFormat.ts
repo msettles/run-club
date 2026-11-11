@@ -35,7 +35,6 @@ const PERSON = {
 
 export const PROFILE_COLUMNS = {
   ...PERSON,
-  shirtSize: { header: 'Shirt Size', aliases: ['Shirt', 'Size'], required: 'no', meaning: 'XS, S, M, L, XL, 2XL or Youth. Words such as Small are understood.', whenBlank: 'Not specified.' },
   birthday: { header: 'Birthday', aliases: ['Birthdate', 'Date of Birth'], required: 'no', meaning: 'Birthday as 1983-09-25 or 9/25/1983.', whenBlank: 'Left empty.' },
   noCheckInRuns: { header: 'No Check-In Runs', aliases: ['OldCounts', 'Old Counts', 'Pre-2021 Runs'], required: 'no', meaning: 'How many runs this person did that have no check-in record. They only add to the run total.', whenBlank: '0.' },
 } satisfies Record<string, ImportColumn>;
@@ -74,8 +73,6 @@ export const IMPORT_FILES: Record<ImportFileKind, { title: string; summary: stri
   checkins: { title: 'Check-ins', summary: 'One row per person per run.', columns: CHECKIN_COLUMNS },
 };
 
-export const SHIRT_SIZES = ['Youth', 'XS', 'S', 'M', 'L', 'XL', '2XL'];
-
 export interface ImportIssue { row: number; level: 'error' | 'warning'; message: string }
 
 // ---- shared helpers ----
@@ -88,19 +85,6 @@ const titleCase = (s: string) => s.replace(/\b[a-z]/g, (m) => m.toUpperCase());
 export function defaultNameFromEmail(email: string): string {
   const local = email.split('@')[0].replace(/[._+-]+/g, ' ').trim();
   return titleCase(local.toLowerCase()) || 'Runner';
-}
-
-/** Words and spreadsheet quirks to the app's shirt sizes (Small -> S, Xl -> XL). Anything unrecognised is kept as typed. */
-export function normalizeShirtSize(value: string): string | undefined {
-  const v = value.trim();
-  if (!v) return undefined;
-  const k = v.toLowerCase().replace(/[^a-z0-9]/g, '');
-  const map: Record<string, string> = {
-    youth: 'Youth', ys: 'Youth', ym: 'Youth', yl: 'Youth', kids: 'Youth', child: 'Youth',
-    xs: 'XS', extrasmall: 'XS', xsmall: 'XS', xxs: 'XS', xxsmall: 'XS', '2xs': 'XS', s: 'S', small: 'S', sm: 'S', m: 'M', medium: 'M', med: 'M', l: 'L', large: 'L', lg: 'L',
-    xl: 'XL', xlarge: 'XL', extralarge: 'XL', '2xl': '2XL', xxl: '2XL', '2x': '2XL', xx: '2XL', xxlarge: '2XL',
-  };
-  return map[k] || v;
 }
 
 function validDay(iso: string): boolean {
@@ -172,7 +156,6 @@ export interface ImportedProfile {
   email?: string;
   name: string;
   nameFromEmail: boolean;
-  shirtSize?: string;
   birthday?: string;
   noCheckInRuns: number;
 }
@@ -210,8 +193,6 @@ export function planProfilesImport(csvText: string, now = new Date()): ProfilesP
       plan.issues.push({ row, level: 'warning', message: `${email || rawName} appears more than once. Their rows were combined.` });
       if (rawName && person.nameFromEmail) { person.name = rawName; person.nameFromEmail = false; }
     }
-    const size = normalizeShirtSize(cell('shirtSize'));
-    if (size && !person.shirtSize) person.shirtSize = size;
     const birthdayText = cell('birthday');
     if (birthdayText && !person.birthday) {
       const b = parseBirthday(birthdayText, now);
@@ -479,9 +460,9 @@ export const IMPORT_EXAMPLES: Record<ImportFileKind, { filename: string; csv: st
   profiles: {
     filename: 'woodchuckers-import-profiles-example.csv',
     csv: toCsv(PROFILE_COLUMNS, [
-      { email: 'jane.runner@example.com', name: 'Jane Runner', shirtSize: 'M', birthday: '1988-04-12', noCheckInRuns: '24' }, // everything filled in
+      { email: 'jane.runner@example.com', name: 'Jane Runner', birthday: '1988-04-12', noCheckInRuns: '24' }, // everything filled in
       { email: 'sam@example.com' },                                                                                       // the least a member needs: an email
-      { email: 'alex@example.com', name: 'Alex Example', shirtSize: 'Large', birthday: '9/25/83' },                      // spreadsheet-style values
+      { email: 'alex@example.com', name: 'Alex Example', birthday: '9/25/83' },                      // spreadsheet-style values
       { name: 'PAT EXAMPLE', noCheckInRuns: '12' },                                                                      // no email: a past alias to claim
     ]),
   },

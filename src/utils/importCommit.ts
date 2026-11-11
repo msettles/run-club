@@ -41,7 +41,7 @@ export interface ImportedMember {
   /** Used as-is when the member does not exist yet. Totals start at zero: they are recomputed afterwards. */
   profile: UserProfile;
   /** Only fields the files filled in are applied to a member who already exists. A name made from the email never overwrites a real one. */
-  given: { name: boolean; shirtSize: boolean; birthday: boolean; noCheckInRuns: boolean };
+  given: { name: boolean; birthday: boolean; noCheckInRuns: boolean };
 }
 
 export interface ImportCommit {
@@ -109,16 +109,16 @@ export function buildImportCommit(profiles: ProfilesPlan | undefined, runs: Runs
 
   // Members: every profile row with an email, plus anyone who appears with an email only in check-ins.
   const members = new Map<string, ImportedMember>();
-  const addMember = (email: string, name: string, explicitName: boolean, extra: { shirtSize?: string; birthday?: string; noCheckInRuns?: number } = {}) => {
+  const addMember = (email: string, name: string, explicitName: boolean, extra: { birthday?: string; noCheckInRuns?: number } = {}) => {
     const { firstName, lastName } = splitName(name);
     members.set(email, {
       profile: {
-        email, firstName, lastName, displayName: name, shirtSize: extra.shirtSize || 'Not specified',
+        email, firstName, lastName, displayName: name, shirtSize: 'Not specified',
         ...(extra.birthday ? { birthday: extra.birthday } : {}),
         pre2021Runs: extra.noCheckInRuns || 0, importedRuns: extra.noCheckInRuns || 0, loggedRuns: 0, totalRuns: extra.noCheckInRuns || 0, totalMiles: 0,
         runCount: 0, walkCount: 0, linkedLegacyNames: [], unlockedBadgeIds: [], role: 'member', createdAt: nowIso,
       },
-      given: { name: explicitName, shirtSize: Boolean(extra.shirtSize), birthday: Boolean(extra.birthday), noCheckInRuns: extra.noCheckInRuns !== undefined && extra.noCheckInRuns > 0 },
+      given: { name: explicitName, birthday: Boolean(extra.birthday), noCheckInRuns: extra.noCheckInRuns !== undefined && extra.noCheckInRuns > 0 },
     });
   };
   for (const p of profiles?.members || []) addMember(p.email!, p.name, !p.nameFromEmail, p);

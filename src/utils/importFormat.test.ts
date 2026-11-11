@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  matchSpecialEvent, IMPORT_EXAMPLES, defaultNameFromEmail, detectImportFile, normalizeShirtSize, parseBirthday, planCheckinsImport, planProfilesImport, planRunsImport,
+  matchSpecialEvent, IMPORT_EXAMPLES, defaultNameFromEmail, detectImportFile, parseBirthday, planCheckinsImport, planProfilesImport, planRunsImport,
 } from './importFormat';
 
 const NOW = new Date('2026-11-12T12:00:00Z');
@@ -23,8 +23,9 @@ describe('profiles file', () => {
 
   it('reads profile fields the way spreadsheets write them, and ignores totals columns (they are recomputed)', () => {
     const plan = planProfilesImport('Email,Display Name,Shirt Size,Birthday,Total Runs,Total Miles,Pre-2021 Runs\nann@x.com,Ann,Large,9/25/83,166,1.22,2\n', NOW);
-    expect(plan.members[0]).toMatchObject({ name: 'Ann', shirtSize: 'L', birthday: '1983-09-25', noCheckInRuns: 2 });
-    expect(plan.ignoredColumns).toEqual(['Total Runs', 'Total Miles']);
+    expect(plan.members[0]).toMatchObject({ name: 'Ann', birthday: '1983-09-25', noCheckInRuns: 2 });
+    // Shirt size is not imported (runners enter it themselves), so it is ignored like the totals.
+    expect(plan.ignoredColumns).toEqual(['Shirt Size', 'Total Runs', 'Total Miles']);
   });
 
   it('combines repeated people with a warning, and rejects rows it cannot place', () => {
@@ -39,9 +40,7 @@ describe('profiles file', () => {
     expect(planProfilesImport('', NOW).issues[0].message).toContain('no rows');
   });
 
-  it('understands shirt sizes and birthdays', () => {
-    expect(['Small', 'Xl', 'medium', 'LARGE', 'xxl', 'Youth', 'weird', 'Xxsmall', 'Med', 'Xsmall'].map(normalizeShirtSize)).toEqual(['S', 'XL', 'M', 'L', '2XL', 'Youth', 'weird', 'XS', 'M', 'XS']);
-    expect(normalizeShirtSize('')).toBeUndefined();
+  it('understands birthdays', () => {
     expect(parseBirthday('9/25/83', NOW)).toBe('1983-09-25');
     expect(parseBirthday('2/25/05', NOW)).toBe('2005-02-25');
     expect(parseBirthday('2/30/1990', NOW)).toBeUndefined();

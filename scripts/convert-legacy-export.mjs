@@ -28,13 +28,13 @@ if (!totalsPath || !checkinsPath) {
 const root = new URL('..', import.meta.url).pathname;
 const bundled = await build({
   stdin: {
-    contents: "export { parseCsv, normalizeName } from './src/utils/legacy.ts'; export { normalizeShirtSize, planProfilesImport, planRunsImport, planCheckinsImport, PROFILE_COLUMNS, RUN_COLUMNS, CHECKIN_COLUMNS } from './src/utils/importFormat.ts';",
+    contents: "export { parseCsv, normalizeName } from './src/utils/legacy.ts'; export { planProfilesImport, planRunsImport, planCheckinsImport, PROFILE_COLUMNS, RUN_COLUMNS, CHECKIN_COLUMNS } from './src/utils/importFormat.ts';",
     resolveDir: root, loader: 'ts',
   },
   bundle: true, write: false, format: 'esm', platform: 'node', logLevel: 'silent',
 });
 const app = await import(`data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString('base64')}`);
-const { parseCsv, normalizeName, normalizeShirtSize } = app;
+const { parseCsv, normalizeName } = app;
 
 const csvCell = (v) => { const s = String(v ?? ''); return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
 const toCsv = (headers, rows) => [headers, ...rows].map((r) => r.map(csvCell).join(',')).join('\r\n') + '\r\n';
@@ -46,10 +46,10 @@ const totals = parseCsv(readFileSync(totalsPath, 'utf8'));
 const checkins = parseCsv(readFileSync(checkinsPath, 'utf8'));
 
 // ---- people ----
-const people = new Map(); // key -> { name, spellings: Map, oldCount, sizes: [{date,size}] }
+const people = new Map(); // key -> { name, spellings: Map, oldCount }
 const person = (rawName) => {
   const key = normalizeName(rawName);
-  if (!people.has(key)) people.set(key, { key, spellings: new Map(), oldCount: 0, sizes: [] });
+  if (!people.has(key)) people.set(key, { key, spellings: new Map(), oldCount: 0 });
   return people.get(key);
 };
 const spell = (p, raw) => { const n = clean(raw); if (n) p.spellings.set(n, (p.spellings.get(n) || 0) + 1); };
@@ -64,7 +64,6 @@ for (const r of checkins) {
   if (!normalizeName(r.Name || '') || !r.Date) continue;
   const p = person(r.Name);
   spell(p, r.Name);
-  if (clean(r['Shirt Size'])) p.sizes.push({ date: r.Date, size: clean(r['Shirt Size']) });
 }
 const namesOnlyInCheckins = [...people.keys()].filter((k) => !namesInTotals.has(k)).length;
 
@@ -128,20 +127,9 @@ for (const [date, g] of byDate) {
 }
 const checkinRows = [...chosen.values()].sort((a, b) => a.date.localeCompare(b.date) || a.key.localeCompare(b.key));
 
-// ---- shirt sizes: most recent non-blank, normalized ----
-const sizeNotes = new Map(); // raw -> normalized
-let unrecognized = 0;
-const sizeOf = (p) => {
-  const latest = [...p.sizes].sort((a, b) => b.date.localeCompare(a.date))[0];
-  if (!latest) return '';
-  const norm = normalizeShirtSize(latest.size) || '';
-  sizeNotes.set(latest.size, norm);
-  if (!['Youth', 'XS', 'S', 'M', 'L', 'XL', '2XL'].includes(norm)) { unrecognized++; return ''; }
-  return norm;
-};
 const displayName = (p) => [...p.spellings.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || p.key;
 const profileRows = [...people.values()].sort((a, b) => displayName(a).localeCompare(displayName(b)))
-  .map((p) => ['', displayName(p), sizeOf(p), '', p.oldCount > 0 ? p.oldCount : '']);
+  .map((p) => ['', displayName(p), '', p.oldCount > 0 ? p.oldCount : '']);
 
 mkdirSync(outDir, { recursive: true });
 const H = (cols) => Object.values(cols).map((c) => c.header);
@@ -183,10 +171,10 @@ Checked with the app's own checkers: profiles ${errs(profilesPlan)} errors / ${w
 
 ## Things that changed or need a decision
 - **Sign-ins collapsed to one per person per date:** ${exactRepeats} exact repeats (same code word) and ${sameDayOtherCode} same-person-same-day sign-ins with a different code word were reduced to one each. The old importer counted the second kind twice; the new format counts a person once per run. Total check-ins: ${checkins.length} -> ${checkinRows.length}.
-- **Dates with more than one code word (${multi.length}):** treated as ONE run using the most-used code word; the others are listed in runs.csv ("Other Code Words"). If any were really two separate runs, split that row. ${multi.map((r) => `${r.date} ${r.code} ${r.attendance} (${r.others.map(([c, n]) => `${c} ${n}`).join(', ')})`).join('; ')}
+- **Dates with more than one code word (${multi.length}):** treated as ONE run using the most-used code word (the club has never held two runs at once); the others are listed in runs.csv ("Other Code Words"). If any were really two separate runs, split that row. ${multi.map((r) => `${r.date} ${r.code} ${r.attendance} (${r.others.map(([c, n]) => `${c} ${n}`).join(', ')})`).join('; ')}
 - **Days of the week:** ${Object.entries(weekdays).sort((a, b) => b[1] - a[1]).map(([d, n]) => `${d} ${n}`).join(', ')}. Runs on days other than Wednesday are kept as they are.
 - **Names:** ${people.size} distinct names (matched ignoring case/spacing); ${spellingVariants} had more than one spelling (the most common is used); ${namesOnlyInCheckins} appear only in the check-ins file; ${[...people.values()].filter((p) => p.oldCount > 0 && ![...checkinRows].some((c) => c.key === p.key)).length} have only a no-check-in count.
-- **Shirt sizes:** words and variants were normalized (Small->S, Medium->M, Xl->XL, Xxsmall->XS ...); ${unrecognized} people had a size that couldn't be mapped and were left blank.
+- **Shirt size, city, zip, emergency contact:** not imported; runners enter them after signing in.
 - **No times of day for runs, no miles, no routes, no activity:** the old data has none. Check-ins keep their sign-in time; runs get the default 18:30 start. Mileage totals will start at zero.
 
 ## Special events

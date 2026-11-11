@@ -4,7 +4,7 @@ import { planCheckinsImport, planProfilesImport, planRunsImport } from './import
 
 const NOW = new Date('2026-11-11T12:00:00Z');
 const special = [{ id: 'halloween', name: 'Halloween Costume Run' }];
-const profilesCsv = 'Email,Name,Shirt Size,No Check-In Runs\njane@example.com,Jane Runner,M,4\n,PAT EXAMPLE,,12\nsam@example.com,,,\n';
+const profilesCsv = 'Email,Name,No Check-In Runs\njane@example.com,Jane Runner,4\n,PAT EXAMPLE,12\nsam@example.com,,\n';
 const runsCsv = 'Date,Time,Title,Code Word,Special Event,Distance\n2026-10-07,18:30,Wednesday Run,APPLE,,3.1\n2026-10-28,18:30,Halloween Costume Run,SPOOKY,Halloween,3.1\n';
 const checkinsCsv = [
   'Email,Name,Date,Code Word,Activity,Miles',
@@ -31,14 +31,14 @@ describe('buildImportCommit', () => {
     const members = build().members.map((m) => m.profile);
     expect(members.map((m) => m.email).sort()).toEqual(['jane@example.com', 'new.person@example.com', 'sam@example.com']);
     const jane = members.find((m) => m.email === 'jane@example.com')!;
-    expect(jane).toMatchObject({ displayName: 'Jane Runner', firstName: 'Jane', lastName: 'Runner', shirtSize: 'M', pre2021Runs: 4, importedRuns: 4, loggedRuns: 0, totalMiles: 0, role: 'member' });
+    expect(jane).toMatchObject({ displayName: 'Jane Runner', firstName: 'Jane', lastName: 'Runner', shirtSize: 'Not specified', pre2021Runs: 4, importedRuns: 4, loggedRuns: 0, totalMiles: 0, role: 'member' });
     expect(members.find((m) => m.email === 'sam@example.com')!.displayName).toBe('Sam');
   });
 
   it('records which fields the files actually gave, so a name made from an email never overwrites a real one', () => {
     const { members } = build();
-    expect(members.find((m) => m.profile.email === 'jane@example.com')!.given).toEqual({ name: true, shirtSize: true, birthday: false, noCheckInRuns: true });
-    expect(members.find((m) => m.profile.email === 'sam@example.com')!.given).toEqual({ name: false, shirtSize: false, birthday: false, noCheckInRuns: false });
+    expect(members.find((m) => m.profile.email === 'jane@example.com')!.given).toEqual({ name: true, birthday: false, noCheckInRuns: true });
+    expect(members.find((m) => m.profile.email === 'sam@example.com')!.given).toEqual({ name: false, birthday: false, noCheckInRuns: false });
   });
 
   it('holds people without an email as unclaimed aliases, with their sign-ins, and makes no profile for them', () => {

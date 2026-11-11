@@ -25,7 +25,7 @@ beforeEach(async () => {
 afterAll(async () => { if (enabled) await env.cleanup(); });
 
 const NOW = new Date('2026-11-11T12:00:00Z');
-const profilesCsv = 'Email,Name,Shirt Size,No Check-In Runs\njane@example.test,Jane Runner,M,5\n,PAT EXAMPLE,,12\n';
+const profilesCsv = 'Email,Name,No Check-In Runs\njane@example.test,Jane Runner,5\n,PAT EXAMPLE,12\n';
 const runsCsv = 'Date,Time,Title,Code Word,Special Event,Distance\n2026-10-07,18:30,Wednesday Run,APPLE,,3.1\n2026-10-14,18:30,Wednesday Run,PEAR,,3.1\n2026-10-21,18:30,Wednesday Run,PLUM,,3.1\n2026-10-28,18:30,Halloween Costume Run,SPOOKY,Halloween,3.1\n';
 const checkinsCsv = [
   'Email,Name,Date,Activity,Miles',
@@ -56,7 +56,7 @@ it.skipIf(!enabled)('imports members, runs, check-ins and held names, then deriv
   expect(result).toMatchObject({ membersCreated: 2, runsWritten: 5, checkinsWritten: 5, aliasesHeld: 1, rewards: { updated: 2, failed: 0 } });
 
   const jane = (await getDoc(doc(db(), 'users', 'jane@example.test'))).data() as UserProfile;
-  expect(jane).toMatchObject({ displayName: 'Jane Runner', shirtSize: 'M', pre2021Runs: 5, loggedRuns: 4, totalRuns: 9, runCount: 3, walkCount: 1, totalMiles: 12.4, firstRunDate: '2026-10-07', lastCheckInDate: '2026-10-28' });
+  expect(jane).toMatchObject({ displayName: 'Jane Runner', shirtSize: 'Not specified', pre2021Runs: 5, loggedRuns: 4, totalRuns: 9, runCount: 3, walkCount: 1, totalMiles: 12.4, firstRunDate: '2026-10-07', lastCheckInDate: '2026-10-28' });
   expect(jane.longestStreakWeeks).toBe(4);
   expect(jane.unlockedBadgeIds).toContain('streak-4');
   expect(jane.badgeCounts?.['special-halloween']).toBe(1);
@@ -91,13 +91,13 @@ it.skipIf(!enabled)('an edited file updates what was edited: profile fields, run
   const { ops, db } = setup();
   await ops.importClubData(commit());
   const edited = await ops.importClubData(commit({
-    profiles: 'Email,Name,Shirt Size,No Check-In Runs\njane@example.test,Jane Q Runner,L,8\n,PAT EXAMPLE,,15\n',
+    profiles: 'Email,Name,No Check-In Runs\njane@example.test,Jane Q Runner,8\n,PAT EXAMPLE,15\n',
     runs: runsCsv.replace('2026-10-21,18:30,Wednesday Run,PLUM,,3.1', '2026-10-21,18:30,Turkey Trot Warmup,PLUM,Turkey Trot,3.1').replace('SPOOKY', 'BOO'),
     checkins: checkinsCsv.replace('jane@example.test,,2026-10-14,walking,3.1', 'jane@example.test,,2026-10-14,running,5').replace(',PAT EXAMPLE,2026-10-28,running,3.1', ',PAT EXAMPLE,2026-10-28,running,3.1\n,PAT EXAMPLE,2026-10-21,running,3.1'),
   }));
   expect(edited).toMatchObject({ membersCreated: 0, membersUpdated: 1, membersUnchanged: 1, runsWritten: 0, runsUpdated: 3, checkinsUpdated: 4, aliasesUpdated: 1 });
   const jane = (await getDoc(doc(db(), 'users', 'jane@example.test'))).data() as UserProfile;
-  expect(jane).toMatchObject({ displayName: 'Jane Q Runner', lastName: 'Q Runner', shirtSize: 'L', importedRuns: 8, pre2021Runs: 8, loggedRuns: 4, runCount: 4, walkCount: 0, totalMiles: 14.3, totalRuns: 12 });
+  expect(jane).toMatchObject({ displayName: 'Jane Q Runner', lastName: 'Q Runner', shirtSize: 'Not specified', importedRuns: 8, pre2021Runs: 8, loggedRuns: 4, runCount: 4, walkCount: 0, totalMiles: 14.3, totalRuns: 12 });
   expect(jane.badgeCounts?.['special-turkey']).toBe(1); // the Turkey Trot tag now on the 21st counts
   expect((await getDoc(doc(db(), 'runs', 'run-2026-10-21'))).data()?.title).toBe('Turkey Trot Warmup');
   expect((await getDoc(doc(db(), 'meetup_secrets', 'run-2026-10-28'))).data()?.codeWord).toBe('BOO');

@@ -129,7 +129,6 @@ export function createClubImportOps(ctx: StoreState & ReturnType<typeof createLe
         if (current.deleting) { result.membersUnchanged++; continue; }
         const patch: Partial<UserProfile> = {};
         if (given.name && current.displayName !== profile.displayName) Object.assign(patch, { displayName: profile.displayName, firstName: profile.firstName, lastName: profile.lastName });
-        if (given.shirtSize && current.shirtSize !== profile.shirtSize) patch.shirtSize = profile.shirtSize;
         if (given.birthday && current.birthday !== profile.birthday) patch.birthday = profile.birthday;
         // The file's "no check-in runs" is kept apart from runs a claim added, so changing it only moves the difference.
         if (given.noCheckInRuns && (current.importedRuns || 0) !== (profile.importedRuns || 0)) {
