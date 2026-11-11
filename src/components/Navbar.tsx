@@ -10,7 +10,6 @@ import {
   Calendar, 
   Map, 
   Trophy, 
-  Plus, 
   UploadCloud, 
   Shield, 
   Bell, 
@@ -32,7 +31,6 @@ interface NavbarProps {
   isSignedIn?: boolean;
   authReady?: boolean; // false while Firebase restores the sign-in after a refresh
   unreadNotifsCount?: number;
-  onOpenNewRun: () => void;
   onOpenUploadGpx: () => void;
   onToggleNotifications?: () => void;
   onOpenAuthModal: () => void;
@@ -49,7 +47,6 @@ export const Navbar: React.FC<NavbarProps> = ({
   firebaseUser,
   isSignedIn = false,
   unreadNotifsCount = 0,
-  onOpenNewRun,
   onOpenUploadGpx,
   onToggleNotifications,
   onEditProfile,
@@ -192,17 +189,6 @@ export const Navbar: React.FC<NavbarProps> = ({
               >
                 <UploadCloud className="w-3.5 h-3.5 text-woodland-600" />
                 <span>Add GPX</span>
-              </button>
-            )}
-
-            {isOrganizerOrAdmin && (
-              <button
-                onClick={onOpenNewRun}
-                className="hidden sm:flex items-center gap-1 px-2.5 sm:px-3 py-1.5 text-xs font-semibold bg-woodland-600 hover:bg-woodland-700 text-white rounded-xl transition shadow-sm cursor-pointer shrink-0"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span className="hidden lg:inline">Schedule Run</span>
-                <span className="lg:hidden">Run</span>
               </button>
             )}
 
