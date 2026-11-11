@@ -575,6 +575,23 @@ service cloud.firestore {
         d.sources == old.concat([d.sourceId]) && d.sources.size() <= 5000 &&
         d.count == d.sources.size() && proofSpecial(d.source, d.userEmail, d.specialId);
     }
+    // Streak badges level up for every full block of `step` weeks in any streak. Each block's final week
+    // (a week whose running streak count is a multiple of the step) is proven once and appended here.
+    function validStepProof(d, id) {
+      let old = resource == null ? [] : resource.data.sources;
+      let weekProof = rewardPath(d.userEmail, d.epoch, 'week', d.week);
+      return d.keys().hasOnly(['userEmail', 'epoch', 'kind', 'step', 'week', 'count', 'sources', 'source']) &&
+        d.step is int && d.step >= 1 && d.step <= 1000 &&
+        id == d.userEmail + '_' + string(d.epoch) + '_streakstep_' + string(d.step) &&
+        d.week is int && d.week == dateWeek(proofDate(d.source, d.userEmail)) &&
+        !(d.week in old) && d.sources == old.concat([d.week]) && d.sources.size() <= 5000 &&
+        d.count == d.sources.size() &&
+        exists(weekProof) && get(weekProof).data.count % d.step == 0;
+    }
+    function streakStepCount(email, d, step) {
+      let proof = rewardPath(email, d.get('rewardEpoch', 0), 'streakstep', step);
+      return exists(proof) ? get(proof).data.count : 0;
+    }
     function derivedUnchanged(d, o) {
       return d.get('badgeCounts', {}) == o.get('badgeCounts', {}) && d.unlockedBadgeIds == o.unlockedBadgeIds &&
         d.get('currentStreakWeeks', 0) == o.get('currentStreakWeeks', 0) && d.get('longestStreakWeeks', 0) == o.get('longestStreakWeeks', 0) &&
@@ -639,7 +656,8 @@ service cloud.firestore {
         type == 'distance' ? rewardSteps(d.get('distanceCounts', {}).get(badgeDistanceKey(cfg), 0), cfg.get('distanceCount', 1), cfg) :
         type == 'pet' ? d.get('petRunCount', 0) :
         type == 'incremental' ? incrementalLevel(cfg, d) :
-        type == 'streak' ? rewardSteps(d.get('longestStreakWeeks', 0), cfg.get('streakWeeks', 4), {'isIncremental': cfg.get('isIncremental', false), 'step': cfg.get('streakWeeks', 4)}) :
+        type == 'streak' ? (cfg.get('isIncremental', false) ? streakStepCount(email, d, cfg.get('streakWeeks', 4)) :
+          (d.get('longestStreakWeeks', 0) >= cfg.get('streakWeeks', 4) ? 1 : 0)) :
         type == 'special_event' ? get(rewardPath(email, d.get('rewardEpoch', 0), 'special', cfg.get('specialEventId', id.matches('^special-.*') ? id.split('special-')[1] : id))).data.count : -1;
     }
     function validBadgeKey(id, d, o, email) {
@@ -1021,7 +1039,8 @@ service cloud.firestore {
         request.resource.data.epoch == get(userPath(request.resource.data.userEmail)).data.get('rewardEpoch', 0) &&
         validRewardSource(request.resource.data.source, request.resource.data.userEmail) &&
         (request.resource.data.kind == 'week' ? validWeekProof(request.resource.data, proofId) :
-          request.resource.data.kind == 'special' && validSpecialProof(request.resource.data, proofId));
+          request.resource.data.kind == 'special' ? validSpecialProof(request.resource.data, proofId) :
+          request.resource.data.kind == 'streakstep' && validStepProof(request.resource.data, proofId));
       allow delete: if isAdmin();
     }
 

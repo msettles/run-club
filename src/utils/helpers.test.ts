@@ -122,16 +122,56 @@ it('a miles incremental badge levels up every step of total miles', async () => 
 });
 
 describe('badge progress is shown within the current level', () => {
-  it('13 weeks on a 4-week streak badge is 1 / 4, not 13 / 16', async () => {
+  it('streak badge progress is the streak you are on now, against the badge step', async () => {
     const { badgeProgress } = await import('./badgeProgress');
     const { INITIAL_BADGES } = await import('../data/catalog');
-    const user = (extra: object) => ({ totalRuns: 0, totalMiles: 0, walkCount: 0, runCount: 0, unlockedBadgeIds: [], badgeCounts: {}, ...extra }) as unknown as import('../types').UserProfile;
+    const { clubYmd } = await import('./dateUtils');
+    const today = clubYmd();
+    const user = (extra: object) => ({ totalRuns: 0, totalMiles: 0, walkCount: 0, runCount: 0, unlockedBadgeIds: [], badgeCounts: {}, lastCheckInDate: today, ...extra }) as unknown as import('../types').UserProfile;
+    const burrow = INITIAL_BADGES.find((b) => b.id === 'streak-10')!;
     const streak = INITIAL_BADGES.find((b) => b.id === 'streak-4')!;
-    expect(badgeProgress(streak, user({ longestStreakWeeks: 13, badgeCounts: { 'streak-4': 3 } }))).toMatchObject({ current: 1, target: 4 });
-    expect(badgeProgress(streak, user({ longestStreakWeeks: 12, badgeCounts: { 'streak-4': 3 } }))).toMatchObject({ current: 0, target: 4 });
-    expect(badgeProgress(streak, user({ longestStreakWeeks: 2 }))).toMatchObject({ current: 2, target: 4 }); // not earned yet
+    // Earned from a past 13-week streak, but only 1 week into the current one: 1 / 10 and 1 / 4.
+    const now = { longestStreakWeeks: 13, currentStreakWeeks: 1, badgeCounts: { 'streak-10': 1, 'streak-4': 3 } };
+    expect(badgeProgress(burrow, user(now))).toMatchObject({ current: 1, target: 10 });
+    expect(badgeProgress(streak, user(now))).toMatchObject({ current: 1, target: 4 });
+    // Still in a 13-week streak: 3 past the first 10-week level, 1 past the third 4-week level.
+    const long = { longestStreakWeeks: 13, currentStreakWeeks: 13, badgeCounts: { 'streak-10': 1, 'streak-4': 3 } };
+    expect(badgeProgress(burrow, user(long))).toMatchObject({ current: 3, target: 10 });
+    expect(badgeProgress(streak, user(long))).toMatchObject({ current: 1, target: 4 });
+    // Exactly on a level shows a full bar, not 0; a new streak of 2 is 2 / 4.
+    expect(badgeProgress(streak, user({ currentStreakWeeks: 8, longestStreakWeeks: 8 }))).toMatchObject({ current: 4, target: 4 });
+    expect(badgeProgress(streak, user({ currentStreakWeeks: 2, longestStreakWeeks: 2 }))).toMatchObject({ current: 2, target: 4 });
+    // A lapsed streak (last check-in long ago) is 0.
+    expect(badgeProgress(burrow, user({ currentStreakWeeks: 5, longestStreakWeeks: 13, lastCheckInDate: '2020-01-01' }))).toMatchObject({ current: 0, target: 10 });
     const walker = INITIAL_BADGES.find((b) => b.id === 'power-walker')!;
     expect(badgeProgress(walker, user({ walkCount: 25, badgeCounts: { 'power-walker': 2 } }))).toMatchObject({ current: 5, target: 10 });
     expect(badgeProgress(walker, user({ walkCount: 3 }))).toMatchObject({ current: 3, target: 10 });
+  });
+});
+
+describe('streak badges level up for every full block in every streak', () => {
+  const wednesdays = (start: string, count: number) => Array.from({ length: count }, (_, i) => {
+    const d = new Date(`${start}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + 7 * i); return d.toISOString().slice(0, 10);
+  });
+
+  it('finds each separate streak and counts full blocks', async () => {
+    const { streakRunLengths, streakBlocks } = await import('./legacy');
+    const dates = [...wednesdays('2024-01-03', 12), ...wednesdays('2024-05-01', 5)];
+    expect(streakRunLengths(dates)).toEqual([12, 5]);
+    expect(streakBlocks([12, 5], 4)).toBe(4); // 3 + 1
+    expect(streakBlocks([12, 5], 10)).toBe(1);
+    expect(streakBlocks([20], 10)).toBe(2);   // 20 in a row earns two
+    expect(streakBlocks([9], 10)).toBe(0);
+  });
+
+  it('a later streak adds levels on top of an earlier one', async () => {
+    const { recomputeBadges } = await import('./legacy');
+    const { INITIAL_BADGES } = await import('../data/catalog');
+    const user = { totalRuns: 17, walkCount: 0, runCount: 17, unlockedBadgeIds: [], badgeCounts: {} } as unknown as import('../types').UserProfile;
+    const events = [...wednesdays('2024-01-03', 12), ...wednesdays('2024-05-01', 5)].map((date) => ({ date, specialEventIds: [] as string[] }));
+    const counts = recomputeBadges(user, INITIAL_BADGES, events, '2024-06-01').badgeCounts!;
+    expect(counts['streak-4']).toBe(4);
+    expect(counts['streak-10']).toBe(1);
+    // Under the old "longest streak only" rule these would have been 3 and 1.
   });
 });

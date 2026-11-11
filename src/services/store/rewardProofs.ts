@@ -10,7 +10,7 @@ export interface RewardSource { checkinId?: string; legacyId?: string; event?: {
 interface Attendance { date: string; source: RewardSource; id: string; specialIds: string[] }
 export function rewardProofId(email: string, epoch: number, kind: string, key: string | number): string { return `${email}_${epoch}_${kind}_${key}`; }
 
-export async function prepareRewardProofs(db: Firestore, user: UserProfile, checkins: CheckInRecord[], legacy: LegacyEvent[], meetups: MeetupEvent[]) {
+export async function prepareRewardProofs(db: Firestore, user: UserProfile, checkins: CheckInRecord[], legacy: LegacyEvent[], meetups: MeetupEvent[], streakSteps: number[] = []) {
   const epoch = user.rewardEpoch || 0;
   const email = user.email.toLowerCase();
   const byId = new Map(meetups.map((event) => [event.id, event]));
@@ -73,6 +73,25 @@ export async function prepareRewardProofs(db: Firestore, user: UserProfile, chec
       return next;
     });
     existing.set(id, proof);
+  }
+  // Streak badges level up for every full block of `step` weeks in any streak. Each block's final week
+  // is proven separately, so the server can count them: the week whose running streak is a multiple of the step.
+  for (const step of new Set(streakSteps.filter((n) => Number.isInteger(n) && n >= 1 && n <= 1000))) {
+    const id = rewardProofId(email, epoch, 'streakstep', step);
+    for (const entry of streaks.flat().filter((e) => e.count % step === 0)) {
+      if (existing.get(id)?.sources?.includes(entry.week)) continue;
+      const proof = await runTransaction(db, async (tx) => {
+        const ref = doc(db, 'reward_proofs', id);
+        const [owner, old] = await Promise.all([tx.get(doc(db, 'users', email)), tx.get(ref)]);
+        if (!owner.exists() || owner.data().deleting || (owner.data().rewardEpoch || 0) !== epoch) throw new Error('Attendance changed. Please refresh your rewards.');
+        const previous = (old.data()?.sources || []) as number[];
+        if (previous.includes(entry.week)) return old.data()!;
+        const next = { userEmail: email, epoch, kind: 'streakstep', step, week: entry.week, count: previous.length + 1, sources: [...previous, entry.week], source: entry.source };
+        tx.set(ref, next);
+        return next;
+      });
+      existing.set(id, proof);
+    }
   }
   return { streakProofWeek: lastWeek, longestStreakProofWeek: longestWeek };
 }

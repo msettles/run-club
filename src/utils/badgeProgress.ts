@@ -1,4 +1,5 @@
 import { Badge, UserProfile } from '../types';
+import { liveStreak } from './legacy';
 
 export interface BadgeProgress {
   current: number;
@@ -13,7 +14,6 @@ export interface BadgeProgress {
 export function badgeProgress(badge: Badge, user: UserProfile): BadgeProgress | null {
   const cfg = badge.triggerConfig;
   if (!cfg) return null;
-  const earned = user.badgeCounts?.[badge.id] || (user.unlockedBadgeIds?.includes(badge.id) ? 1 : 0);
   // Incremental badges level up every `step`; others have a single threshold.
   const levelUp = (threshold: number, step: number | undefined, count: number, unit: string, incremental = Boolean(cfg.isIncremental)): BadgeProgress => {
     const size = incremental ? step || threshold : threshold;
@@ -42,9 +42,12 @@ export function badgeProgress(badge: Badge, user: UserProfile): BadgeProgress | 
       return cfg.counter === 'miles' ? { ...progress, current: Math.round(progress.current * 10) / 10 } : progress;
     }
     case 'streak': {
+      // The badge is *awarded* from the longest streak, but Progress shows the streak you're on right now
+      // (a streak that has lapsed counts as 0): 1 week into a new streak is 1 / 4 on a 4-week badge.
       const weeks = cfg.streakWeeks || 4;
-      const best = Math.max(user.longestStreakWeeks || 0, user.currentStreakWeeks || 0);
-      return levelUp(weeks, weeks, earned ? best : Math.min(best, weeks), 'weeks');
+      const active = liveStreak(user.currentStreakWeeks || 0, user.lastCheckInDate, undefined, user.streakProofWeek);
+      const within = cfg.isIncremental && active > 0 && active % weeks === 0 ? weeks : cfg.isIncremental ? active % weeks : Math.min(active, weeks);
+      return { current: within, target: weeks, unit: 'weeks' };
     }
     default:
       return null;
