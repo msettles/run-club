@@ -72,7 +72,12 @@ export function App() {
     badges,
     milestones,
     createMilestone,
+    updateMilestone,
     deleteMilestone,
+    updateBadge,
+    installStarterCatalog,
+    catalogSeeded,
+    catalogSettled,
     partner,
     savePartner,
     notifications,
@@ -209,6 +214,15 @@ export function App() {
     : isUserLoggedIn;
   const isAdmin = isUserLoggedIn && isProfileVerified && isAdminProfile(currentUser);
   const isOrganizerOrAdmin = isUserLoggedIn && isProfileVerified && isStaffProfile(currentUser);
+
+  // First time an admin opens a club whose starter pack (milestones, badges, special events) hasn't been written yet,
+  // save it, so everything is the club's own data that can be edited or deleted. It runs once.
+  const seedingStarted = useRef(false);
+  useEffect(() => {
+    if (!isFirebaseConfigured || !isAdmin || !catalogSettled || catalogSeeded || seedingStarted.current) return;
+    seedingStarted.current = true;
+    void installStarterCatalog().catch((error) => { seedingStarted.current = false; console.warn('Could not save the starter milestones and badges:', error); });
+  }, [isAdmin, catalogSettled, catalogSeeded, installStarterCatalog]);
 
   // Runs the signed-in runner has checked into, and whether that includes a run open right now.
   const myEmail = (currentUser.email || '').toLowerCase();
@@ -933,6 +947,9 @@ export function App() {
               onSavePartner={savePartner}
               milestones={milestones}
               onCreateMilestone={createMilestone}
+              onUpdateMilestone={updateMilestone}
+              onUpdateBadge={updateBadge}
+              onInstallStarterCatalog={installStarterCatalog}
               onDeleteMilestone={deleteMilestone}
               onCreateBadge={createBadge}
               onDeleteBadge={deleteBadge}

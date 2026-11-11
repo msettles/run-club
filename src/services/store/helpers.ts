@@ -117,6 +117,12 @@ export function hydrateRouteFromFirestore(data: any): GPXRoute {
 export const isBadge = (b: { category?: string; triggerConfig?: { type?: string } }): boolean =>
   b.category !== 'milestone' && b.triggerConfig?.type !== 'milestone';
 
+/** The starter pack plus saved entries, saved copies winning. Used only until the starter pack has been written to Firestore. */
+export function withCatalog<T extends { id: string }>(saved: T[], starter: T[]): T[] {
+  const ids = new Set(saved.map((x) => x.id));
+  return [...starter.filter((x) => !ids.has(x.id)), ...saved];
+}
+
 export const STORAGE_KEYS = {
   RUNS: 'woodchuckers_runs_v1',
   ROUTES: 'woodchuckers_routes_v1',

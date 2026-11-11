@@ -624,9 +624,15 @@ service cloud.firestore {
         id == "special-halloween" ? {"type":"special_event","specialEventId":"halloween","isIncremental":true,"step":1} :
         id == "special-anniversary" ? {"type":"special_event","specialEventId":"anniversary","isIncremental":true,"step":1} : {};
     }
+    // Once the starter pack has been saved (settings/catalog), badges are ONLY what is saved in the badges collection:
+    // a deleted badge is gone, and nothing is built in. Before that, the built-in starter configs apply so an
+    // existing club keeps working until its admin first opens the app after this update.
+    function catalogSeeded() {
+      return exists(/databases/$(database)/documents/settings/catalog);
+    }
     function badgeConfig(id) {
       let p = /databases/$(database)/documents/badges/$(id);
-      return exists(p) ? get(p).data.get('triggerConfig', {}) : builtinBadgeConfig(id);
+      return exists(p) ? get(p).data.get('triggerConfig', {}) : (catalogSeeded() ? {} : builtinBadgeConfig(id));
     }
     function positiveRewardLevel(n, step) {
       let level = int(math.floor(n / step));
@@ -1003,7 +1009,11 @@ service cloud.firestore {
     match /settings/{settingId} {
       allow read: if true;
       // The partner doc holds the club's home-base partner: a name, optional https links, an address and a thank-you line.
-      allow create, update: if isAdmin() && (settingId != 'partner' || (
+      // settings/catalog only records that the starter pack of milestones and badges has been saved.
+      allow create, update: if isAdmin() && (settingId != 'catalog' || (
+        request.resource.data.keys().hasOnly(['seeded', 'seededAt']) && request.resource.data.get('seeded', false) == true &&
+        (!('seededAt' in request.resource.data) || (request.resource.data.seededAt is string && request.resource.data.seededAt.size() <= 40)))) &&
+        (settingId != 'partner' || (
         request.resource.data.keys().hasOnly(['name', 'website', 'instagram', 'facebook', 'address', 'thanks']) &&
         request.resource.data.keys().hasAll(['name']) &&
         request.resource.data.name is string && request.resource.data.name.size() >= 1 && request.resource.data.name.size() <= 100 &&

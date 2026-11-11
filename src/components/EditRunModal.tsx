@@ -3,7 +3,6 @@ import React, { useState } from 'react';
 import { RunEvent, GPXRoute, PaceGroup, SpecialEventType, SpecialEventDefinition, RunRouteChoice } from '../types';
 import { type RouteCatalogPaginationProps, RouteChoicesEditor } from './RouteChoicesEditor';
 import { getRunChoices, resolveChoices, routeChoiceError, deriveRunStats, deleteRunConfirmMessage } from '../utils/runChoices';
-import { INITIAL_SPECIAL_EVENTS } from '../data/catalog';
 import { X, Calendar, Clock, MapPin, Plus, Trash2, Sparkles, KeyRound } from 'lucide-react';
 
 interface EditRunModalProps extends RouteCatalogPaginationProps {
@@ -28,7 +27,7 @@ export const EditRunModal: React.FC<EditRunModalProps> = ({
   onSave,
   onDelete,
   checkInCount = 0,
-  specialEvents = INITIAL_SPECIAL_EVENTS,
+  specialEvents = [],
   currentCodeWord = '',
   codeWordLockedSince,
 }) => {

@@ -14,7 +14,6 @@ import {
   BadgeCategory,
   BadgeTriggerConfig,
 } from '../types';
-import { INITIAL_BADGES } from '../data/catalog';
 import { ClubNotification } from '../services/notifications';
 import { isLegacyClaimed } from '../utils/legacy';
 import { type AssignableRole } from './admin/shared';
@@ -72,6 +71,10 @@ export interface AdminDashboardProps {
   milestones?: MilestoneReward[];
   onCreateMilestone?: (data: { name: string; measure?: 'runs' | 'miles'; target: number; icon: string; description: string; gear: string; perks?: string }) => Promise<unknown>;
   onDeleteMilestone?: (id: string) => Promise<void>;
+  onUpdateMilestone?: (id: string, data: { name: string; measure?: 'runs' | 'miles'; target: number; icon: string; description: string; gear: string; perks?: string }) => Promise<unknown>;
+  onUpdateBadge?: (id: string, data: { name: string; emoji: string; description: string; requirement: string; category: BadgeCategory; isIncremental?: boolean; maxMultiplier?: number; triggerConfig: BadgeTriggerConfig }) => Promise<unknown>;
+  /** Writes any starter milestones, badges and special events that aren't saved yet (never overwrites edits). Returns how many were added. */
+  onInstallStarterCatalog?: () => Promise<number>;
   currentUser?: UserProfile;
   badges?: Badge[];
   specialEvents?: SpecialEventDefinition[];
@@ -110,7 +113,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = (props) => {
     users,
     legacyMembers,
     milestoneAlerts = [],
-    badges = INITIAL_BADGES,
+    badges = [],
   } = props;
   const [adminTab, setAdminTab] = useState<'events' | 'badges' | 'checkins' | 'milestones' | 'members' | 'notifications' | 'partner'>('events');
 

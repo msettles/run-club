@@ -10,6 +10,7 @@ import { doc, writeBatch } from 'firebase/firestore';
 import { cleanFirestoreData } from './helpers';
 import { emojiOwners, emojiTakenMessage } from '../../utils/emoji';
 import type { StoreState } from './state';
+import type { createCatalogOps } from './catalog';
 
 const slugify = (name: string): string =>
   name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || `custom_${Date.now()}`;
@@ -21,7 +22,7 @@ function uniqueId(base: string, taken: (id: string) => boolean): string {
   return id;
 }
 
-export function createBadgeOps(ctx: StoreState) {
+export function createBadgeOps(ctx: StoreState & ReturnType<typeof createCatalogOps>) {
   const {
     badges,
     setBadges,
@@ -64,7 +65,6 @@ export function createBadgeOps(ctx: StoreState) {
       isIncremental: badgeData.isIncremental ?? false,
       maxMultiplier: badgeData.maxMultiplier,
       triggerConfig: { ...badgeData.triggerConfig },
-      isDefault: false,
       createdAt: now,
     };
 
@@ -79,7 +79,6 @@ export function createBadgeOps(ctx: StoreState) {
         badgeId,
         badgeDescription: newBadge.description,
         badgeRequirement: newBadge.requirement,
-        isDefault: false,
         createdAt: now,
       };
     }
@@ -99,12 +98,69 @@ export function createBadgeOps(ctx: StoreState) {
     return newBadge;
   };
 
-  /** Delete a custom badge and its special event option, if any (Admin). Throws if the server refuses. */
+  /**
+   * Edit a badge (Admin): any badge, including ones from the starter pack. A special-event badge keeps its event id
+   * (so past attendance still counts) and its event option's name, emoji and wording follow the badge.
+   */
+  const updateBadge = async (badgeId: string, badgeData: {
+    name: string;
+    emoji: string;
+    description: string;
+    requirement: string;
+    category: BadgeCategory;
+    isIncremental?: boolean;
+    maxMultiplier?: number;
+    triggerConfig: BadgeTriggerConfig;
+  }): Promise<Badge> => {
+    await ctx.ensureCatalogSeeded();
+    const existing = badges.find((b) => b.id === badgeId);
+    if (!existing) throw new Error('That badge no longer exists.');
+    const name = badgeData.name.trim();
+    const emoji = badgeData.emoji.trim() || '🏅';
+    if (!name) throw new Error('Give the badge a name.');
+    const taken = emojiTakenMessage(emoji, emojiOwners(badges, ctx.milestones, badgeId));
+    if (taken) throw new Error(taken);
+
+    const triggerConfig = { ...badgeData.triggerConfig };
+    // A special-event badge keeps the event it was tied to.
+    if (existing.triggerConfig?.specialEventId && badgeData.category === 'special_event') triggerConfig.specialEventId = existing.triggerConfig.specialEventId;
+    const updated: Badge = {
+      ...existing,
+      name,
+      emoji,
+      description: badgeData.description.trim(),
+      requirement: badgeData.requirement.trim(),
+      category: badgeData.category,
+      isIncremental: badgeData.isIncremental ?? false,
+      maxMultiplier: badgeData.maxMultiplier,
+      triggerConfig,
+    };
+    const event = specialEvents.find((se) => se.badgeId === badgeId || se.id === existing.triggerConfig?.specialEventId);
+    const updatedEvent: SpecialEventDefinition | undefined = event
+      ? { ...event, name, emoji, badgeDescription: updated.description, badgeRequirement: updated.requirement }
+      : undefined;
+
+    if (isFirebaseConfigured && db) {
+      const batch = writeBatch(db);
+      batch.set(doc(db, 'badges', badgeId), cleanFirestoreData(updated));
+      if (updatedEvent) batch.set(doc(db, 'special_events', updatedEvent.id), cleanFirestoreData(updatedEvent));
+      await batch.commit();
+    }
+    setBadges((prev) => [...prev.filter((b) => b.id !== badgeId), updated]);
+    if (updatedEvent) setSpecialEvents((prev) => [...prev.filter((se) => se.id !== updatedEvent.id), updatedEvent]);
+    return updated;
+  };
+
+  /**
+   * Delete a badge and its special event option, if any (Admin): any badge, including ones from the starter pack.
+   * Runners who already earned it keep their record, but it no longer shows or counts.
+   */
   const deleteBadge = async (badgeId: string): Promise<void> => {
+    await ctx.ensureCatalogSeeded();
     const b = badges.find((x) => x.id === badgeId);
-    if (!b || b.isDefault) return;
+    if (!b) return;
     const seIds = specialEvents
-      .filter((se) => !se.isDefault && (se.badgeId === badgeId || se.id === b.triggerConfig?.specialEventId))
+      .filter((se) => se.badgeId === badgeId || se.id === b.triggerConfig?.specialEventId)
       .map((se) => se.id);
     if (isFirebaseConfigured && db) {
       const batch = writeBatch(db);
@@ -116,5 +172,5 @@ export function createBadgeOps(ctx: StoreState) {
     setSpecialEvents((prev) => prev.filter((se) => !seIds.includes(se.id)));
   };
 
-  return { createBadge, deleteBadge };
+  return { createBadge, updateBadge, deleteBadge };
 }

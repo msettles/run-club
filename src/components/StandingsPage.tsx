@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { Member, Badge, MilestoneReward } from '../types';
-import { CLUB_MILESTONES } from '../data/catalog';
 import { milestoneMeasure, milestoneTarget, sortMilestones } from '../utils/milestones';
 import { levelTag } from '../utils/badgeProgress';
 import { isBadge } from '../services/store/helpers';
@@ -25,7 +24,7 @@ const METRICS: { id: StandingMetric; label: string; unit: (n: number) => string;
 
 const rankIcon = (i: number) => (i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}`);
 
-export const StandingsPage: React.FC<StandingsPageProps> = ({ members, badges, milestones = CLUB_MILESTONES, currentMember, loading, error, onRetry }) => {
+export const StandingsPage: React.FC<StandingsPageProps> = ({ members, badges, milestones = [], currentMember, loading, error, onRetry }) => {
   const [visibleCount, setVisibleCount] = useState(25);
   const [metric, setMetric] = useState<StandingMetric>('miles');
 

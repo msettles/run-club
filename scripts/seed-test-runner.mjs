@@ -77,8 +77,12 @@ async function checkInTestRunners() {
   const event = { ...eventSnap.data(), id: runId, codeWord: '' };
   const distanceChoice = option('--distance') || (event.activeDistances || Object.keys(event.routes))[0];
   const [badgeDocs, milestoneDocs] = await Promise.all([db.collection('badges').get(), db.collection('milestones').get()]);
-  const badges = withCatalog(badgeDocs.docs.map((d) => ({ ...d.data(), id: d.id })), INITIAL_BADGES).filter(isBadge);
-  const milestones = withCatalog(milestoneDocs.docs.map((d) => ({ ...d.data(), id: d.id })), CLUB_MILESTONES);
+  // Once the club's starter pack has been saved (settings/catalog) the saved documents ARE the catalog; before that, the starter pack applies too.
+  const seeded = (await db.doc('settings/catalog').get()).exists;
+  const savedBadges = badgeDocs.docs.map((d) => ({ ...d.data(), id: d.id }));
+  const savedMilestones = milestoneDocs.docs.map((d) => ({ ...d.data(), id: d.id }));
+  const badges = (seeded ? savedBadges : withCatalog(savedBadges, INITIAL_BADGES)).filter(isBadge);
+  const milestones = seeded ? savedMilestones : withCatalog(savedMilestones, CLUB_MILESTONES);
   console.log(`Checking test runners into ${runId} ("${event.title}", ${event.date}) on ${target}, route choice "${distanceChoice}"…`);
   for (const email of TEST_EMAILS) {
     const userSnap = await db.doc(`users/${email}`).get();

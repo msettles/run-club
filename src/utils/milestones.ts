@@ -1,4 +1,3 @@
-import { CLUB_MILESTONES } from '../data/catalog';
 import type { MilestoneAlert, MilestoneReward } from '../types';
 
 /** What a milestone is earned by. Milestones without a measure are run-count milestones. */
@@ -24,7 +23,7 @@ export function alertHasGear(alert: Pick<MilestoneAlert, 'hasGear'>): boolean {
  * Progress toward the next *gear* milestone of one measure (a recognition-only milestone has nothing to work toward),
  * shared by both runner screens. `remaining` is in runs or miles to match the measure.
  */
-export function milestoneProgress(total: number, milestones: MilestoneReward[] = CLUB_MILESTONES, measure: 'runs' | 'miles' = 'runs') {
+export function milestoneProgress(total: number, milestones: MilestoneReward[] = [], measure: 'runs' | 'miles' = 'runs') {
   const gear = sortMilestones(milestones).filter((m) => m.hasGear !== false && milestoneMeasure(m) === measure);
   const nextMilestone = gear.find((m) => milestoneTarget(m) > total) || null;
   const previous = nextMilestone

@@ -5,7 +5,6 @@ import { celebrate } from '../utils/celebrate';
 import { milestoneProgress } from '../utils/milestones';
 import { levelTag } from '../utils/badgeProgress';
 import { RunEvent, MeetupEvent, UserProfile, RouteOption, ActivityType, DistanceChoice, CheckInRecord, Badge, GPXRoute } from '../types';
-import { CLUB_MILESTONES } from '../data/catalog';
 import type { MilestoneAlert, MilestoneReward } from '../types';
 import { milestoneMeasure, milestoneTarget } from '../utils/milestones';
 import { checkInStatus, checkInWindow, formatOpening } from '../utils/checkInWindow';
@@ -69,7 +68,7 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
   runs = [],
   onResolveCodeWord,
   currentUser,
-  milestones = CLUB_MILESTONES,
+  milestones = [],
   routes,
   checkins,
   onCheckInRunner,

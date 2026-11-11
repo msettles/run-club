@@ -32,7 +32,8 @@ import {
   getStoredNotifications,
 } from '../notifications';
 import { onPushReceived, readReceivedPushes, type ReceivedPush } from '../push';
-import { STORAGE_KEYS, hydrateRouteFromFirestore, isBadge, loadFromStorage, memberFromUser, saveToStorage } from './helpers';
+import { STORAGE_KEYS, hydrateRouteFromFirestore, isBadge, loadFromStorage, memberFromUser, saveToStorage, withCatalog } from './helpers';
+import { sortMilestones } from '../../utils/milestones';
 
 /**
  * Local (no-Firebase) mode keeps everything in this browser, starting from the
@@ -104,15 +105,21 @@ export function useStoreState() {
   const [gearHistoryError, setGearHistoryError] = useState<string | null>(null);
   const [hasMoreGearHistory, setHasMoreGearHistory] = useState(!LOCAL_MODE);
   const [members, setMembers] = useState<Member[]>(() => (LOCAL_MODE ? loadMerged<Member>(STORAGE_KEYS.MEMBERS, [], emailOf) : []));
-  // The built-in badge catalog is part of the app; admin-made badges come from Firestore.
-  // Milestones (gear tiers) and badges are separate: a milestone is never also a badge.
-  const [badges, setBadges] = useState<Badge[]>(() => (LOCAL_MODE ? loadMerged(STORAGE_KEYS.BADGES, INITIAL_BADGES, idOf).filter(isBadge) : INITIAL_BADGES));
+  // Badges, milestones and special events are the club's own data, saved in Firestore and editable by admins.
+  // The starter pack in data/catalog.ts is written there once (settings/catalog marks that it was); until then
+  // the starter pack is shown alongside anything saved. Milestones (gear tiers) and badges are separate.
+  const [badgeDocs, setBadges] = useState<Badge[]>(() => (LOCAL_MODE ? loadFromStorage<Badge[]>(STORAGE_KEYS.BADGES, INITIAL_BADGES) : []));
+  const [milestoneDocs, setMilestones] = useState<MilestoneReward[]>(() => (LOCAL_MODE ? loadFromStorage<MilestoneReward[]>(STORAGE_KEYS.MILESTONES, CLUB_MILESTONES) : []));
+  const [specialEventDocs, setSpecialEvents] = useState<SpecialEventDefinition[]>(() =>
+    LOCAL_MODE ? loadFromStorage<SpecialEventDefinition[]>(STORAGE_KEYS.SPECIAL_EVENTS, INITIAL_SPECIAL_EVENTS) : []
+  );
+  const [catalogSeeded, setCatalogSeeded] = useState(LOCAL_MODE);   // the starter pack has been written
+  const [catalogSettled, setCatalogSettled] = useState(LOCAL_MODE); // we know whether it has (the settings have loaded)
+  const badges = useMemo(() => (catalogSeeded ? badgeDocs : withCatalog(badgeDocs, INITIAL_BADGES)).filter(isBadge), [catalogSeeded, badgeDocs]);
+  const milestones = useMemo(() => sortMilestones(catalogSeeded ? milestoneDocs : withCatalog(milestoneDocs, CLUB_MILESTONES)), [catalogSeeded, milestoneDocs]);
+  const specialEvents = useMemo(() => (catalogSeeded ? specialEventDocs : withCatalog(specialEventDocs, INITIAL_SPECIAL_EVENTS)), [catalogSeeded, specialEventDocs]);
   // The club's home-base partner; admins can edit it (settings/partner), the app ships with a default.
   const [partner, setPartner] = useState<ClubPartner>(DEFAULT_PARTNER);
-  const [milestones, setMilestones] = useState<MilestoneReward[]>(() => (LOCAL_MODE ? loadMerged(STORAGE_KEYS.MILESTONES, CLUB_MILESTONES, idOf) : CLUB_MILESTONES));
-  const [specialEvents, setSpecialEvents] = useState<SpecialEventDefinition[]>(() =>
-    LOCAL_MODE ? loadMerged(STORAGE_KEYS.SPECIAL_EVENTS, INITIAL_SPECIAL_EVENTS, idOf) : INITIAL_SPECIAL_EVENTS
-  );
   // Club announcements: shared via Firestore (announcements collection); local mode keeps them in the browser.
   const [notifications, setNotifications] = useState<ClubNotification[]>(() => (LOCAL_MODE ? getStoredNotifications() : []));
   // Pushes this device received from the Firebase console (saved by the push worker).
@@ -233,9 +240,9 @@ export function useStoreState() {
   usePersist(STORAGE_KEYS.LEGACY_MEMBERS, legacyPool, localReady);
   usePersist(STORAGE_KEYS.CURRENT_USER_EMAIL, currentUserEmail, localReady);
   usePersist(STORAGE_KEYS.MILESTONE_ALERTS, milestoneAlerts, localReady);
-  usePersist(STORAGE_KEYS.BADGES, badges, localReady);
-  usePersist(STORAGE_KEYS.MILESTONES, milestones, localReady);
-  usePersist(STORAGE_KEYS.SPECIAL_EVENTS, specialEvents, localReady);
+  usePersist(STORAGE_KEYS.BADGES, badgeDocs, localReady);
+  usePersist(STORAGE_KEYS.MILESTONES, milestoneDocs, localReady);
+  usePersist(STORAGE_KEYS.SPECIAL_EVENTS, specialEventDocs, localReady);
 
   // Derived current user (Falls back to GUEST_USER if not logged in)
   const currentUser: UserProfile = useMemo(
@@ -278,13 +285,17 @@ export function useStoreState() {
     setMembers,
     leaderboardLoaded, setLeaderboardLoaded, leaderboardError, setLeaderboardError,
     badges,
+    badgeDocs,
     setBadges,
     milestones,
+    milestoneDocs,
     setMilestones,
     partner,
     setPartner,
     specialEvents,
+    specialEventDocs,
     setSpecialEvents,
+    catalogSeeded, setCatalogSeeded, catalogSettled, setCatalogSettled,
     notifications,
     setNotifications,
     receivedPushes,

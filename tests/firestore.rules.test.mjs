@@ -998,3 +998,18 @@ test('incremental badges: admin-defined level size, counter and display cap are 
   await assertFails(setDoc(doc(admin, 'badges', 'b-max'), badge('b-max', { type: 'incremental', counter: 'pet', step: 1, isIncremental: true }, { maxMultiplier: 0 })));
   await assertFails(setDoc(doc(ctx(ORGANIZER), 'badges', 'b-org'), badge('b-org', { type: 'incremental', counter: 'pet', step: 1, isIncremental: true })));
 });
+
+test('the catalog marker is admin-only; starter milestones and badges are plain documents an admin can edit and delete', async () => {
+  const admin = ctx(BOOTSTRAP);
+  await assertSucceeds(setDoc(doc(admin, 'settings', 'catalog'), { seeded: true, seededAt: '2026-11-12T00:00:00.000Z' }));
+  await assertFails(setDoc(doc(admin, 'settings', 'catalog'), { seeded: false }));
+  await assertFails(setDoc(doc(admin, 'settings', 'catalog'), { seeded: true, extra: 1 }));
+  await assertFails(setDoc(doc(ctx(ORGANIZER), 'settings', 'catalog'), { seeded: true }));
+  // The starter milestones are written as plain documents (no "built in" flag) and can be edited or deleted like any other.
+  const starter = { id: 'milestone-5', runsRequired: 5, name: '5 Runs Milestone', reward: 'Official Woodchucker Member Shirt', perks: '$1 off', icon: '👕', description: 'x', hasGear: true };
+  await assertSucceeds(setDoc(doc(admin, 'milestones', 'milestone-5'), starter));
+  await assertSucceeds(setDoc(doc(admin, 'milestones', 'milestone-5'), { ...starter, reward: 'Club Shirt' }));
+  await assertSucceeds(deleteDoc(doc(admin, 'milestones', 'milestone-5')));
+  await assertSucceeds(setDoc(doc(admin, 'badges', 'power-walker'), { id: 'power-walker', name: 'Power Walker', emoji: '🚶', description: 'd', requirement: 'r', category: 'incremental', isIncremental: true, triggerConfig: { type: 'incremental', counter: 'walks', step: 10, isIncremental: true } }));
+  await assertSucceeds(deleteDoc(doc(admin, 'badges', 'power-walker')));
+});

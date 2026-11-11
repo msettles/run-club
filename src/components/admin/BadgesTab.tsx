@@ -6,7 +6,6 @@ import {
   IncrementalCounter,
   DistanceChoice
 } from '../../types';
-import { INITIAL_BADGES, INITIAL_SPECIAL_EVENTS } from '../../data/catalog';
 import { 
   Sparkles,
   Plus,
@@ -16,6 +15,7 @@ import {
 import type { AdminDashboardProps } from '../AdminDashboard';
 import { EmojiPicker } from './EmojiPicker';
 import { emojiOwners } from '../../utils/emoji';
+import { badgeFormFromBadge } from '../../utils/badgeForm';
 
 const COUNTER_LABEL: Record<IncrementalCounter, { plural: string }> = {
   walks: { plural: 'walking check-ins' },
@@ -27,10 +27,12 @@ const COUNTER_LABEL: Record<IncrementalCounter, { plural: string }> = {
 export const BadgesTab: React.FC<AdminDashboardProps> = (props) => {
   const {
     routes = [],
-    badges = INITIAL_BADGES,
-    specialEvents = INITIAL_SPECIAL_EVENTS,
+    badges = [],
+    specialEvents = [],
     onCreateBadge,
+    onUpdateBadge,
     onDeleteBadge,
+    onInstallStarterCatalog,
   } = props;
   // Badge & Special Event Creator State
   const [newBadgeName, setNewBadgeName] = useState<string>('');
@@ -51,6 +53,22 @@ export const BadgesTab: React.FC<AdminDashboardProps> = (props) => {
   const [badgeSavedToast, setBadgeSavedToast] = useState<string | null>(null);
   const [badgeFilterCategory, setBadgeFilterCategory] = useState<string>('all');
   const [isSubmittingBadge, setIsSubmittingBadge] = useState<boolean>(false);
+  const [editingBadgeId, setEditingBadgeId] = useState<string | null>(null);
+  const [restoreNote, setRestoreNote] = useState('');
+
+  const resetBadgeForm = () => {
+    setEditingBadgeId(null); setNewBadgeName(''); setNewBadgeDesc(''); setNewBadgeReq(''); setNewBadgeEmoji('🏅');
+    setNewBadgeCategory('special_event'); setNewBadgeIncremental(true); setTriggerSpecialSlug(''); setTriggerMaxDisplay('');
+  };
+  /** Load an existing badge into the form to edit it (any badge, including the starter ones). */
+  const startEditBadge = (b: (typeof badges)[number]) => {
+    const f = badgeFormFromBadge(b);
+    setEditingBadgeId(b.id); setNewBadgeName(f.name); setNewBadgeEmoji(f.emoji); setNewBadgeDesc(f.description); setNewBadgeReq(f.requirement);
+    setNewBadgeIncremental(f.incremental); setTriggerMaxDisplay(f.maxDisplay); setNewBadgeCategory(f.category);
+    setTriggerCounter(f.counter); setTriggerStep(f.step); setTriggerSpecialSlug(f.specialSlug);
+    setTriggerDistanceChoice(f.distanceChoice); setTriggerDistanceThreshold(f.distanceThreshold); setTriggerStreakWeeks(f.streakWeeks);
+    document.getElementById('badge-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
 
   return (
     <div className="space-y-6">
@@ -70,6 +88,19 @@ export const BadgesTab: React.FC<AdminDashboardProps> = (props) => {
           </div>
         </div>
 
+        {onInstallStarterCatalog && (
+          <div className="text-right">
+            <button
+              type="button"
+              onClick={() => { onInstallStarterCatalog().then((n) => setRestoreNote(n ? `Added back ${n} starter item${n === 1 ? '' : 's'}. Your edits were not touched.` : 'Every starter item is already saved.')).catch(() => setRestoreNote("Couldn't add the starter items. Please try again.")); }}
+              className="text-[11px] font-bold text-amber-200 hover:text-white underline cursor-pointer"
+            >
+              Add back starter badges &amp; milestones
+            </button>
+            {restoreNote && <p role="status" className="mt-1 text-[11px] text-stone-300">{restoreNote}</p>}
+          </div>
+        )}
+
         {badgeSavedToast && (
           <div className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500 text-white text-xs font-bold rounded-xl animate-in fade-in shadow-md">
             <CheckCheck className="w-4 h-4" />
@@ -84,18 +115,19 @@ export const BadgesTab: React.FC<AdminDashboardProps> = (props) => {
           <div className="border-b border-stone-100 pb-3 flex items-center justify-between">
             <div>
               <h4 className="font-extrabold text-sm text-stone-900 font-display uppercase tracking-wide">
-                Create New Club Badge or Special Event
+                {editingBadgeId ? 'Edit Club Badge' : 'Create New Club Badge or Special Event'}
               </h4>
               <p className="text-xs text-stone-500">
                 Define the emoji, achievement rule, and automatic reward triggers.
               </p>
             </div>
             <span className="text-xs font-black px-2.5 py-1 bg-amber-100 text-amber-900 rounded-full border border-amber-300">
-              New Badge
+              {editingBadgeId ? 'Editing' : 'New Badge'}
             </span>
           </div>
 
           <form
+            id="badge-form"
             onSubmit={async (e) => {
               e.preventDefault();
               if (!newBadgeName.trim() || isSubmittingBadge) return;
@@ -127,7 +159,19 @@ export const BadgesTab: React.FC<AdminDashboardProps> = (props) => {
                   triggerConfig.step = Number(triggerStreakWeeks);
                 }
 
-                if (onCreateBadge) {
+                const payload = {
+                  name: newBadgeName.trim(),
+                  emoji: newBadgeEmoji.trim() || '🏅',
+                  description: newBadgeDesc.trim() || `Achievement badge for ${newBadgeName.trim()}`,
+                  requirement: newBadgeReq.trim() || newBadgeName.trim(),
+                  category: categoryToSave,
+                  isIncremental: newBadgeCategory === 'incremental' ? true : newBadgeIncremental,
+                  maxMultiplier: newBadgeCategory === 'incremental' && triggerMaxDisplay.trim() ? Math.floor(Number(triggerMaxDisplay)) : undefined,
+                  triggerConfig,
+                };
+                if (editingBadgeId && onUpdateBadge) {
+                  await onUpdateBadge(editingBadgeId, payload);
+                } else if (onCreateBadge) {
                   await onCreateBadge({
                     name: newBadgeName.trim(),
                     emoji: newBadgeEmoji.trim() || '🏅',
@@ -141,13 +185,9 @@ export const BadgesTab: React.FC<AdminDashboardProps> = (props) => {
                   });
                 }
 
-                setBadgeSavedToast(`Created "${newBadgeName.trim()}" badge!`);
+                setBadgeSavedToast(`${editingBadgeId ? 'Saved' : 'Created'} "${newBadgeName.trim()}" badge!`);
                 setTimeout(() => setBadgeSavedToast(null), 4000);
-
-                // Reset form
-                setNewBadgeName('');
-                setNewBadgeDesc('');
-                setNewBadgeReq('');
+                resetBadgeForm();
               } catch (err: any) {
                 alert(err.message || 'Error creating badge');
               } finally {
@@ -435,8 +475,11 @@ export const BadgesTab: React.FC<AdminDashboardProps> = (props) => {
               className="w-full py-3 bg-amber-500 hover:bg-amber-400 text-stone-950 font-black text-xs uppercase tracking-wider rounded-xl transition shadow-md flex items-center justify-center gap-2 cursor-pointer font-display"
             >
               <Plus className="w-4 h-4" />
-              <span>Create &amp; Activate Club Badge</span>
+              <span>{editingBadgeId ? 'Save Changes' : 'Create & Activate Club Badge'}</span>
             </button>
+            {editingBadgeId && (
+              <button type="button" onClick={resetBadgeForm} className="w-full py-2 text-xs font-bold text-stone-700 hover:bg-stone-100 rounded-xl cursor-pointer">Cancel editing</button>
+            )}
           </form>
         </div>
 
@@ -515,15 +558,10 @@ export const BadgesTab: React.FC<AdminDashboardProps> = (props) => {
                     </div>
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
-                    {se.isDefault ? (
-                      <span className="px-2 py-0.5 bg-stone-200 text-stone-700 text-[10px] font-bold rounded-full">
-                        Built-in
-                      </span>
-                    ) : (
                       <button
                         type="button"
                         onClick={async () => {
-                          if (confirm(`Delete custom special event "${se.name}"?`) && onDeleteBadge) {
+                          if (confirm(`Delete special event "${se.name}"?`) && onDeleteBadge) {
                             try {
                               await onDeleteBadge(se.badgeId);
                             } catch (err) {
@@ -533,11 +571,10 @@ export const BadgesTab: React.FC<AdminDashboardProps> = (props) => {
                           }
                         }}
                         className="p-1 text-stone-400 hover:text-red-500 transition"
-                        title="Delete custom special event"
+                        title="Delete special event"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
-                    )}
                   </div>
                 </div>
               ))}
@@ -596,11 +633,15 @@ export const BadgesTab: React.FC<AdminDashboardProps> = (props) => {
                       </div>
                     </div>
 
-                    {!b.isDefault && onDeleteBadge && (
+                    <div className="flex items-center gap-1">
+                    {onUpdateBadge && (
+                      <button type="button" onClick={() => startEditBadge(b)} className="text-[11px] font-bold text-woodland-800 hover:underline px-1 cursor-pointer" title="Edit badge">Edit</button>
+                    )}
+                    {onDeleteBadge && (
                       <button
                         type="button"
                         onClick={async () => {
-                          if (confirm(`Are you sure you want to delete badge "${b.name}"?`)) {
+                          if (confirm(`Delete the "${b.name}" badge? Runners who earned it keep their record, but it no longer shows or counts.`)) {
                             try {
                               await onDeleteBadge(b.id);
                             } catch (err) {
@@ -610,11 +651,12 @@ export const BadgesTab: React.FC<AdminDashboardProps> = (props) => {
                           }
                         }}
                         className="text-stone-400 hover:text-red-500 p-1"
-                        title="Delete custom badge"
+                        title="Delete badge"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     )}
+                    </div>
                   </div>
 
                   <p className="text-xs text-stone-600 mt-2 leading-relaxed">
