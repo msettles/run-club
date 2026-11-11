@@ -52,7 +52,7 @@ export const NewUserModal: React.FC<NewUserModalProps> = ({
 
   const [firstName, setFirstName] = useState<string>(parsedNames.first);
   const [lastName, setLastName] = useState<string>(parsedNames.last);
-  const [shirtSize, setShirtSize] = useState<string>('L');
+  const [shirtSize, setShirtSize] = useState<string>('Not specified');
   const [preferredPace, setPreferredPace] = useState<string>('9:30 - 11:00 /mi');
   const [birthday, setBirthday] = useState<string>('');
   const [zipCode, setZipCode] = useState<string>('95695');
@@ -225,12 +225,13 @@ export const NewUserModal: React.FC<NewUserModalProps> = ({
           {/* Shirt Size & Pace Preference */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label htmlFor={`${fieldId}-shirtSize`} className="block text-xs font-bold text-stone-700 mb-1">Shirt Size (Milestones) *</label>
+              <label htmlFor={`${fieldId}-shirtSize`} className="block text-xs font-bold text-stone-700 mb-1">Shirt Size (Milestones)</label>
               <select id={`${fieldId}-shirtSize`}
                 value={shirtSize}
                 onChange={(e) => setShirtSize(e.target.value)}
                 className="w-full px-3 py-2 text-sm rounded-xl border border-stone-300 focus:ring-2 focus:ring-amber-500 outline-none bg-white font-bold"
               >
+                <option value="Not specified">Not specified</option>
                 <option value="Youth">Youth</option>
                 <option value="XS">Adult XS</option>
                 <option value="S">Adult S</option>
