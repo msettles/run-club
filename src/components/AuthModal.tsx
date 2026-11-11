@@ -6,6 +6,7 @@ import { emailLinkErrorMessage, loginWithGoogle, sendPasswordlessEmailLink } fro
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
+  returnUrl?: string;
   onAuthSuccess?: (email: string, displayName?: string | null) => void;
 }
 
@@ -13,6 +14,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   isOpen,
   onClose,
   onAuthSuccess,
+  returnUrl,
 }) => {
   const [emailInput, setEmailInput] = useState<string>('');
   const [isSubmittingGoogle, setIsSubmittingGoogle] = useState<boolean>(false);
@@ -49,7 +51,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
     setIsSubmittingEmail(true);
     try {
-      await sendPasswordlessEmailLink(emailInput);
+      await sendPasswordlessEmailLink(emailInput, returnUrl);
       setEmailSentSuccess(true);
     } catch (err) {
       console.error('Sending sign-in link failed:', err);

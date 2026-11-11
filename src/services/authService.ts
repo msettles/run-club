@@ -1,3 +1,4 @@
+import { safeAuthReturnUrl } from '../utils/authReturn';
 import { 
   GoogleAuthProvider, 
   signInWithPopup, 
@@ -41,7 +42,7 @@ export async function loginWithGoogle(): Promise<FirebaseUser | null> {
 /**
  * Send Passwordless Email Magic Link
  */
-export async function sendPasswordlessEmailLink(email: string): Promise<void> {
+export async function sendPasswordlessEmailLink(email: string, returnUrl?: string): Promise<void> {
   if (!isFirebaseConfigured || !auth) {
     throw new Error('Firebase Authentication is not configured yet.');
   }
@@ -49,14 +50,14 @@ export async function sendPasswordlessEmailLink(email: string): Promise<void> {
   const cleanEmail = email.trim().toLowerCase();
   const actionCodeSettings = {
     // URL to redirect back to. Must be on the authorized domain list.
-    url: window.location.origin,
+    url: safeAuthReturnUrl(window.location.href, returnUrl),
     handleCodeInApp: true,
   };
 
   try {
     await sendSignInLinkToEmail(auth, cleanEmail, actionCodeSettings);
     // Save email locally so the user doesn't have to re-enter it on the same device
-    window.localStorage.setItem(EMAIL_STORAGE_KEY, cleanEmail);
+    try { window.localStorage.setItem(EMAIL_STORAGE_KEY, cleanEmail); } catch { /* Email confirmation is available if browser storage is blocked. */ }
   } catch (error: any) {
     console.error('Error sending passwordless sign-in link:', error);
     throw error;
@@ -91,35 +92,27 @@ export function emailLinkErrorMessage(error: unknown): string {
 /**
  * Check and complete passwordless email sign-in if the user opened a magic link
  */
+let completingEmailLink: { url: string; promise: Promise<FirebaseUser> } | undefined;
 export async function checkAndCompleteEmailLinkSignIn(): Promise<FirebaseUser | null> {
   if (!isFirebaseConfigured || !auth) return null;
-
-  try {
-    if (isSignInWithEmailLink(auth, window.location.href)) {
-      let email = window.localStorage.getItem(EMAIL_STORAGE_KEY);
-      
-      // If the email isn't in local storage (e.g. user opened link on a different browser/device), prompt for it
-      if (!email) {
-        email = window.prompt('Please confirm your email address to complete sign in:');
-      }
-
-      if (!email) {
-        throw new Error('Email is required to complete passwordless sign-in.');
-      }
-
-      const result = await signInWithEmailLink(auth, email.trim().toLowerCase(), window.location.href);
-      window.localStorage.removeItem(EMAIL_STORAGE_KEY);
-      
-      // Clean up the URL query parameters
-      window.history.replaceState({}, document.title, window.location.origin + window.location.pathname);
-      return result.user;
-    }
-  } catch (error: any) {
-    console.error('Error completing email link sign in:', error);
-    throw error;
-  }
-
-  return null;
+  const signInUrl = window.location.href;
+  if (!isSignInWithEmailLink(auth, signInUrl)) return null;
+  if (completingEmailLink?.url === signInUrl) return completingEmailLink.promise;
+  const returnUrl = safeAuthReturnUrl(signInUrl);
+  const promise = (async () => {
+    let email: string | null = null;
+    try { email = window.localStorage.getItem(EMAIL_STORAGE_KEY); } catch { /* Confirm email below. */ }
+    if (!email) email = window.prompt('Please confirm your email address to complete sign in:');
+    if (!email?.trim()) throw new Error('Email is required to complete passwordless sign-in.');
+    const result = await signInWithEmailLink(auth, email.trim().toLowerCase(), signInUrl);
+    try { window.localStorage.removeItem(EMAIL_STORAGE_KEY); } catch { /* Storage may be blocked. */ }
+    // Remove one-time credentials while retaining the check-in/run destination.
+    window.history.replaceState({}, document.title, returnUrl);
+    return result.user;
+  })();
+  completingEmailLink = { url: signInUrl, promise };
+  try { return await promise; }
+  finally { if (completingEmailLink?.promise === promise) completingEmailLink = undefined; }
 }
 
 /**
