@@ -35,7 +35,6 @@ const PERSON = {
 
 export const PROFILE_COLUMNS = {
   ...PERSON,
-  shirtSize: { header: 'Shirt Size', aliases: ['Shirt', 'Size'], required: 'no', meaning: 'XS, S, M, L, XL, 2XL or Youth. Words such as Small are understood.', whenBlank: 'Not specified.' },
   birthday: { header: 'Birthday', aliases: ['Birthdate', 'Date of Birth'], required: 'no', meaning: 'Birthday as 1983-09-25 or 9/25/1983.', whenBlank: 'Left empty.' },
   noCheckInRuns: { header: 'No Check-In Runs', aliases: ['OldCounts', 'Old Counts', 'Pre-2021 Runs'], required: 'no', meaning: 'How many runs this person did that have no check-in record. They only add to the run total.', whenBlank: '0.' },
 } satisfies Record<string, ImportColumn>;
@@ -45,14 +44,14 @@ export const RUN_COLUMNS = {
   time: { header: 'Time', aliases: ['Start Time'], required: 'no', meaning: 'When the run started, such as 18:30.', whenBlank: '18:30.' },
   title: { header: 'Title', aliases: ['Run Title', 'Event', 'Event Title'], required: 'no', meaning: 'The run’s name.', whenBlank: '"Group run".' },
   codeWord: { header: 'Code Word', aliases: ['Code Name', 'CodeWord', 'Code'], required: 'no', meaning: 'The code word used at that run. It identifies the run, and tells two runs on the same day apart.', whenBlank: 'Left empty.' },
-  specialEvent: { header: 'Special Event', aliases: ['Special'], required: 'no', meaning: 'A special event this run counted for, such as Turkey Trot (its name or id).', whenBlank: 'Not a special event.' },
+  specialEvent: { header: 'Special Event', aliases: ['Special'], required: 'no', meaning: 'The special event this run was, such as Turkey Trot (one of your special events, by name or id). Check-ins at the run count toward it, so the tag lives here and not in the check-ins file.', whenBlank: 'Not a special event.' },
   location: { header: 'Location', aliases: ['Venue'], required: 'no', meaning: 'Where it met.', whenBlank: 'The club’s usual location.' },
   address: { header: 'Address', aliases: [], required: 'no', meaning: 'The street address.', whenBlank: 'Left empty.' },
   route: { header: 'Route', aliases: ['Route Name'], required: 'no', meaning: 'The route (its name).', whenBlank: 'Left empty.' },
   distance: { header: 'Distance', aliases: ['Miles'], required: 'no', meaning: 'The run’s distance in miles.', whenBlank: 'Unknown.' },
   surface: { header: 'Surface', aliases: [], required: 'no', meaning: 'Pavement, Trail or Mixed.', whenBlank: 'Pavement.' },
   notes: { header: 'Notes', aliases: ['Description'], required: 'no', meaning: 'Anything to remember about the run.', whenBlank: 'Left empty.' },
-  runId: { header: 'Run ID', aliases: ['ID'], required: 'no', meaning: 'Only when restoring this app’s own export: the run’s id, so check-ins reattach exactly.', whenBlank: 'Made from the date (and code word).' },
+  runId: { header: 'Run ID', aliases: ['ID'], required: 'no', meaning: 'Only when restoring this app’s own export: the run’s id, so check-ins reattach exactly.', whenBlank: 'Made from the date (and code word when two runs share a date).' },
 } satisfies Record<string, ImportColumn>;
 
 export const CHECKIN_COLUMNS = {
@@ -74,8 +73,6 @@ export const IMPORT_FILES: Record<ImportFileKind, { title: string; summary: stri
   checkins: { title: 'Check-ins', summary: 'One row per person per run.', columns: CHECKIN_COLUMNS },
 };
 
-export const SHIRT_SIZES = ['Youth', 'XS', 'S', 'M', 'L', 'XL', '2XL'];
-
 export interface ImportIssue { row: number; level: 'error' | 'warning'; message: string }
 
 // ---- shared helpers ----
@@ -88,19 +85,6 @@ const titleCase = (s: string) => s.replace(/\b[a-z]/g, (m) => m.toUpperCase());
 export function defaultNameFromEmail(email: string): string {
   const local = email.split('@')[0].replace(/[._+-]+/g, ' ').trim();
   return titleCase(local.toLowerCase()) || 'Runner';
-}
-
-/** Words and spreadsheet quirks to the app's shirt sizes (Small -> S, Xl -> XL). Anything unrecognised is kept as typed. */
-export function normalizeShirtSize(value: string): string | undefined {
-  const v = value.trim();
-  if (!v) return undefined;
-  const k = v.toLowerCase().replace(/[^a-z0-9]/g, '');
-  const map: Record<string, string> = {
-    youth: 'Youth', ys: 'Youth', ym: 'Youth', yl: 'Youth', kids: 'Youth', child: 'Youth',
-    xs: 'XS', extrasmall: 'XS', xsmall: 'XS', s: 'S', small: 'S', sm: 'S', m: 'M', medium: 'M', med: 'M', l: 'L', large: 'L', lg: 'L',
-    xl: 'XL', xlarge: 'XL', extralarge: 'XL', '2xl': '2XL', xxl: '2XL', '2x': '2XL', xx: '2XL', xxlarge: '2XL',
-  };
-  return map[k] || v;
 }
 
 function validDay(iso: string): boolean {
@@ -172,7 +156,6 @@ export interface ImportedProfile {
   email?: string;
   name: string;
   nameFromEmail: boolean;
-  shirtSize?: string;
   birthday?: string;
   noCheckInRuns: number;
 }
@@ -210,8 +193,6 @@ export function planProfilesImport(csvText: string, now = new Date()): ProfilesP
       plan.issues.push({ row, level: 'warning', message: `${email || rawName} appears more than once. Their rows were combined.` });
       if (rawName && person.nameFromEmail) { person.name = rawName; person.nameFromEmail = false; }
     }
-    const size = normalizeShirtSize(cell('shirtSize'));
-    if (size && !person.shirtSize) person.shirtSize = size;
     const birthdayText = cell('birthday');
     if (birthdayText && !person.birthday) {
       const b = parseBirthday(birthdayText, now);
@@ -243,7 +224,10 @@ export interface ImportedRun {
   timeDefaulted: boolean;
   title: string;
   codeWord: string;
+  /** What the file said, e.g. "Halloween". */
   specialEvent: string;
+  /** The club's special event it matched (by id or name), when the club's events were supplied and one matched. */
+  specialEventId?: string;
   location: string;
   address: string;
   route: string;
@@ -256,11 +240,23 @@ export interface RunsPlan {
   runs: ImportedRun[];
   issues: ImportIssue[];
   ignoredColumns: string[];
+  /** How many runs are tagged with each special event (by the club's event name, or the file's own wording when unmatched). */
+  specialEvents: Record<string, number>;
   stats: { rows: number; skippedRows: number; duplicateRuns: number; timesDefaulted: number; earliest?: string; latest?: string };
 }
 
-export function planRunsImport(csvText: string, now = new Date()): RunsPlan {
-  const plan: RunsPlan = { runs: [], issues: [], ignoredColumns: [], stats: { rows: 0, skippedRows: 0, duplicateRuns: 0, timesDefaulted: 0 } };
+/** Match a Special Event cell to one of the club's special events: by id, by name, or by one name containing the other. */
+export function matchSpecialEvent(value: string, known: { id: string; name: string }[]): { id: string; name: string } | undefined {
+  const v = headerKey(value);
+  if (!v) return undefined;
+  const exact = known.find((e) => headerKey(e.id) === v || headerKey(e.name) === v);
+  if (exact) return exact;
+  const loose = known.filter((e) => headerKey(e.name).includes(v) || v.includes(headerKey(e.name)));
+  return loose.length === 1 ? loose[0] : undefined;
+}
+
+export function planRunsImport(csvText: string, now = new Date(), knownSpecialEvents?: { id: string; name: string }[]): RunsPlan {
+  const plan: RunsPlan = { runs: [], issues: [], ignoredColumns: [], specialEvents: {}, stats: { rows: 0, skippedRows: 0, duplicateRuns: 0, timesDefaulted: 0 } };
   const table = readTable(csvText, RUN_COLUMNS);
   if (table.error) { plan.issues.push({ row: 0, level: 'error', message: table.error }); return plan; }
   plan.ignoredColumns = table.ignoredColumns;
@@ -284,7 +280,9 @@ export function planRunsImport(csvText: string, now = new Date()): RunsPlan {
     if (seen.has(dup)) { plan.stats.duplicateRuns++; plan.issues.push({ row, level: 'warning', message: `A run on ${date}${codeWord ? ` with code word ${codeWord}` : ''} is already listed. This row was dropped.` }); continue; }
     seen.add(dup);
     // An id: the one given, otherwise made from the date (and the code word when two runs share a day).
-    let runId = cell('runId') || `run-${date}${codeWord ? `-${codeWord.toLowerCase()}` : ''}`;
+    // The first run on a date is run-<date>, so correcting its code word or title in a later file updates the same run.
+    // A second run on the same date adds its code word (or a number).
+    let runId = cell('runId') || (ids.has(`run-${date}`) && codeWord ? `run-${date}-${codeWord.toLowerCase()}` : `run-${date}`);
     for (let n = 2; ids.has(runId); n++) runId = `${cell('runId') || `run-${date}`}-${n}`;
     ids.add(runId);
     const timeText = cell('time');
@@ -294,9 +292,15 @@ export function planRunsImport(csvText: string, now = new Date()): RunsPlan {
     const distance = distanceText === '' ? undefined : Number(distanceText);
     if (distance !== undefined && (!Number.isFinite(distance) || distance < 0)) plan.issues.push({ row, level: 'warning', message: `Distance "${distanceText}" was not understood and was left empty.` });
     const surface = /^(trail)/i.test(cell('surface')) ? 'Trail' : /^(mixed)/i.test(cell('surface')) ? 'Mixed' : 'Pavement';
+    const specialText = cell('specialEvent');
+    const matched = specialText && knownSpecialEvents ? matchSpecialEvent(specialText, knownSpecialEvents) : undefined;
+    if (specialText && knownSpecialEvents && !matched) {
+      plan.issues.push({ row, level: 'warning', message: 'Special Event "' + specialText + '" is not one of your special events (' + (knownSpecialEvents.map((e) => e.name).join(', ') || 'none yet') + '). That run would have no special event. Add it under Admin > Badges first, or fix the name.' });
+    }
+    if (specialText) { const label = matched?.name || specialText; plan.specialEvents[label] = (plan.specialEvents[label] || 0) + 1; }
     plan.runs.push({
       runId, date, time: time ?? '18:30:00', timeDefaulted: !time, title: cell('title') || 'Group run', codeWord,
-      specialEvent: cell('specialEvent'), location: cell('location'), address: cell('address'), route: cell('route'),
+      specialEvent: specialText, specialEventId: matched?.id, location: cell('location'), address: cell('address'), route: cell('route'),
       distance: distance !== undefined && Number.isFinite(distance) && distance >= 0 ? distance : undefined, surface, notes: cell('notes'),
     });
     if (!plan.stats.earliest || date < plan.stats.earliest) plan.stats.earliest = date;
@@ -456,9 +460,9 @@ export const IMPORT_EXAMPLES: Record<ImportFileKind, { filename: string; csv: st
   profiles: {
     filename: 'woodchuckers-import-profiles-example.csv',
     csv: toCsv(PROFILE_COLUMNS, [
-      { email: 'jane.runner@example.com', name: 'Jane Runner', shirtSize: 'M', birthday: '1988-04-12', noCheckInRuns: '24' }, // everything filled in
+      { email: 'jane.runner@example.com', name: 'Jane Runner', birthday: '1988-04-12', noCheckInRuns: '24' }, // everything filled in
       { email: 'sam@example.com' },                                                                                       // the least a member needs: an email
-      { email: 'alex@example.com', name: 'Alex Example', shirtSize: 'Large', birthday: '9/25/83' },                      // spreadsheet-style values
+      { email: 'alex@example.com', name: 'Alex Example', birthday: '9/25/83' },                      // spreadsheet-style values
       { name: 'PAT EXAMPLE', noCheckInRuns: '12' },                                                                      // no email: a past alias to claim
     ]),
   },

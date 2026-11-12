@@ -411,7 +411,7 @@ service cloud.firestore {
                'createdAt', 'age', 'birthday', 'city', 'zipCode', 'preferredPace',
                'petRunCount', 'distanceCounts', 'firstRunDate', 'badgeCounts',
                'emergencyContact', 'lastCheckInDate', 'lastCheckInRunId', 'linkedLegacyIds',
-               'lastCheckInUpdatedAt', 'legacyEventRuns', 'currentStreakWeeks', 'longestStreakWeeks', 'deleting', 'rewardEpoch', 'streakProofWeek', 'longestStreakProofWeek', 'rewardChanges'
+               'lastCheckInUpdatedAt', 'legacyEventRuns', 'currentStreakWeeks', 'longestStreakWeeks', 'deleting', 'rewardEpoch', 'streakProofWeek', 'longestStreakProofWeek', 'rewardChanges', 'importedRuns'
              ]) &&
              data.keys().hasAll([
                'email', 'firstName', 'lastName', 'displayName', 'shirtSize',
@@ -445,6 +445,7 @@ service cloud.firestore {
              (!('lastCheckInRunId' in data) || (data.lastCheckInRunId is string && data.lastCheckInRunId.size() <= 128)) &&
              (!('linkedLegacyIds' in data) || (data.linkedLegacyIds is list && data.linkedLegacyIds.size() <= 50)) &&
              (!('legacyEventRuns' in data) || (data.legacyEventRuns is int && data.legacyEventRuns >= 0)) &&
+             (!('importedRuns' in data) || (data.importedRuns is int && data.importedRuns >= 0 && data.importedRuns <= 100000)) &&
              (!('currentStreakWeeks' in data) || (data.currentStreakWeeks is int && data.currentStreakWeeks >= 0)) &&
              (!('longestStreakWeeks' in data) || (data.longestStreakWeeks is int && data.longestStreakWeeks >= 0)) &&
              (!('distanceCounts' in data) || (data.distanceCounts is map)) &&
@@ -463,7 +464,7 @@ service cloud.firestore {
     // Legacy claim fields: only change through isLegacyClaimBacked (or an admin).
     function legacyFieldsUnchanged() {
       return !request.resource.data.diff(resource.data).affectedKeys().hasAny([
-        'pre2021Runs', 'linkedLegacyNames', 'linkedLegacyIds', 'legacyEventRuns'
+        'pre2021Runs', 'linkedLegacyNames', 'linkedLegacyIds', 'legacyEventRuns', 'importedRuns'
       ]);
     }
 
@@ -545,7 +546,7 @@ service cloud.firestore {
       );
     }
     // App check-ins count toward a special event only when the run was tagged with it ("Is Special Event?").
-    // Old-app sign-ins have no run to tag, so they still match by code word.
+    // Old-app sign-ins have no run to tag, so they match by code word, or by the special event tag an import gave them.
     function proofSpecial(s, email, specialId) {
       let isCheckin = s.get('checkinId', null) is string;
       let c = isCheckin ? get(/databases/$(database)/documents/checkins/$(s.checkinId)).data : {};
@@ -554,7 +555,8 @@ service cloud.firestore {
       let special = c.get('eventSpecial', event.get('specialEvent', ''));
       let word = isCheckin ? '' : proofWord(s, email).upper();
       return isCheckin ? (specialId != 'none' && special == specialId) :
-        ((specialId == 'turkey_trot' && word.matches('.*TURKEY.*')) ||
+        ((specialId != 'none' && s.event.get('s', '') == specialId) ||
+         (specialId == 'turkey_trot' && word.matches('.*TURKEY.*')) ||
          (specialId == 'halloween' && (word.matches('.*HALLOWEEN.*') || word.matches('.*SPOOKY.*'))) ||
          (specialId == 'anniversary' && word.matches('.*ANNIVERSARY.*')));
     }
@@ -923,8 +925,8 @@ service cloud.firestore {
     }
 
     // 8. MILESTONE ALERTS — private gear queue.
-    // Runners may create exactly one alert per milestone, only alongside the
-    // check-in that brought their total to that milestone.
+    // Runners may create exactly one alert per milestone: alongside the check-in that brought their total to it,
+    // or (run milestones only) after claiming two or more old names whose runs reach it.
     match /milestone_alerts/{alertId} {
       allow get: if hasVerifiedEmail() && !exists(/databases/$(database)/documents/milestone_alerts/$(alertId));
       allow read: if isStaff() ||
@@ -942,19 +944,28 @@ service cloud.firestore {
                         request.resource.data.milestoneRuns is int &&
                         request.resource.data.milestoneRuns >= 1 &&
                         request.resource.data.fulfilled == false &&
-                        request.resource.data.runId is string &&
-                        isCheckInCreatedInBatch(checkinPath(request.resource.data.runId, tokenEmail())) &&
-                        getAfter(userPath(tokenEmail())).data.totalRuns == request.resource.data.milestoneRuns &&
                         (
-                          // A run-count milestone: reached by exactly this check-in.
-                          (!('milestoneMiles' in request.resource.data) &&
-                           alertId == 'm' + string(request.resource.data.milestoneRuns) + '_' + tokenEmail()) ||
-                          // A miles milestone: this check-in took the runner's total miles across it.
-                          ('milestoneMiles' in request.resource.data &&
-                           request.resource.data.milestoneMiles is int && request.resource.data.milestoneMiles >= 1 &&
-                           alertId == 'mi' + string(request.resource.data.milestoneMiles) + '_' + tokenEmail() &&
-                           get(userPath(tokenEmail())).data.totalMiles < request.resource.data.milestoneMiles &&
-                           getAfter(userPath(tokenEmail())).data.totalMiles >= request.resource.data.milestoneMiles)
+                          // A check-in reached it.
+                          (request.resource.data.runId is string &&
+                           isCheckInCreatedInBatch(checkinPath(request.resource.data.runId, tokenEmail())) &&
+                           getAfter(userPath(tokenEmail())).data.totalRuns == request.resource.data.milestoneRuns &&
+                           (
+                             // A run-count milestone: reached by exactly this check-in.
+                             (!('milestoneMiles' in request.resource.data) &&
+                              alertId == 'm' + string(request.resource.data.milestoneRuns) + '_' + tokenEmail()) ||
+                             // A miles milestone: this check-in took the runner's total miles across it.
+                             ('milestoneMiles' in request.resource.data &&
+                              request.resource.data.milestoneMiles is int && request.resource.data.milestoneMiles >= 1 &&
+                              alertId == 'mi' + string(request.resource.data.milestoneMiles) + '_' + tokenEmail() &&
+                              get(userPath(tokenEmail())).data.totalMiles < request.resource.data.milestoneMiles &&
+                              getAfter(userPath(tokenEmail())).data.totalMiles >= request.resource.data.milestoneMiles)
+                           )) ||
+                          // Claiming several old names: a run-count milestone the claimed names' runs reach. It has no run, and
+                          // only a runner who has claimed two or more names, and whose total has reached it, can create it.
+                          (!('runId' in request.resource.data) && !('milestoneMiles' in request.resource.data) &&
+                           alertId == 'm' + string(request.resource.data.milestoneRuns) + '_' + tokenEmail() &&
+                           get(userPath(tokenEmail())).data.get('linkedLegacyIds', []).size() >= 2 &&
+                           get(userPath(tokenEmail())).data.totalRuns >= request.resource.data.milestoneRuns)
                         ));
 
       allow update, delete: if isStaff();

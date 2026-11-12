@@ -528,6 +528,48 @@ test('legacy history is private to the claimer and staff', async () => {
   await assertSucceeds(getDoc(doc(ctx(ORGANIZER), 'legacy_history', LP.id)));
 });
 
+function claimAlert(email, runs, extra = {}) {
+  return { id: `m${runs}_${email}`, userEmail: email, runnerName: 'Alice', shirtSize: 'M', milestoneRuns: runs, milestoneName: `M${runs}`, reward: 'Shirt', perks: '', hasGear: true, date: '2026-11-11', time: '19:30:00', fulfilled: false, ...extra };
+}
+
+test('claiming two or more old names lets the runner record the gear their runs reach, and nothing more', async () => {
+  await seedLegacy();
+  await assertSucceeds(claimBatch(ctx(ALICE), ALICE, [LP]).commit());
+  // One claimed name owes nothing, so no alert yet.
+  await assertFails(setDoc(doc(ctx(ALICE), 'milestone_alerts', `m50_${ALICE}`), claimAlert(ALICE, 50)));
+  const alice = ctx(ALICE);
+  const second = writeBatch(alice);
+  const u = (await getDoc(doc(alice, 'users', ALICE))).data();
+  const next = { ...u, linkedLegacyIds: [LP.id, LP2.id], linkedLegacyNames: [LP.name, LP2.name], pre2021Runs: u.pre2021Runs + LP2.oldCount, legacyEventRuns: u.legacyEventRuns + LP2.newCount, totalRuns: u.totalRuns + LP2.totalRuns };
+  second.update(doc(alice, 'legacy_profiles', LP2.id), { claimedBy: memberKeyFor(ALICE), claimedAt: '2026-11-09T00:00:00Z' });
+  second.set(doc(alice, 'users', ALICE), next);
+  second.set(doc(alice, 'members', memberKeyFor(ALICE)), memberFromUser(next));
+  await assertSucceeds(second.commit());
+  await assertSucceeds(setDoc(doc(ctx(ALICE), 'milestone_alerts', `m50_${ALICE}`), claimAlert(ALICE, 50)));
+  // Not one the runner's total has not reached, not under another id, not for someone else, not already handed out.
+  await assertFails(setDoc(doc(ctx(ALICE), 'milestone_alerts', `m500_${ALICE}`), claimAlert(ALICE, 500)));
+  await assertFails(setDoc(doc(ctx(ALICE), 'milestone_alerts', 'anything'), claimAlert(ALICE, 25, { id: 'anything' })));
+  await assertFails(setDoc(doc(ctx(ALICE), 'milestone_alerts', `m25_${BOB}`), claimAlert(BOB, 25)));
+  await assertFails(setDoc(doc(ctx(ALICE), 'milestone_alerts', `m25_${ALICE}`), claimAlert(ALICE, 25, { fulfilled: true })));
+  await assertFails(setDoc(doc(ctx(ALICE), 'milestone_alerts', `m50_${ALICE}`), claimAlert(ALICE, 50, { notes: 'extra' })));
+});
+
+test('a held sign-in tagged with a special event counts for that event once claimed, and only that one', async () => {
+  const sourceFor = (c) => ({ legacyId: LP.id, event: { d: '2025-05-28', t: '18:30:00', c, s: 'anniversary' } });
+  const proof = (specialId, source) => ({ userEmail: ALICE, epoch: 0, kind: 'special', specialId, count: 1, sourceId: `legacy:${LP.id}:2025-05-28:18:30:00:${source.event.c}`, sources: [`legacy:${LP.id}:2025-05-28:18:30:00:${source.event.c}`], source });
+  await seedLegacy();
+  await env.withSecurityRulesDisabled((c) => setDoc(doc(c.firestore(), 'legacy_history', LP.id), { events: [sourceFor('FIRST').event, { d: '2024-11-27', t: '18:00:00', c: 'PLAIN' }] }));
+  // Not before the name is claimed.
+  await assertFails(setDoc(doc(ctx(ALICE), 'reward_proofs', `${ALICE}_0_special_anniversary`), proof('anniversary', sourceFor('FIRST'))));
+  await assertSucceeds(claimBatch(ctx(ALICE), ALICE, [LP]).commit());
+  // The code word FIRST says nothing, but the run's tag does.
+  await assertSucceeds(setDoc(doc(ctx(ALICE), 'reward_proofs', `${ALICE}_0_special_anniversary`), proof('anniversary', sourceFor('FIRST'))));
+  // The tag is for anniversary only, and an event that is not in the history cannot be invented.
+  await assertFails(setDoc(doc(ctx(ALICE), 'reward_proofs', `${ALICE}_0_special_halloween`), proof('halloween', sourceFor('FIRST'))));
+  const invented = { legacyId: LP.id, event: { d: '2025-05-28', t: '18:30:00', c: 'FIRST', s: 'halloween' } };
+  await assertFails(setDoc(doc(ctx(ALICE), 'reward_proofs', `${ALICE}_0_special_halloween`), proof('halloween', invented)));
+});
+
 test('admin can unclaim or reassign a legacy name and fix totals', async () => {
   await seedLegacy();
   await assertSucceeds(claimBatch(ctx(ALICE), ALICE, [LP]).commit());

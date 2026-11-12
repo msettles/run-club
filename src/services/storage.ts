@@ -8,6 +8,7 @@ import { useStoreState } from './store/state';
 import { createScheduleLoadingOps, subscribeSchedule } from './store/scheduleLoading';
 import { createRouteLoadingOps } from './store/routeLoading';
 import { createLegacyOps } from './store/legacy';
+import { createClubImportOps } from './store/clubImport';
 import { createPrivateSyncOps } from './store/privateSync';
 import { createMemberOps } from './store/members';
 import { createCheckInOps } from './store/checkIn';
@@ -42,7 +43,8 @@ export function useClubStore({ loadLeaderboard = true } = {}) {
   // Each group of operations can use the state and every group created before it.
   // Extend one context in dependency order; each operation sees current render state.
   const c0 = Object.assign(s, createRouteLoadingOps(s), createScheduleLoadingOps(s), createStaffLoadingOps(s));
-  const c1 = Object.assign(c0, createLegacyOps(c0));
+  const c1a = Object.assign(c0, createLegacyOps(c0));
+  const c1 = Object.assign(c1a, createClubImportOps(c1a));
   const c2 = Object.assign(c1, createPrivateSyncOps(c1));
   const c3 = Object.assign(c2, createMemberOps(c2));
   const c4 = Object.assign(c3, createCheckInOps(c3));
@@ -239,6 +241,8 @@ export function useClubStore({ loadLeaderboard = true } = {}) {
     claimLegacyProfile: store.claimLegacyProfile,
     adminSetLegacyClaim: store.adminSetLegacyClaim,
     importLegacyData: store.importLegacyData,
+    importClubData: store.importClubData,
+    recomputeRewards: store.recomputeRewards,
     refreshDerivedStats: store.refreshDerivedStats,
 
     // Check-ins and gear

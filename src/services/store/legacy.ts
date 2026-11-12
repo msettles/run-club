@@ -3,7 +3,9 @@ import {
   UserProfile,
   CheckInRecord,
   LegacyMember,
+  MilestoneAlert,
 } from '../../types';
+import { claimGearAlerts, claimGearMilestones, type ClaimedHistory } from '../../utils/claimGear';
 import {
   buildLegacyImport,
   datedEventsFrom,
@@ -20,6 +22,7 @@ import {
   query,
   where,
   runTransaction,
+  setDoc,
 } from 'firebase/firestore';
 import { fetchMeetups } from './scheduleLoading';
 import { sha256Hex } from '../../utils/hash';
@@ -175,6 +178,38 @@ export function createLegacyOps(ctx: StoreState) {
   };
 
   /**
+   * After a claim: the gear a runner is owed for old names they have claimed, which is the only time an old
+   * sign-in history creates gear alerts (importing and recomputing never do). Claiming a single name owes nothing.
+   * The claimed name with the most runs is taken as already rewarded; each other name is added to it, skipping
+   * days already counted, and every milestone crossed is an unfulfilled alert. See utils/claimGear.ts.
+   */
+  const grantClaimGear = async (user: UserProfile): Promise<MilestoneAlert[]> => {
+    const ids = user.linkedLegacyIds || [];
+    if (ids.length < 2) return [];
+    let claimed: ClaimedHistory[];
+    if (isFirebaseConfigured && db) {
+      const firestore = db;
+      const [profiles, events] = await Promise.all([Promise.all(ids.map((id) => getDoc(doc(firestore, 'legacy_profiles', id)))), fetchLegacyEvents(ids)]);
+      claimed = profiles.filter((p) => p.exists()).map((p) => ({ id: p.id, oldCount: (p.data()?.oldCount as number) || 0, events: events.filter((e) => e.legacyId === p.id) }));
+    } else {
+      claimed = ids.map((id) => ({ id, oldCount: legacyPool.find((m) => m.id === id)?.oldCount || 0, events: Array.from({ length: legacyPool.find((m) => m.id === id)?.newCount || 0 }, (_, i) => ({ d: `${id}:${i}` })) }));
+    }
+    const owed = claimGearAlerts(user, claimGearMilestones(claimed, ctx.milestones).milestones);
+    if (!owed.length) return [];
+    const fresh: MilestoneAlert[] = [];
+    for (const alert of owed) {
+      // An alert that already exists (made at a check-in, or by an earlier claim) is never made again.
+      if (isFirebaseConfigured && db) {
+        if ((await getDoc(doc(db, 'milestone_alerts', alert.id))).exists()) continue;
+        await setDoc(doc(db, 'milestone_alerts', alert.id), alert);
+      } else if (ctx.milestoneAlerts.some((a) => a.id === alert.id)) continue;
+      fresh.push(alert);
+    }
+    if (fresh.length) ctx.setMilestoneAlerts((prev) => [...fresh, ...prev.filter((a) => !fresh.some((f) => f.id === a.id))]);
+    return fresh;
+  };
+
+  /**
    * Runner claims one legacy name. The rules only accept it if the name is
    * still unclaimed and the totals grow by exactly that name's counts.
    */
@@ -220,6 +255,8 @@ export function createLegacyOps(ctx: StoreState) {
     if (session !== ctx.privateSessionEpoch?.current) throw new Error('The signed-in account changed. Sign in again to continue.');
     setLegacyMembers((prev) => prev.map((m) => (m.id === legacyId ? { ...m, claimedBy: key, claimedAt } : m)));
     setUsers((prev) => [updated, ...prev.filter((u) => u.email.toLowerCase() !== email)]);
+    try { await grantClaimGear(updated); }
+    catch (error) { console.warn('Claim saved; gear owed for the claimed names could not be recorded:', error); }
     return updated;
   };
 
@@ -298,6 +335,11 @@ export function createLegacyOps(ctx: StoreState) {
     if (session !== ctx.privateSessionEpoch?.current) return;
     setLegacyMembers((prev) => prev.map((m) => (m.id === legacyId ? { ...m, claimedBy: toKey, claimedAt } : m)));
     setUsers((prev) => prev.map((u) => changed.find((c) => c.email === u.email) || u));
+    const receiver = changed.find((u) => u.email.toLowerCase() === toEmail?.toLowerCase());
+    if (receiver) {
+      try { await grantClaimGear(receiver); }
+      catch (error) { console.warn('Claim saved; gear owed for the claimed names could not be recorded:', error); }
+    }
     for (const u of changed) {
       try { await refreshDerivedStats(u); }
       catch (error) { console.warn('Claim saved; derived rewards need a refresh:', error); ctx.setPrivateSyncError?.('The historical claim was saved. Rewards will refresh at the runner’s next sign-in.'); }
