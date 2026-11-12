@@ -325,7 +325,7 @@ export const NewUserModal: React.FC<NewUserModalProps> = ({
                   Historical Run Records &amp; Merge
                 </h4>
                 <p className="text-[11px] text-stone-500 leading-snug">
-                  Claim your past group runs from our 2021–2026 club records to unlock milestone shirts &amp; badges.
+                  Claim your past group runs from our past club records to unlock milestone shirts &amp; badges.
                 </p>
               </div>
             </div>
