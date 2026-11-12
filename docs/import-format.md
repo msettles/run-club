@@ -82,7 +82,12 @@ Only run-count milestones apply (old sign-ins have no mileage). The runner's run
 
 ### First Run Date
 
-A member's First Run Date is their oldest check-in date (or oldest dated sign-in from a claimed name). If they also have runs with no check-in record, it reads **Before mm/yyyy** instead, using the month and year of that oldest recorded date, because those runs came before it. With such runs but no dated record at all it reads "Before check-ins began". It is worked out when an import or **Recompute rewards** runs, so a claim made later shows its effect after the next recompute.
+Shown as month/year, and on Standings as "Running since mm/yyyy".
+
+- A member with runs that have **no check-in record** reads **Before mm/yyyy**. That month is when the club's check-in records begin (the first recorded run, club-wide): from then on everyone should have checked in, so any earlier run has no record.
+- Everyone else reads **mm/yyyy** of their oldest check-in (including dated sign-ins from claimed names).
+
+It is worked out when an import or **Recompute rewards** runs, so a claim made later shows its effect after the next recompute.
 
 ### Recompute rewards
 

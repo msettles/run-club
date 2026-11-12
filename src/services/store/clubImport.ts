@@ -6,7 +6,7 @@
  * the check-ins by `recomputeRewards`, which the import runs at the end for every member it touched,
  * and which an admin can run again at any time (for example after changing the badge catalog).
  */
-import { collection, deleteDoc, doc, getDoc, getDocs, query, runTransaction, setDoc, where, writeBatch } from 'firebase/firestore';
+import { collection, deleteDoc, doc, getDoc, getDocs, limit, orderBy, query, runTransaction, setDoc, where, writeBatch } from 'firebase/firestore';
 import type { CheckInRecord, RunEvent, UserProfile } from '../../types';
 import { isFirebaseConfigured, db } from '../firebase';
 import { codeKeyFor, memberKeyFor } from '../../utils/memberKey';
@@ -56,7 +56,14 @@ export function createClubImportOps(ctx: StoreState & ReturnType<typeof createLe
    * Rebuild one member's totals, badges, streaks and reward proofs from their check-ins
    * (plus any claimed old sign-ins). Safe to repeat: it only writes what differs.
    */
-  const recomputeMember = async (email: string): Promise<UserProfile> => {
+  /** When the club's check-in records begin: its first recorded run. Before then nobody was checking in. */
+  const recordsBegin = async (): Promise<string | undefined> => {
+    if (!isFirebaseConfigured || !db) return undefined;
+    const first = await getDocs(query(collection(db, 'meetup_events'), orderBy('date'), limit(1)));
+    return first.docs[0]?.data().date as string | undefined;
+  };
+
+  const recomputeMember = async (email: string, begin?: string): Promise<UserProfile> => {
     if (!isFirebaseConfigured || !db) throw new Error('Recomputing rewards needs the live club database.');
     const firestore = db;
     const clean = email.toLowerCase();
@@ -65,7 +72,7 @@ export function createClubImportOps(ctx: StoreState & ReturnType<typeof createLe
     const base = snapshot.data() as UserProfile;
     if (base.deleting) throw new Error(`${clean} is being deleted.`);
     const [history, legacy] = await Promise.all([ctx.fetchRunnerCheckins(clean), ctx.fetchLegacyEvents(base.linkedLegacyIds || [])]);
-    const totals = totalsFromCheckins(base, history, legacy.map((e) => e.d));
+    const totals = totalsFromCheckins(base, history, legacy.map((e) => e.d), begin ?? await recordsBegin());
     const withTotals: UserProfile = { ...base, ...totals };
     const streakSteps = ctx.badges.filter((b) => b.triggerConfig?.type === 'streak' && b.triggerConfig.isIncremental).map((b) => b.triggerConfig!.streakWeeks || 4);
     const proofs = await prepareRewardProofs(firestore, base, history, legacy, ctx.meetupEvents, streakSteps);
@@ -91,10 +98,11 @@ export function createClubImportOps(ctx: StoreState & ReturnType<typeof createLe
   const recomputeRewards = async (emails?: string[], onProgress?: Progress): Promise<{ updated: number; failed: { email: string; reason: string }[] }> => {
     if (!isFirebaseConfigured || !db) throw new Error('Recomputing rewards needs the live club database.');
     const targets = emails?.length ? [...new Set(emails.map((e) => e.toLowerCase()))] : (await getDocs(collection(db, 'users'))).docs.map((d) => d.id);
+    const begin = await recordsBegin();
     let updated = 0;
     const failed: { email: string; reason: string }[] = [];
     for (let i = 0; i < targets.length; i++) {
-      try { await recomputeMember(targets[i]); updated++; }
+      try { await recomputeMember(targets[i], begin); updated++; }
       catch (error) { failed.push({ email: targets[i], reason: error instanceof Error ? error.message : 'Failed.' }); }
       if ((i + 1) % 5 === 0 || i + 1 === targets.length) await onProgress?.(`Recomputed ${i + 1} of ${targets.length} members…`);
     }

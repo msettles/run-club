@@ -16,11 +16,11 @@ describe('totalsFromCheckins', () => {
     expect(Object.values(totals.distanceCounts || {}).reduce((a, b) => a + b, 0)).toBeGreaterThan(0);
   });
 
-  it('sets the first run date to the oldest check-in or claimed sign-in, or "Before mm/yyyy" when some runs have no record', () => {
+  it('sets the first run date to month/year of the oldest check-in, or "Before mm/yyyy" of when records begin when some runs have no record', () => {
     const rows = [checkin('2026-10-07'), checkin('2026-10-14')];
-    expect(totalsFromCheckins({ pre2021Runs: 0 }, rows).firstRunDate).toBe('2026-10-07');
-    expect(totalsFromCheckins({ pre2021Runs: 0 }, rows, ['2022-02-02']).firstRunDate).toBe('2022-02-02');
-    expect(totalsFromCheckins({ pre2021Runs: 4 }, rows, ['2022-02-02']).firstRunDate).toBe('Before 02/2022');
+    expect(totalsFromCheckins({ pre2021Runs: 0 }, rows).firstRunDate).toBe('10/2026');
+    expect(totalsFromCheckins({ pre2021Runs: 0 }, rows, ['2022-02-02']).firstRunDate).toBe('02/2022');
+    expect(totalsFromCheckins({ pre2021Runs: 4 }, rows, ['2022-02-02'], '2021-01-06').firstRunDate).toBe('Before 01/2021');
   });
 
   it('gives the same answer however often it runs', () => {

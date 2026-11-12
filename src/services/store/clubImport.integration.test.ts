@@ -58,6 +58,8 @@ it.skipIf(!enabled)('imports members, runs, check-ins and held names, then deriv
   const jane = (await getDoc(doc(db(), 'users', 'jane@example.test'))).data() as UserProfile;
   expect(jane).toMatchObject({ displayName: 'Jane Runner', shirtSize: 'Not specified', pre2021Runs: 5, loggedRuns: 4, totalRuns: 9, runCount: 3, walkCount: 1, totalMiles: 12.4, firstRunDate: 'Before 10/2026', lastCheckInDate: '2026-10-28' });
   expect(jane.longestStreakWeeks).toBe(4);
+  // Someone with no unrecorded runs reads mm/yyyy of their first check-in; Jane, who has some, reads Before the club's first recorded run.
+  expect(((await getDoc(doc(db(), 'users', 'drop.in@example.test'))).data() as UserProfile).firstRunDate).toBe('11/2026');
   expect(jane.unlockedBadgeIds).toContain('streak-4');
   expect(jane.badgeCounts?.['special-halloween']).toBe(1);
   expect((await getDoc(doc(db(), 'members', (await import('../../utils/memberKey').then((m) => m.memberKeyFor('jane@example.test')))))).exists()).toBe(true);
