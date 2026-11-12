@@ -94,10 +94,10 @@ export function createClubImportOps(ctx: StoreState & ReturnType<typeof createLe
     return next;
   };
 
-  /** Admin: recompute rewards for the given members, or for everyone when none are given. */
+  /** Admin: recompute rewards for the given members, or for everyone when no list is given (an empty list recomputes nobody). */
   const recomputeRewards = async (emails?: string[], onProgress?: Progress): Promise<{ updated: number; failed: { email: string; reason: string }[] }> => {
     if (!isFirebaseConfigured || !db) throw new Error('Recomputing rewards needs the live club database.');
-    const targets = emails?.length ? [...new Set(emails.map((e) => e.toLowerCase()))] : (await getDocs(collection(db, 'users'))).docs.map((d) => d.id);
+    const targets = emails ? [...new Set(emails.map((e) => e.toLowerCase()))] : (await getDocs(collection(db, 'users'))).docs.map((d) => d.id);
     const begin = await recordsBegin();
     let updated = 0;
     const failed: { email: string; reason: string }[] = [];
@@ -296,7 +296,7 @@ export function createClubImportOps(ctx: StoreState & ReturnType<typeof createLe
       await onProgress?.(`Past names: ${result.aliasesHeld} held, ${result.aliasesUpdated} updated…`);
     }
 
-    // 5. Rewards: recomputed from the check-ins for every member the import changed.
+    // 5. Rewards: recomputed from the check-ins for every member the import changed (a runs-only import changes none).
     const rewards = await recomputeRewards([...touched], onProgress);
     result.rewards = { updated: rewards.updated, failed: rewards.failed.length };
     return result;
