@@ -127,6 +127,13 @@ it.skipIf(!enabled)('recomputing picks up a badge added after the import, withou
   expect(jane.unlockedBadgeIds).toContain('club-runs');
 });
 
+it.skipIf(!enabled)('a runs-only import saves the runs and recomputes nobody', async () => {
+  const { ops } = setup();
+  const result = await ops.importClubData(commit({ profiles: '', checkins: '' }));
+  expect(result).toMatchObject({ runsWritten: 4, membersCreated: 0, checkinsWritten: 0, aliasesHeld: 0, rewards: { updated: 0, failed: 0 } });
+  expect(await ops.recomputeRewards([])).toEqual({ updated: 0, failed: [] });
+});
+
 it.skipIf(!enabled)('refuses to import without admin access', async () => {
   const { ops } = setup();
   backend.current = env.authenticatedContext('runner', { email: 'runner@example.test', email_verified: true }).firestore() as unknown as Firestore;
