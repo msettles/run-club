@@ -21,8 +21,8 @@ export function showLocalNotification(title: string, body: string, url?: string)
       navigator.serviceWorker.ready.then((registration) => {
         registration.showNotification(title, {
           body,
-          icon: '/Woodchucker2026.png',
-          badge: '/Woodchucker2026.png',
+          icon: '/pwa-192x192.png',
+          badge: '/pwa-192x192.png',
           vibrate: [100, 50, 100],
           data: { url: url || '/' },
         } as NotificationOptions);
@@ -30,7 +30,7 @@ export function showLocalNotification(title: string, body: string, url?: string)
     } else {
       new Notification(title, {
         body,
-        icon: '/Woodchucker2026.png',
+        icon: '/pwa-192x192.png',
       });
     }
   } catch (e) {

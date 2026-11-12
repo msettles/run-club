@@ -205,7 +205,7 @@ Both logos are bundled directly in `/public` for instant offline PWA access and 
   * `public/pwa-192x192.png` (192×192)
   * `public/apple-touch-icon.png` (180×180)
   * `public/favicon.ico` (32×32)
-* Retired `public/woodchuck.svg`: in-app notifications now use `Woodchucker2026.png`.
+* Retired `public/woodchuck.svg`: in-app notifications now use the install icon `pwa-192x192.png`, as pushed notifications do.
 
 ### Phase 3: Component Restyling & Brand Integration
 * **`src/App.tsx`**:
