@@ -159,7 +159,6 @@ Both logos are bundled directly in `/public` for instant offline PWA access and 
 | :--- | :---: | :---: | :---: | :--- |
 | `public/Woodchucker2026.png` | PNG | 468 × 355 px | **Yes (Cutout)** | **New 2026 Mascot**: Navbar badge, singlets, tech shirts, race bibs, stickers, Hero mascot showcase. |
 | `public/Woodchucker2.jpg` | JPEG | 960 × 960 px | No (Teal Fill) | **Original Heritage Badge**: Bottle cap emblem, pint glasses, circular stickers, social media avatars, PWA icons. |
-| `public/woodchuck.svg` | SVG | Vector 100×100 | Yes (Vector) | Notification icon, vector badge. |
 | `public/runclub-icon.png` | PNG | 96 × 96 px | Yes | **Run Club platform mark** (not club branding): browser tab icon and the footer's "Built with Run Club" credit. Cropped from `runclub.png`. |
 | `public/runclub.png` | PNG | 936 × 624 px | Yes | **Run Club platform logo** with wordmark (README header). |
 | `public/pwa-512x512.png` | PNG | 512 × 512 px | No (Square) | Android splash screen & high-density home screen icon. |
@@ -206,8 +205,7 @@ Both logos are bundled directly in `/public` for instant offline PWA access and 
   * `public/pwa-192x192.png` (192×192)
   * `public/apple-touch-icon.png` (180×180)
   * `public/favicon.ico` (32×32)
-* Updated `public/woodchuck.svg`:
-  * Replaced previous green gradient with `#1A607C` Blue Note Teal and `#DE9C1E` Craft Beer Amber headband stripe.
+* Retired `public/woodchuck.svg`: in-app notifications now use the install icon `pwa-192x192.png`, as pushed notifications do.
 
 ### Phase 3: Component Restyling & Brand Integration
 * **`src/App.tsx`**:

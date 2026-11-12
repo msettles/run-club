@@ -44,7 +44,7 @@ club/
 | `wording` | "All runs start and finish at…", "Meet on patio @…", perk text | The dozen venue sentences across run cards, check-in and milestones |
 | `theme.primary`, `theme.accent` | Teal `#1a607c` scale, gold `#de9c1e` scale | Tailwind palette, manifest theme colour, map lines, confetti |
 | `theme.neutrals` | cream `#faf2ee`, ink `#0d1113`, deep `#13495d` | Gradients and brand swatches |
-| `assets` | `Woodchucker2026.png`, `Woodchucker2.jpg`, `woodchuck.svg`, `pwa-*.png`, `apple-touch-icon.png` | Navbar mascot, install icons, notification icon, Logos & Brand screen |
+| `assets` | `Woodchucker2026.png`, `Woodchucker2.jpg`, `pwa-*.png`, `apple-touch-icon.png` | Navbar mascot, install icons, notification icon, Logos & Brand screen |
 | `ownerEmails` | the club Gmail account | Always-admin account in the app **and** in `firestore.rules` |
 | `firebase.projectId`, `firebase.hostingSite`, `siteUrl` | `woodland-woodchuckers`, `https://woodland-woodchuckers.web.app` | `.firebaserc`, `firebase.json`, calendar UIDs, sign-in email sender text, console links |
 

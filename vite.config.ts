@@ -57,7 +57,7 @@ export default defineConfig({
           options: { cacheName: 'on-demand-assets', expiration: { maxEntries: 40 }, cacheableResponse: { statuses: [200] } },
         }],
       },
-      includeAssets: ['favicon.ico', 'runclub-icon.png', 'apple-touch-icon.png', 'woodchuck.svg', 'Woodchucker2.jpg', 'Woodchucker2026.png'],
+      includeAssets: ['favicon.ico', 'runclub-icon.png', 'apple-touch-icon.png', 'Woodchucker2.jpg', 'Woodchucker2026.png'],
       manifest: {
         name: 'Woodland Woodchuckers Run Club',
         short_name: 'Woodchuckers',
