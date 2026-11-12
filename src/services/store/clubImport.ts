@@ -246,7 +246,8 @@ export function createClubImportOps(ctx: StoreState & ReturnType<typeof createLe
       const pool = await getDoc(poolRef);
       const entries = new Map(((pool.exists() && pool.data().entries) || []).map((e: PoolEntry) => [e.id, e] as const));
       let poolChanged = false;
-      for (const alias of commit.aliases) {
+      // Several at a time: a thousand names one after another takes minutes over the network, with no sign of life.
+      await inParallel(commit.aliases, async (alias) => {
         assertDocumentFitsFirestore({ events: alias.events }, `Held sign-ins for ${alias.name}`);
         const newCount = alias.events.length;
         const ref = doc(firestore, 'legacy_profiles', alias.id);
@@ -260,11 +261,11 @@ export function createClubImportOps(ctx: StoreState & ReturnType<typeof createLe
           await batch.commit();
           entries.set(alias.id, { id: alias.id, name: alias.name, oldCount: alias.oldCount, newCount });
           poolChanged = true; result.aliasesHeld++;
-          continue;
+          return;
         }
         const old = saved.data() as { name: string; oldCount: number; newCount: number; claimedBy?: string | null };
         const sameEvents = JSON.stringify(((history.data()?.events as LegacyEvent[]) || []).map((e) => sortKeys(e))) === JSON.stringify(alias.events.map((e) => sortKeys(e)));
-        if (old.name === alias.name && old.oldCount === alias.oldCount && old.newCount === newCount && sameEvents) { result.aliasesUnchanged++; continue; }
+        if (old.name === alias.name && old.oldCount === alias.oldCount && old.newCount === newCount && sameEvents) { result.aliasesUnchanged++; return; }
         // Update the name's record, and the totals of whoever has claimed it, together.
         const owners = await getDocs(query(collection(firestore, 'users'), where('linkedLegacyIds', 'array-contains', alias.id)));
         await runTransaction(firestore, async (tx) => {
@@ -287,7 +288,7 @@ export function createClubImportOps(ctx: StoreState & ReturnType<typeof createLe
         poolChanged = true;
         if (owners.size) result.aliasesClaimedUpdated++;
         result.aliasesUpdated++;
-      }
+      }, (n) => (n % 25 === 0 || n === commit.aliases.length ? onProgress?.(`Past names: ${n} of ${commit.aliases.length}…`) : undefined));
       if (poolChanged) {
         const merged = [...entries.values()];
         assertDocumentFitsFirestore({ entries: merged }, 'The historical name index');

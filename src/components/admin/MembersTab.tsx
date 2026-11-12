@@ -90,7 +90,7 @@ export const MembersTab: React.FC<AdminDashboardProps> = (props) => {
       const [totals, checkinsCsv] = await Promise.all([legacyTotalsFile.text(), legacyCheckinsFile.text()]);
       const stats = await onImportLegacyData(totals, checkinsCsv, setLegacyImportMsg);
       setLegacyImportMsg(
-        `Imported ${stats.names} names, ${stats.events} sign-ins since 2021 (${stats.duplicatesDropped} double sign-ins dropped) and ${stats.oldRuns} pre-2021 runs.`
+        `Imported ${stats.names} names, ${stats.events} dated sign-ins (${stats.duplicatesDropped} double sign-ins dropped) and ${stats.oldRuns} runs with no check-in record.`
       );
     } catch (err: any) {
       console.error('Legacy import failed:', err);
@@ -280,7 +280,7 @@ export const MembersTab: React.FC<AdminDashboardProps> = (props) => {
                 <th className="py-2.5 px-3">Email Key</th>
                 <th className="py-2.5 px-3">Shirt</th>
                 <th className="py-2.5 px-3">Total Runs</th>
-                <th className="py-2.5 px-3">Legacy Runs</th>
+                <th className="py-2.5 px-3">Past Runs</th>
                 <th className="py-2.5 px-3">Lifetime Miles</th>
                 <th className="py-2.5 px-3">Run/Walk Split</th>
                 <th className="py-2.5 px-3">Claimed Past Aliases</th>
@@ -337,7 +337,7 @@ export const MembersTab: React.FC<AdminDashboardProps> = (props) => {
                     </span>
                   </td>
                   <td className="py-2.5 px-3 font-mono font-black text-amber-700">{u.totalRuns}</td>
-                  <td className="py-2.5 px-3 font-mono text-stone-500" title="Pre-2021 runs + old-app sign-ins since 2021">
+                  <td className="py-2.5 px-3 font-mono text-stone-500" title="Runs with no check-in record + dated sign-ins from claimed past names">
                     {u.pre2021Runs} + {u.legacyEventRuns || 0}
                   </td>
                   <td className="py-2.5 px-3 font-mono font-bold text-emerald-700">{u.totalMiles} mi</td>
@@ -395,7 +395,7 @@ export const MembersTab: React.FC<AdminDashboardProps> = (props) => {
               Legacy Members Roster &amp; Claim Pool
             </h3>
             <p className="text-xs text-stone-500">
-              Sign-in names from the old app. A claimed name is locked to one runner; its pre-2021 runs and sign-ins since 2021 count toward their total.
+              Past names held to claim. A claimed name is locked to one runner; its runs with no check-in record and its dated sign-ins count toward their total.
             </p>
           </div>
           <span className="px-3 py-1 bg-stone-100 text-stone-700 text-xs font-bold rounded-full font-mono shrink-0">
@@ -485,8 +485,8 @@ export const MembersTab: React.FC<AdminDashboardProps> = (props) => {
               <thead className="bg-stone-50 text-stone-600 font-bold uppercase tracking-wider border-b border-stone-200">
                 <tr>
                   <th className="py-2 px-3">Old Name</th>
-                  <th className="py-2 px-3">Pre-2021</th>
-                  <th className="py-2 px-3">2021+</th>
+                  <th className="py-2 px-3">No Check-In Runs</th>
+                  <th className="py-2 px-3">Dated Sign-Ins</th>
                   <th className="py-2 px-3">Total</th>
                   <th className="py-2 px-3">Claimed By</th>
                   <th className="py-2 px-3">Admin</th>
