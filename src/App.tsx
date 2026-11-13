@@ -38,6 +38,7 @@ import { formatOpening, formatCountdown, nextCheckInEvent, openCheckInEvents, ch
 // Lazy-loaded heavy components & modals (saves >60% initial mobile bundle size)
 const AdminDashboard = lazy(() => import('./components/AdminDashboard').then((m) => ({ default: m.AdminDashboard })));
 const RouteStudioModal = lazy(() => import('./components/RouteStudioModal').then((m) => ({ default: m.RouteStudioModal })));
+const RouteImportModal = lazy(() => import('./components/RouteImportModal').then((m) => ({ default: m.RouteImportModal })));
 const CheckInModal = lazy(() => import('./components/CheckInModal').then((m) => ({ default: m.CheckInModal })));
 const NewRunModal = lazy(() => import('./components/NewRunModal').then((m) => ({ default: m.NewRunModal })));
 const EditRunModal = lazy(() => import('./components/EditRunModal').then((m) => ({ default: m.EditRunModal })));
@@ -91,6 +92,7 @@ export function App() {
     deleteAnnouncement,
     bellItems,
     addRoute,
+    importRoute,
     updateRoute,
     deleteRoute,
     isFirebaseConfigured,
@@ -143,6 +145,7 @@ export function App() {
   const [isNewRunOpen, setIsNewRunOpen] = useState<boolean>(false);
   const [editingRun, setEditingRun] = useState<RunEvent | null>(null);
   const [isRouteStudioOpen, setIsRouteStudioOpen] = useState<boolean>(false);
+  const [isRouteImportOpen, setIsRouteImportOpen] = useState(false);
   const [routeActionId, setRouteActionId] = useState<string | null>(null);
   const [routeActionError, setRouteActionError] = useState<string>();
   const routeActionPending = useRef(false);
@@ -798,16 +801,19 @@ export function App() {
                 </p>
               </div>
               {isOrganizerOrAdmin && (
-                <button
-                  onClick={() => {
-                    setEditingRoute(null);
-                    setIsRouteStudioOpen(true);
-                  }}
-                  className="flex items-center gap-2 px-4 py-2 bg-woodland-800 hover:bg-woodland-900 text-white font-bold text-xs rounded-xl shadow-sm transition"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>Upload &amp; Create Route</span>
-                </button>
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" onClick={() => setIsRouteImportOpen(true)} className="px-4 py-2 border border-woodland-800 text-woodland-800 font-bold text-xs rounded-xl hover:bg-stone-100">Import routes</button>
+                  <button
+                    onClick={() => {
+                      setEditingRoute(null);
+                      setIsRouteStudioOpen(true);
+                    }}
+                    className="flex items-center gap-2 px-4 py-2 bg-woodland-800 hover:bg-woodland-900 text-white font-bold text-xs rounded-xl shadow-sm transition"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Upload &amp; Create Route</span>
+                  </button>
+                </div>
               )}
             </div>
 
@@ -1227,6 +1233,13 @@ export function App() {
               return opensAt <= new Date() ? formatOpening(opensAt) : undefined;
             })()}
           />
+        )}
+
+        {isRouteImportOpen && isOrganizerOrAdmin && (
+          <RouteImportModal onClose={() => setIsRouteImportOpen(false)} onImport={async (id, route) => {
+            if (!isOrganizerOrAdmin) throw new Error('Only organizers and administrators can import routes.');
+            return importRoute(id, route);
+          }} />
         )}
 
         {isRouteStudioOpen && isOrganizerOrAdmin && (

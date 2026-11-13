@@ -178,6 +178,17 @@ test('public cannot read private collections', async () => {
   await assertSucceeds(getDocs(collection(anon, 'members')));
 });
 
+test('only staff can create imported routes and collection names must be bounded strings', async () => {
+  const id = 'route-garmin-123';
+  const data = { id, name: 'Route 1 Mile', collectionName: 'Route', description: '', distanceMiles: 1.2, elevationGainFt: 0, points: [{ lat: 38.6, lon: -121.7 }], surface: 'Pavement', difficulty: 'Easy', createdAt: '2021-10-11T00:00:00.000Z' };
+  await assertFails(setDoc(doc(ctx(ALICE), 'routes', id), data));
+  const org = ctx(ORGANIZER);
+  await assertSucceeds(setDoc(doc(org, 'routes', id), data));
+  await assertFails(updateDoc(doc(org, 'routes', id), { collectionName: 123 }));
+  await assertFails(updateDoc(doc(org, 'routes', id), { collectionName: 'x'.repeat(151) }));
+  await assertSucceeds(updateDoc(doc(org, 'routes', id), { collectionName: 'New collection' }));
+});
+
 test('runner reads only their own profile and check-ins', async () => {
   const alice = ctx(ALICE);
   await assertSucceeds(getDoc(doc(alice, 'users', ALICE)));

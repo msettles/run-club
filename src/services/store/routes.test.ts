@@ -17,6 +17,19 @@ function operations(runs: unknown[] = []) {
 }
 beforeEach(() => { api.set.mockClear(); api.saved = { ...existing }; });
 
+it('imports a stable route ID once and never overwrites an existing route on retry', async () => {
+  api.saved = undefined;
+  const { ops, ctx } = operations();
+  const id = 'route-garmin-123';
+  expect(await ops.importRoute(id, { ...existing, collectionName: 'Original collection' })).toBe(true);
+  expect(api.set).toHaveBeenCalledWith(`routes/${id}`, expect.objectContaining({ id, collectionName: 'Original collection' }));
+  api.saved = api.set.mock.calls[0][1];
+  api.set.mockClear(); ctx.setRoutes.mockClear();
+  expect(await ops.importRoute(id, { ...existing, name: 'Changed CSV name' })).toBe(false);
+  expect(api.set).not.toHaveBeenCalled();
+  expect(ctx.setRoutes).not.toHaveBeenCalled();
+});
+
 it('removes cleared route links and old raw GPX instead of merging deleted fields back in', async () => {
   await operations().ops.updateRoute('route', { externalLinks: { garminUrl: 'https://connect.garmin.com/new' } });
   expect(api.set.mock.calls[0]).toHaveLength(2);

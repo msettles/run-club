@@ -261,6 +261,7 @@ export function useClubStore({ loadLeaderboard = true } = {}) {
 
     // Routes
     addRoute: store.addRoute,
+    importRoute: store.importRoute,
     updateRoute: store.updateRoute,
     deleteRoute: store.deleteRoute,
 

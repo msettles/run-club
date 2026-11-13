@@ -3,7 +3,7 @@ import type { GPXRoute } from '../types';
 import { hydrateRouteFromFirestore } from './store/helpers';
 
 export const ROUTE_PAGE_SIZE = 20;
-const SUMMARY_FIELDS = ['id', 'name', 'description', 'distanceMiles', 'elevationGainFt', 'surface', 'difficulty', 'customDistanceLabel', 'isLoop', 'maxLoops', 'externalLinks', 'notes', 'createdAt', 'updatedAt', 'thumbnailUrl', 'referenced'];
+const SUMMARY_FIELDS = ['id', 'name', 'collectionName', 'description', 'distanceMiles', 'elevationGainFt', 'surface', 'difficulty', 'customDistanceLabel', 'isLoop', 'maxLoops', 'externalLinks', 'notes', 'createdAt', 'updatedAt', 'thumbnailUrl', 'referenced'];
 interface RestValue { stringValue?: string; integerValue?: string; doubleValue?: number; booleanValue?: boolean; nullValue?: null; timestampValue?: string; mapValue?: { fields?: Record<string, RestValue> }; arrayValue?: { values?: RestValue[] } }
 interface RestDocument { name: string; fields?: Record<string, RestValue> }
 function decode(value: RestValue): unknown {

@@ -302,7 +302,7 @@ service cloud.firestore {
                'id', 'name', 'description', 'distanceMiles', 'elevationGainFt',
                'points', 'surface', 'difficulty', 'customDistanceLabel', 'isLoop',
                'maxLoops', 'directions', 'geoJson', 'externalLinks', 'notes',
-               'gpxXml', 'createdAt', 'updatedAt', 'thumbnailUrl', 'referenced'
+               'gpxXml', 'createdAt', 'updatedAt', 'thumbnailUrl', 'referenced', 'collectionName'
              ]) &&
              data.keys().hasAll([
                'id', 'name', 'description', 'distanceMiles', 'elevationGainFt',
@@ -310,6 +310,7 @@ service cloud.firestore {
              ]) &&
              data.id is string && data.id.size() >= 1 && data.id.size() <= 128 &&
              data.name is string && data.name.size() >= 1 && data.name.size() <= 150 &&
+             (!('collectionName' in data) || (data.collectionName is string && data.collectionName.size() >= 1 && data.collectionName.size() <= 150)) &&
              data.description is string && data.description.size() <= 2000 &&
              data.distanceMiles is number && data.distanceMiles >= 0 && data.distanceMiles <= 500 &&
              data.elevationGainFt is number && data.elevationGainFt >= 0 && data.elevationGainFt <= 50000 &&

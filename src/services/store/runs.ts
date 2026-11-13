@@ -157,6 +157,27 @@ export function createRunOps(ctx: StoreState & ReturnType<typeof createLegacyOps
     return newRoute;
   };
 
+  /** Insert-only import: deterministic IDs make retries safe even after a lost response. */
+  const importRoute = async (id: string, routeData: Omit<GPXRoute, 'id'>): Promise<boolean> => {
+    if (!/^route-garmin-\d+$/.test(id)) throw new Error('Invalid imported route ID.');
+    const route: GPXRoute = { ...routeData, id };
+    const formatted = formatRouteForFirestore(route);
+    assertRouteFitsFirestore(formatted);
+    if (isFirebaseConfigured && db) {
+      const ref = doc(db, 'routes', id);
+      const created = await runTransaction(db, async (tx) => {
+        const existing = await tx.get(ref);
+        if (existing.exists()) return false;
+        tx.set(ref, formatted);
+        return true;
+      });
+      if (!created) return false;
+    } else if (ctx.routes.some((saved) => saved.id === id)) return false;
+    ctx.routeDetailsCache?.prime(route);
+    setRoutes((previous) => [isFirebaseConfigured ? routeSummary(route) : route, ...previous.filter((saved) => saved.id !== id)]);
+    return true;
+  };
+
   /**
    * Update an existing route (staff). Saves first; throws if the server refuses.
    * A route no run has used is edited in place. Once a run uses it, the saved
@@ -356,5 +377,5 @@ export function createRunOps(ctx: StoreState & ReturnType<typeof createLegacyOps
   };
 
 
-  return { toggleRSVP, createRunWithCheckIn, addRoute, updateRoute, deleteRoute, updateRun, rollBackCheckIn, countRunCheckIns, deleteRun };
+  return { toggleRSVP, createRunWithCheckIn, addRoute, importRoute, updateRoute, deleteRoute, updateRun, rollBackCheckIn, countRunCheckIns, deleteRun };
 }

@@ -44,6 +44,7 @@ export interface RouteExternalLinks {
 }
 
 export interface GPXRoute {
+  collectionName?: string; // Original route family, shared by distance variants.
   detailsLoaded?: boolean; // Client-only: false for metadata projections
   referenced?: boolean;
   id: string;
