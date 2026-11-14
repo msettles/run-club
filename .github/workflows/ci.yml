@@ -36,6 +36,9 @@ jobs:
 
       - run: npm ci
 
+      - name: Install Cloud Functions dependencies
+        run: npm ci --prefix functions
+
       - name: Dependency audit
         run: npm run audit:dependencies
 

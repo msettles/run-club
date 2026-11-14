@@ -6,6 +6,7 @@ Use Node.js 24 (`.nvmrc` and CI), plus Java 21+ for Firestore emulator tests. Th
 
 ```bash
 npm ci
+npm ci --prefix functions
 npm run dev
 ```
 

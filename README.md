@@ -49,7 +49,8 @@ Starting another club? See [`docs/new-club-setup.md`](docs/new-club-setup.md) (f
 Use Node.js 24.12+ (`nvm use` reads `.nvmrc`). Rules tests also need Java 21+.
 
 ```bash
-npm install
+npm ci
+npm ci --prefix functions  # server builds and the complete test suite
 cp .env.example .env    # fill in Firebase web config (or leave blank for local mode)
 npm run dev             # http://localhost:5173
 ```
