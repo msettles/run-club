@@ -155,8 +155,9 @@ fontFamily: {
 
 ### Installed app identity
 
-* **Home-screen icon:** `woodchucker-bottlecap.png` isolates the full crimped bottle cap from `Woodchucker2.jpg`, excluding the surrounding teal field and stray marks. The extracted artwork supplies `pwa-192x192.png`, `pwa-512x512.png`, and `apple-touch-icon.png`, centered on Blue Note Teal. `pwa-maskable-512x512.png` adds safe padding for Android icon shapes.
+* **Home-screen icon:** `woodland_woodchucker_app_icon-teal.png` places the approved woodchuck-face artwork from `woodland_woodchucker_app_icon.png` on Blue Note Teal (`#1A607C`). This artwork supplies `pwa-192x192.png`, `pwa-512x512.png`, and `apple-touch-icon.png`, as well as notification icons. `pwa-maskable-512x512.png` uses the same full-size artwork for circular Android icons. The earlier bottle-cap extraction remains available as `woodchucker-bottlecap.png`.
 * **Launch splash:** the unchanged 2026 line art in black on Alabaster Cream (`Woodchucker2026-black-cream.png`), centered on a full Blue Note Teal screen. Static markup displays before the app bundle loads in installed standalone/fullscreen windows, then fades after React mounts. Ordinary browser tabs skip it. Launch artwork is precached for offline use; the manifest background is teal as well.
+* **Circular icon fit:** standard and Apple icons center the transparent source artwork and scale its outermost visible detail to 98% of the circular diameter. At the owner’s request, Android maskable artwork uses the same full-size circular fit without extra inset. Lettering outside the standard adaptive safe zone can be cropped by other launcher masks. Teal fills the entire canvas in every installed icon; transparent circular preview files are for review only.
 * The operating system may show its own icon-based launch screen before the app's splash. Existing phone shortcuts may need to be removed and added again to refresh their cached icon after deployment.
 
 Both logos are bundled directly in `/public` for instant offline PWA access and high-speed delivery.
