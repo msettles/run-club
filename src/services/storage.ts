@@ -1,3 +1,4 @@
+import { createSelfServiceOps } from './store/selfService';
 import { createStaffLoadingOps } from './store/staffLoading';
 import { useEffect } from 'react';
 import { RunEvent, Badge, MilestoneReward, SpecialEventDefinition } from '../types';
@@ -44,7 +45,7 @@ export function useClubStore({ loadLeaderboard = true } = {}) {
   // Extend one context in dependency order; each operation sees current render state.
   const c0 = Object.assign(s, createRouteLoadingOps(s), createScheduleLoadingOps(s), createStaffLoadingOps(s));
   const c1a = Object.assign(c0, createLegacyOps(c0));
-  const c1 = Object.assign(c1a, createClubImportOps(c1a));
+  const c1 = Object.assign(c1a, createClubImportOps(c1a), createSelfServiceOps(c1a));
   const c2 = Object.assign(c1, createPrivateSyncOps(c1));
   const c3 = Object.assign(c2, createMemberOps(c2));
   const c4 = Object.assign(c3, createCheckInOps(c3));
@@ -204,6 +205,7 @@ export function useClubStore({ loadLeaderboard = true } = {}) {
     staffRosterLoaded: Boolean(store.staffRosterPage.current.cursor || store.staffRosterPage.current.complete),
     refreshStaffUsers: store.refreshStaffUsers, refreshGearHistory: store.refreshGearHistory,
     searchStaffUsers: store.searchStaffUsers, loadMoreStaffUsers: store.loadMoreStaffUsers, findStaffUser: store.findStaffUser, loadRunRoster: store.loadRunRoster, exportStaffUsers: store.exportStaffUsers,
+    staffRunNightReady: store.staffRunNightReady,
     staffRosterLoading: store.staffRosterLoading, staffRosterError: store.staffRosterError, hasMoreStaffUsers: store.hasMoreStaffUsers,
     loadMoreGearHistory: store.loadMoreGearHistory, gearHistoryLoading: store.gearHistoryLoading, gearHistoryError: store.gearHistoryError, hasMoreGearHistory: store.hasMoreGearHistory,
     setUsers: store.setUsers,
@@ -239,6 +241,7 @@ export function useClubStore({ loadLeaderboard = true } = {}) {
     // Legacy (old app) names
     loadLegacyPool: store.loadLegacyPool,
     claimLegacyProfile: store.claimLegacyProfile,
+    loadPersonalHistory: store.loadPersonalHistory, loadPersonalHistoryRoute: store.loadPersonalHistoryRoute, claimOwnHistory: store.claimOwnHistory,
     adminSetLegacyClaim: store.adminSetLegacyClaim,
     importLegacyData: store.importLegacyData,
     importClubData: store.importClubData,

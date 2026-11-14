@@ -2,7 +2,7 @@
 
 Who can see and do what in the app: **Guest**, **Runner**, **Organizer** and **Admin**.
 
-**The source of truth is `firestore.rules`.** The app also hides controls a role can't use, but hiding is only a convenience: the rules are what actually stop a request. Where the screens and the rules disagree, this document says so (see [Gaps between the rules and the screens](#gaps-between-the-rules-and-the-screens)).
+**Client data access is governed by `firestore.rules`; server callables enforce their own authorization.** The app also hides controls a role can't use, but hiding is only a convenience: the rules are what actually stop a request. Where the screens and the rules disagree, this document says so (see [Gaps between the rules and the screens](#gaps-between-the-rules-and-the-screens)).
 
 Related code: `src/utils/roles.ts` (client role checks), `firestore.rules` (helpers `isAdmin()`, `isStaff()`, `isUserEmailOwner()`), `tests/firestore.rules.test.mjs` (rule tests). Retention and deletion policy lives in [go-live-policy.md](go-live-policy.md).
 
@@ -59,7 +59,7 @@ Signed-in access always requires a **verified email**: the rules check `email_ve
 | Delete a run whose check-in has opened or that is over | ➖ | ➖ | ➖ | ✅ |
 | See who checked in to a run and open their profile (emergency contact, shirt size) | ➖ | ➖ | ✅ | ✅ |
 | See milestones reached at a run and mark gear handed out | ➖ | ➖ | ✅ | ✅ |
-| Record a check-in on a runner's behalf | ➖ | ➖ | ✅ (rules) | ✅ (rules) |
+| Assisted check-in during the normal window (server deployment required) | ➖ | ➖ | ✅ | ✅ |
 | **Staff data** | | | | |
 | List and search all runner profiles; read the whole check-in log | ➖ | ➖ | ✅ (rules) | ✅ |
 | See and fulfill the whole gear queue (all runs) | ➖ | ➖ | ✅ (rules) | ✅ |
@@ -102,7 +102,7 @@ Organizers run event night. Beyond a Runner, an Organizer can:
 3. **Look up who checked in to a run and open their profile.** Each run card shows a **Check-ins** button listing the runners who checked in (with a search box). Tapping a runner shows their **emergency contact** (with a tap-to-call number), shirt size, pace, age and run count. The check-ins load for that run only, however old it is.
 4. **See the milestones reached at a run and mark off gear handouts.** The same **Check-ins** window lists the milestone gear earned at that run, with the runner's current shirt size, and a **Mark handed out** button. Runners who reached a milestone are listed first. A runner's **first run** shows as a **First Chuck Run** welcome (🦫) so organizers can recognize new runners; it has no gear, so there is no handout button and it never appears in the gear queue.
 
-Also allowed by the rules for Organizers: setting or changing a run's code word until check-in opens, deleting a run's check-in event before check-in opens, recording a check-in on a runner's behalf (no screen for it yet), and read access to the runner roster, the check-in log, reward proofs and legacy history.
+Also allowed by the rules for Organizers: setting or changing a run's code word until check-in opens, deleting a run's check-in event before check-in opens, recording a check-in on a runner's behalf through the new Table Mode/server function (deployment required), and read access to the runner roster, the check-in log, reward proofs and legacy history.
 
 Organizers **cannot**: change roles, delete runners or check-ins, edit badges, special events, announcements or club settings, manage legacy data, or open the Admin dashboard.
 
@@ -124,8 +124,12 @@ These are things where the two differ today; worth deciding on deliberately.
 1. **The Admin dashboard is Admin-only on screen.** Organizers get the per-run **Check-ins** window (check-in lookup and gear handouts for that run), but not the whole-club gear queue, check-in log or roster, even though the rules would let them read those.
 2. **Run deletion.** The rules now let Organizers delete a run only before its check-in opens; Admins can delete any run. The Edit Run window offers "Delete Run" for upcoming runs to Organizers and Admins; deleting past runs is offered to Admins only.
 3. **Two role lists to keep in sync.** `ADMIN_EMAILS` (client) and `isBootstrapAdminEmail()` (rules) must list the same owner email.
-4. **Names on old records.** Check-ins, RSVPs and gear alerts store the name from when they were written. Staff screens look the current name up by email, and RSVP avatars use the current name where it's loaded, so a renamed runner may still show their old name on RSVP circles for other runners.
+4. **Names on old records.** Check-ins, RSVPs and gear alerts store the name from when they were written. Table Mode preserves the recorded check-in name; the existing runner-details screen looks the current name up by email, and RSVP avatars use the current name where it's loaded, so a renamed runner may still show their old name on RSVP circles for other runners.
 
 ## Keeping this document current
 
 When you change `firestore.rules`, `src/utils/roles.ts`, or who sees what in the screens, update the summary table above, and add or adjust a case in `tests/firestore.rules.test.mjs`. Run the rule tests with `npm run test:rules`.
+
+## Run Night and member self-service — November 14
+
+Local implementation now adds staff Table Mode, normal-window assisted check-in, private My Runs and profile-based historical claiming. The assisted callable revalidates staff roles on the server and updates attendance/counters atomically; it grants no arbitrary role/contact/profile editing. It pauses for maintenance/imports even for admins. `assisted_checkins` audits are server-only, with direct client access denied. The client rules are not expanded. See [behavior, limits and activation](run-night-and-self-service.md).

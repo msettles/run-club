@@ -119,6 +119,7 @@ docs/                        plans (route engine, push notifications Plan B)
 | Signed-in | `legacy_index`, `legacy_profiles` (old-app names and claim locks) |
 | Claimer + staff | `legacy_history` |
 | Admins | `push_devices` |
+| Server only | `assisted_checkins` (private staff audit), `social_posts`, `social_images` (local social publishing implementation; public image delivery uses its dedicated endpoint) |
 
 **Roles:** `woodlandwoodchuckers@gmail.com` is the only hardcoded owner (always admin). Everyone else's role (`member` / `organizer` / `admin`) is set by an admin in Runners & Claims.
 
@@ -132,9 +133,17 @@ A recoverable one-time cutover backup was restored and verified. The owner decli
 
 ## Push notifications
 
-Today (**Plan A**, free): devices sign up in the app, and admins send from **Firebase console → Messaging → New campaign → Notifications**, targeting the web app.
+Today (**Plan A**): devices sign up in the app, and admins send from **Firebase console → Messaging → New campaign → Notifications**, targeting the web app.
 
-Sending straight from **Post Announcement** needs Cloud Functions (Blaze plan, expected $0/month). That's scoped in [`docs/push-notifications-plan-b.md`](docs/push-notifications-plan-b.md).
+Source and the deployed-functions listing were checked November 14: app-sent announcement pushes and automatic run reminders are absent; only the calendar function is deployed. The sender proposal is in [`docs/push-notifications-plan-b.md`](docs/push-notifications-plan-b.md). Review current billing/quotas before implementing it.
+
+## Run Night and member self-service
+
+The implementation adds staff **Run Night / Table Mode** (live counts, gear and assisted check-in) and profile-menu **My Runs** / **Claim historical runs**. Assisted check-in uses a new authenticated server function and preserves the normal window; matching hosting/server deployment is described in the [1.6.2 update](docs/releases/1.6.2-table-mode.md). See [feature behavior and activation](docs/run-night-and-self-service.md).
+
+## Social run posts
+
+Local implementation supports creating one branded route-map photo per attached route and an editable caption after saving a run and explicitly publishing them together as one Facebook multi-photo post / Instagram carousel. Two routes produce two photos. Club account setup, service deployment and live acceptance remain required; no real posts have been sent by this change. See [social publishing setup and status](docs/social-publishing.md).
 
 ## More
 
@@ -161,7 +170,7 @@ These tests use synthetic local data with Firebase disabled and external request
 
 ### Go-live data policy
 
-Launch preparation and owner acceptance completed November 13, 2026. The approved refresh is complete: 300 historical runs plus the next real run, 1,199 historical names, 6,231 dated check-ins, 2,371 undated credits, 54 routes, five retained staff accounts and eight claims. The designated acceptance-test run and attendance are gone; maintenance and the import lock are off. See the [readiness review](docs/go-live-readiness-review.md) for dated evidence and [documentation status](docs/documentation-status.md) for remaining operational/device checks. Readiness is not a record of a public launch announcement.
+Launch preparation and owner acceptance completed November 13, 2026. The approved refresh is complete: 300 historical runs plus the next real run, 1,199 historical names, 6,231 dated check-ins, 2,371 undated credits, 54 routes, five retained staff accounts and eight claims. The designated acceptance-test run and attendance are gone; maintenance and the import lock are off. See the [readiness review](docs/go-live-readiness-review.md) for dated evidence and [documentation status](docs/documentation-status.md) for completed decisions and the remaining feature roadmap. Readiness is not a record of a public launch announcement.
 
 The [go-live reset policy](docs/go-live-policy.md) records the completed retained-staff scope and rules for any separately requested reset. Do not repeat the reset merely because another release is deployed.
 

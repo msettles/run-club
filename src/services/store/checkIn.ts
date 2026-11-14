@@ -2,6 +2,7 @@
 import type { Attendee, UserProfile, CheckInRecord, MeetupEvent, MilestoneAlert } from '../../types';
 import { isFirebaseConfigured, db } from '../firebase';
 import { doc, runTransaction, getDocFromServer } from 'firebase/firestore';
+import { isStaffProfile } from '../../utils/roles';
 import { memberKeyFor } from '../../utils/memberKey';
 import { cleanFirestoreData, memberFromUser, meetupFromPublicDoc } from './helpers';
 import { calculateCheckIn, type CheckInParams } from './checkInModel';
@@ -13,6 +14,7 @@ export function createCheckInOps(ctx: StoreState & ReturnType<typeof createLegac
     if (isFirebaseConfigured && db && typeof navigator !== 'undefined' && navigator.onLine === false) {
       return { success: false, message: "You're offline. Check-in changes need an internet connection. Reconnect, then try again. Your saved check-in has not changed." };
     }
+    if (params.source === 'admin' && !isStaffProfile(ctx.currentUser)) return { success: false, message: 'Only staff may assist a runner check-in.' };
     const privateEpoch = ctx.privateSessionEpoch?.current;
     const email = params.userEmail.trim().toLowerCase();
     const id = `${params.eventId}_${email}`;

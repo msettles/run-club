@@ -40,3 +40,6 @@ export const calendar = onRequest({ region: 'us-central1', maxInstances: 3, memo
   });
   res.status(200).send(req.method === 'HEAD' ? '' : buildCalendarFeed(runs));
 });
+
+export { runSocialPost, socialImage } from './social';
+export { assistedCheckIn } from './assistedCheckIn';

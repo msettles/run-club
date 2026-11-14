@@ -2,6 +2,8 @@
 
 **Status, November 13:** push sending from the app remains a proposal. Plan A (device registration plus Firebase Console sending) is implemented. `functions/` already exists for the deployed calendar feed; there is no announcement push trigger or automatic run-reminder scheduler. Confirm current billing and quotas rather than promising zero cost.
 
+**Verification, November 14:** at the owner's request, source was checked for announcement triggers, server sends and reminder schedules; none exists. `sendPushAnnouncement` writes only the in-app announcement. A read-only deployed-functions listing for the club project shows only `calendar`. Push device registration and console-sent push handling exist, but app-sent pushes and automatic reminders are not implemented. The owner selected [social publishing](social-publishing.md) as the current implementation priority. Reminders still need a timing, audience, opt-out, cancellation and deduplication design; the announcement sender below alone does not implement reminders.
+
 ## Goal
 
 Let an admin press **Post Announcement** in the app and have it reach phones as a push notification, without switching to the Firebase console. Pushes and announcements become the same thing: one post shows in everyone's bell **and** arrives on every phone that has notifications on.

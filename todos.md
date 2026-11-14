@@ -3,7 +3,7 @@
 > **Application Status:** Deployed PWA; launch readiness and owner acceptance complete November 13, 2026. Public site: [https://woodland-woodchuckers.web.app](https://woodland-woodchuckers.web.app)\
 > **Infrastructure:** Firebase Hosting + Firestore/Auth/FCM, plus the calendar Cloud Function. Confirm billing/quotas; do not assume all features run on Spark or guarantee zero cost\
 > **Design Philosophy:** Mobile-First for runners & organizers; responsive desktop/tablet tools for admins.\
-> **Last Updated:** November 13, 2026 (launch work reconciled with implementation; [remaining documentation checks](docs/documentation-status.md))
+> **Last Updated:** November 14, 2026 (local Run Night/self-service implementation added; [remaining documentation checks](docs/documentation-status.md))
 
 ---
 
@@ -37,6 +37,7 @@
 The Run Organizer runs the Wednesday night table on the patio at Blue Note Brewing Co. They need lightweight, high-speed mobile tools to oversee the event without requiring full administrative access to site settings.
 
 ### ✅ Completed & Implemented
+- [x] **Run Night / Table Mode, headcounts and assisted check-in:** local implementation adds the dedicated staff screen, live attendance/route/activity/pet counts, existing gear fulfillment, code-word card and confirmed server-authorized assistance inside the normal window. Deployment required; see [feature behavior and activation](docs/run-night-and-self-service.md).
 - [x] **Data Model Role:** `role: 'organizer'` defined in user profiles and legacy models.
 - [x] **Milestone Runner Alert Dispatch:** When a runner checks in for their 5th, 50th, 100th, or 200th run, an alert record is created with the runner's shirt size and reward perks.
 
@@ -45,20 +46,9 @@ The Run Organizer runs the Wednesday night table on the patio at Blue Note Brewi
 #### Deferred
 - [ ] **Check-In Window Bypass:** The current check-in UI enforces the run window; it has no organizer bypass toggle. This is a future feature, not a launch blocker.
 
-#### High Priority
-- [ ] **Dedicated "Run Night / Table Mode" Mobile View**
-  - Create a dedicated navigation view for users with `role: 'organizer'` (and `admin`) accessible directly from the navbar or mobile bottom nav on run days.
-  - Features required on this screen:
-    - **Live Check-In Feed:** Real-time stream of tonight's attendees as they check in (name, distance, run vs walk, pet icon).
-    - **Live Milestone & Gear Pickup Queue:** Instant visual card whenever a runner checks in to a milestone (5th, 50th, 100th, 200th run). Shows their name, shirt size on file, and a one-tap button: `[Mark Handed Out & Delivered]`.
-    - **Tonight's Codeword Card:** Display tonight's secret codeword in large font; option to set the word before check-in opens; a future table view must preserve the existing post-opening lock.
-    - **Assisted / Table Check-In:** Quick runner lookup search bar allowing the organizer to manually check in members whose phone battery died or who forgot their device.
-
 #### Medium Priority
 - [ ] **Run Night Quick Announcements:**
   - Let organizers send quick local push alerts (e.g., *"Group photo on the patio in 5 minutes!"* or *"Course update: Watch for wet leaves on Main St"*).
-- [ ] **Check-In Summary Headcount:**
-  - Running counter on the organizer screen: Total Check-Ins, 1-Mile Walkers, 3-Mile Runners, 5-Mile Runners, Dogs/Pets attending.
 
 ---
 
@@ -67,6 +57,8 @@ The Run Organizer runs the Wednesday night table on the patio at Blue Note Brewi
 Runners are the core members of the club. They check in on mobile at Blue Note, track their lifetime stats and streaks, and work toward milestone gear.
 
 ### ✅ Completed & Implemented
+- [x] **My Runs:** private read-only paginated attendance, deduplicated claimed history, undated-credit summary and recorded run/route links.
+- [x] **Post-registration historical claiming:** profile-menu search, confirmation, existing transactional reconciliation and interrupted-claim recovery. Both features are implemented locally; see [feature behavior and activation](docs/run-night-and-self-service.md).
 - [x] **Self-service profile editing:** profile menu → Edit Profile; name, shirt size (Youth/XS–2XL), birthday, city/ZIP, preferred pace and emergency contact.
 - [x] **Authentication:** Passwordless Email Magic Link + Google Sign-In with automatic session persistence.
 - [x] **Check-In Flow:**
@@ -93,18 +85,7 @@ Runners are the core members of the club. They check in on mobile at Blue Note, 
 
 ### 📋 Pending TODOs
 
-#### High Priority
-- [ ] **Personal Check-In History ("My Past Runs")**
-  - A tab or expandable drawer where a runner can view their own historical check-in logs:
-    - Date & time.
-    - Route name, measured mileage and loop choice.
-    - Activity type (🏃 Run vs 🚶 Walk).
-    - Pet flag (🐕 Ran with pet).
-    - Badges earned on that run.
-
 #### Medium Priority
-- [ ] **Post-Registration Legacy Run Claiming**
-  - Allow logged-in members who skipped legacy claiming during initial signup to search and claim their historical names from their profile. Claim/reconciliation operations and signup claiming already exist; a dedicated post-registration profile entry point is still pending.
 - [ ] **Custom Profile Photo / Avatar Upload**
   - Allow runners to upload a custom profile picture or avatar instead of generated initials.
 - [ ] **Club Strava / Garmin Club Link**
@@ -189,11 +170,22 @@ Admins oversee the entire club system, scheduling, route library, member rosters
 
 ---
 
-## 5. Suggested Sprint Roadmap
+## 5. Current owner priority — November 14, 2026
+
+The owner subsequently requested all four self-service/table deliverables. Run Night, My Runs, profile historical claiming and assisted check-in are implemented locally and validated; updated hosting and the new assisted-check-in function still require deployment. See [activation and behavior](docs/run-night-and-self-service.md). Social publishing awaits Meta account configuration.
+
+1. **Social publishing:** after saving a run, generate and review a post, then publish to the selected club Instagram/Facebook accounts. Local preview/publishing implementation is added; club account setup, deployment and live acceptance remain. Track activation prerequisites in [social-publishing.md](docs/social-publishing.md). Link-preview metadata remains a separate enhancement.
+2. **Push automation verification:** November 14 source review and read-only deployed-functions listing confirm that app-sent phone pushes and automatic reminders do not exist yet; only `calendar` is deployed. See [Plan B](docs/push-notifications-plan-b.md). Social publishing awaits account setup; the owner-selected table/self-service implementation is recorded above.
+
+## 6. Suggested Sprint Roadmap (earlier proposal)
 
 | Sprint | Focus Area | Deliverables |
 | :--- | :--- | :--- |
-| **Sprint 1** | **Run Night Organizer Experience** | • Dedicated Mobile Organizer View (`/organizer` or Table Mode)<br>• Live tonight's check-in stream & headcount<br>• Table milestone gear fulfillment queue with shirt sizes<br>• Assisted manual runner check-in |
-| **Sprint 2** | **Runner Self-Service & History** | • Extend existing profile settings if needed<br>• "My Past Runs" personal log view<br>• Post-registration legacy run claim button |
+| **Sprint 1 — implemented locally** | **Run Night Organizer Experience** | • Dedicated Mobile Organizer View (`/organizer` or Table Mode)<br>• Live tonight's check-in stream & headcount<br>• Table milestone gear fulfillment queue with shirt sizes<br>• Assisted manual runner check-in |
+| **Sprint 2 — implemented locally** | **Runner Self-Service & History** | • Extend existing profile settings if needed<br>• "My Past Runs" personal log view<br>• Post-registration legacy run claim button |
 | **Sprint 3** | **Admin Role & Asset Management** | • Milestone gear photo uploads / URL manager<br>• Additional admin tools as needed (role management and route edit/delete already implemented) |
 | **Sprint 4** | **Guest Experience & Welcome** | • Guest RSVP with email collection<br>• "How Woodchuckers Works" welcome & FAQ guide<br>• Full JSON database backup / restore |
+
+## Deployment authorization — November 14, 2026
+
+The owner authorized commit, push and deployment of the completed table/self-service work using app version 1.6.2. Earlier local-only notes describe validation before that authorization. See [release scope and verification](docs/releases/1.6.2-table-mode.md); live verification is recorded separately. The original 1.6.2 artwork tag stays fixed. Meta publishing remains pending account configuration.

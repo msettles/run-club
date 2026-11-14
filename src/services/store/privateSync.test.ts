@@ -17,6 +17,7 @@ function context() {
     setGearHistoryLoading: vi.fn(), setGearHistoryError: vi.fn(), setHasMoreGearHistory: vi.fn(),
     privateUnsubscribers: { current: [] }, setPrivateSyncError: vi.fn(),
     privateSyncEpoch: { current: 0 }, staffCodeWords: { current: {} },
+    setStaffRunNightReady: vi.fn(),
     setUsers: vi.fn(), setMeetupEvents: vi.fn(), setCheckins: vi.fn(), setOwnLegacyEvents: vi.fn(), setLegacyMembers: vi.fn(), setMilestoneAlerts: vi.fn(),
     fetchLegacyEvents: vi.fn().mockResolvedValue([]), loadLegacyPool: vi.fn().mockResolvedValue([]),
   };
@@ -35,7 +36,7 @@ it('does not restore private data when requests finish after sign-out', async ()
   const ops = createPrivateSyncOps(ctx as unknown as Parameters<typeof createPrivateSyncOps>[0]);
   const syncing = ops.syncPrivateData('alice@example.com', true);
   ops.clearPrivateData();
-  for (const setter of [ctx.setUsers, ctx.setCheckins, ctx.setMilestoneAlerts, ctx.setOwnLegacyEvents, ctx.setMeetupEvents, ctx.setLegacyMembers]) setter.mockClear();
+  for (const setter of [ctx.setUsers, ctx.setCheckins, ctx.setMilestoneAlerts, ctx.setOwnLegacyEvents, ctx.setMeetupEvents, ctx.setLegacyMembers, ctx.setStaffRunNightReady]) setter.mockClear();
   callbacks.forEach((next) => next({ docs: [] }));
   expect(unsubscribe).toHaveBeenCalledTimes(callbacks.length);
   await syncing;
@@ -44,6 +45,7 @@ it('does not restore private data when requests finish after sign-out', async ()
   expect(ctx.setMilestoneAlerts).not.toHaveBeenCalled();
   expect(ctx.setOwnLegacyEvents).not.toHaveBeenCalled();
   expect(ctx.setMeetupEvents).not.toHaveBeenCalled();
+  expect(ctx.setStaffRunNightReady).not.toHaveBeenCalled();
 });
 
 it('does not re-read or re-seed routes during staff sign-in', async () => {

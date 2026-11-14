@@ -11,7 +11,8 @@ interface NewRunModalProps extends RouteCatalogPaginationProps {
   onClose: () => void;
   routes: GPXRoute[];
   organizerName: string;
-  onAddRun: (run: Omit<RunEvent, 'id' | 'attendees'>, codeWord: string) => Promise<void>;
+  onAddRun: (run: Omit<RunEvent, 'id' | 'attendees'>, codeWord: string) => Promise<RunEvent>;
+  onSocialPost?: (run: RunEvent) => void;
   specialEvents?: SpecialEventDefinition[];
 }
 
@@ -22,6 +23,7 @@ export const NewRunModal: React.FC<NewRunModalProps> = ({
   onLoadMoreRoutes, hasMoreRoutes, routesLoading,
   organizerName,
   onAddRun,
+  onSocialPost,
   specialEvents = [],
 }) => {
   const [title, setTitle] = useState('');
@@ -44,6 +46,7 @@ export const NewRunModal: React.FC<NewRunModalProps> = ({
 
   // Hooks must run before the early return below.
   const [isSaving, setIsSaving] = useState(false);
+  const [prepareSocialPost, setPrepareSocialPost] = useState(false);
 
   if (!isOpen) return null;
 
@@ -72,7 +75,7 @@ export const NewRunModal: React.FC<NewRunModalProps> = ({
     setIsSaving(true);
     setFormError(null);
     try {
-      await onAddRun({
+      const saved = await onAddRun({
       title,
       date,
       time,
@@ -87,6 +90,7 @@ export const NewRunModal: React.FC<NewRunModalProps> = ({
       specialEvent: specialEvent !== 'none' ? specialEvent : undefined,
       }, codeWord);
       onClose();
+      if (prepareSocialPost) onSocialPost?.(saved);
     } catch (err: any) {
       // Nothing was saved; keep the form open so the code word can be changed.
       setFormError(err?.message || 'Not saved. Please try again.');
@@ -279,6 +283,11 @@ export const NewRunModal: React.FC<NewRunModalProps> = ({
               ))}
             </div>
           </div>
+
+          {onSocialPost && <label className="flex items-start gap-2 text-sm text-stone-700">
+            <input type="checkbox" checked={prepareSocialPost} disabled={isSaving} onChange={(e) => setPrepareSocialPost(e.target.checked)} className="mt-1" />
+            <span>Prepare an Instagram / Facebook post after saving. You can review it before publishing.</span>
+          </label>}
 
           {/* Submit */}
           <div className="pt-4 border-t border-stone-200 flex justify-end gap-2">

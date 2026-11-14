@@ -181,6 +181,7 @@ export function useStoreState() {
   const [priorRunsLoading, setPriorRunsLoading] = useState(false);
   const [hasMorePriorRuns, setHasMorePriorRuns] = useState(!LOCAL_MODE);
   const [priorRunsError, setPriorRunsError] = useState<string | null>(null);
+  const [staffRunNightReady, setStaffRunNightReady] = useState(LOCAL_MODE);
   const [checkins, setCheckins] = useState<CheckInRecord[]>(() => (LOCAL_MODE ? loadMerged<CheckInRecord>(STORAGE_KEYS.CHECKINS, [], idOf) : []));
   // With Firebase the pool comes from Firestore (loadLegacyPool).
   const [legacyPool, setLegacyMembers] = useState<LegacyMember[]>(() =>
@@ -321,6 +322,7 @@ export function useStoreState() {
     setCheckins,
     legacyPool,
     setLegacyMembers,
+    staffRunNightReady, setStaffRunNightReady,
     ownLegacyEvents,
     setOwnLegacyEvents,
     currentUserEmail,

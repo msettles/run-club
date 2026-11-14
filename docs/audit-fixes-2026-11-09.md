@@ -56,6 +56,6 @@ The last measured production entry and its static JavaScript dependencies total 
 - Production bundle boundary checks pass. `npm audit --audit-level=low` reports zero vulnerabilities; resolver compatibility tests pass.
 - No production data was changed. Real-device GPS permissions, iPhone/Android push delivery and installed-PWA upgrades still need device smoke testing before release. Existing installed clients must load the new app when the stricter rules are released.
 
-## Separate larger follow-ups
+## Follow-ups completed in later releases
 
-These review opportunities were not presented as completed fixes: pagination/archiving of historical data, route summaries with on-demand geometry, cross-job OSM caching, and a shared modal component with focus trapping/restoration and lazy-load error recovery. They remain architectural/accessibility work beyond the numbered defect repairs.
+The original follow-ups are now implemented: [history/route loading](performance-loading.md), [staff pagination](staff-pagination.md), [cross-job OSM caching](osm-caching.md), and [shared modal accessibility and lazy-load recovery](modal-accessibility.md). They are not outstanding work. Pagination preserves all records; automatic archiving/deletion is not part of the retention policy. The earlier device-testing note above is historical; the owner accepted those categories November 13 (see [browser/device acceptance](browser-device-testing.md)).

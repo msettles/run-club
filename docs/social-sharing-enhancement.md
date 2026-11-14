@@ -1,6 +1,6 @@
 # Enhancement: social sharing previews
 
-Status: deferred; implement when requested. Created November 10, 2026.
+Status: link-preview metadata remains deferred. Created November 10, 2026. The owner selected direct Instagram/Facebook run posting first on November 14; track that separate feature in [social-publishing.md](social-publishing.md).
 
 ## Goal
 

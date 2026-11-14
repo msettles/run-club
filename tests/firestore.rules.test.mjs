@@ -1095,3 +1095,16 @@ test('the catalog marker is admin-only; starter milestones and badges are plain 
   await assertSucceeds(setDoc(doc(admin, 'badges', 'power-walker'), { id: 'power-walker', name: 'Power Walker', emoji: '🚶', description: 'd', requirement: 'r', category: 'incremental', isIncremental: true, triggerConfig: { type: 'incremental', counter: 'walks', step: 10, isIncremental: true } }));
   await assertSucceeds(deleteDoc(doc(admin, 'badges', 'power-walker')));
 });
+
+test('social and assisted attendance audits are server-only even for admin clients', async () => {
+  await env.withSecurityRulesDisabled(async (context) => {
+    for (const name of ['social_posts', 'social_images', 'assisted_checkins']) await setDoc(doc(context.firestore(), name, 'synthetic'), { private: 'synthetic' });
+  });
+  for (const db of [env.unauthenticatedContext().firestore(), ctx(ALICE), ctx(ORGANIZER), ctx(BOOTSTRAP)]) {
+    for (const name of ['social_posts', 'social_images', 'assisted_checkins']) {
+      await assertFails(getDoc(doc(db, name, 'synthetic')));
+      await assertFails(setDoc(doc(db, name, 'forged'), { state: 'published' }));
+      await assertFails(deleteDoc(doc(db, name, 'synthetic')));
+    }
+  }
+});

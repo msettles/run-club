@@ -3,7 +3,7 @@ import type { ActivityType, DistanceChoice, UserProfile, MeetupEvent, CheckInRec
 import { milestoneMeasure, milestoneTarget } from '../../utils/milestones';
 import { adjustDistanceCounts, recomputeBadges, datedEventsFrom, type LegacyEvent } from '../../utils/legacy';
 
-export interface CheckInParams { eventId: string; userEmail: string; codeWordEntered: string; activity: ActivityType; distanceChoice: DistanceChoice; loops?: number; withPet?: boolean; now?: Date }
+export interface CheckInParams { eventId: string; userEmail: string; codeWordEntered: string; activity: ActivityType; distanceChoice: DistanceChoice; loops?: number; withPet?: boolean; now?: Date; source?: 'pwa' | 'admin' }
 
 export function calculateCheckIn(params: CheckInParams, u: UserProfile, event: MeetupEvent, existingCheckIn: CheckInRecord | undefined, history: CheckInRecord[], legacyEvents: LegacyEvent[], badges: Badge[], meetupEvents: MeetupEvent[], milestones: MilestoneReward[]) {
   const { eventId, activity, distanceChoice, loops, withPet, codeWordEntered } = params;
@@ -50,7 +50,7 @@ export function calculateCheckIn(params: CheckInParams, u: UserProfile, event: M
       routeName: computedRouteName,
       loops: effectiveLoops,
       withPet: Boolean(withPet),
-      source: 'pwa',
+      source: params.source || 'pwa',
       codeWord: codeWordEntered.trim().toUpperCase(),
       createdAt: existingCheckIn?.createdAt || nowIso,
       updatedAt: nowIso,

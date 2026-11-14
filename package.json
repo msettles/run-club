@@ -16,12 +16,12 @@
     "audit:dependencies": "npm audit --audit-level=low",
     "pack:resolver": "node scripts/pack-node-resolve-fork.mjs",
     "test:resolver": "node --test tests/node-resolve-fork.test.mjs",
-    "test:integration": "firebase emulators:exec --only firestore --project demo-woodchuckers 'vitest run src/services/store/*.integration.test.ts'",
+    "test:integration": "firebase emulators:exec --only firestore --project demo-woodchuckers 'vitest run src/services/store/*.integration.test.ts functions/src/*.integration.test.ts'",
     "check:bundle": "node scripts/check-bundle.mjs",
     "sync:reward-rules": "node scripts/update-reward-rules.mjs",
     "test:browser": "playwright test",
     "typecheck:browser": "tsc --noEmit -p tests/browser/tsconfig.json",
-    "build:functions": "node scripts/build-functions.mjs"
+    "build:functions": "tsc --noEmit -p functions/tsconfig.json && node scripts/build-functions.mjs"
   },
   "dependencies": {
     "canvas-confetti": "^1.9.4",

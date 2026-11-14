@@ -1,10 +1,12 @@
 import React from 'react';
+import type { AppTab } from '../types';
 import { Calendar, Map, Trophy, Gift, Sparkles } from 'lucide-react';
 
 interface MobileBottomNavProps {
-  activeTab: 'runs' | 'routes' | 'milestones' | 'leaderboard' | 'admin';
-  setActiveTab: (tab: 'runs' | 'routes' | 'milestones' | 'leaderboard' | 'admin') => void;
+  activeTab: AppTab;
+  setActiveTab: (tab: AppTab) => void;
   isSignedIn?: boolean;
+  isStaff?: boolean;
   onQuickCheckIn: () => void;
 }
 
@@ -12,6 +14,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
   activeTab,
   setActiveTab,
   isSignedIn = false,
+  isStaff = false,
   onQuickCheckIn,
 }) => {
   return (
@@ -58,13 +61,13 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
 
         {isSignedIn ? (
           <button
-            onClick={() => setActiveTab('leaderboard')}
+            onClick={() => setActiveTab(isStaff ? 'organizer' : 'leaderboard')}
             className={`flex flex-col items-center py-1 px-1.5 rounded-lg transition ${
-              activeTab === 'leaderboard' ? 'text-woodland-900 font-bold' : 'hover:text-stone-900'
+              activeTab === (isStaff ? 'organizer' : 'leaderboard') ? 'text-woodland-900 font-bold' : 'hover:text-stone-900'
             }`}
           >
             <Trophy className="w-5 h-5 mb-0.5 text-stone-400" />
-            <span>Standings</span>
+            <span>{isStaff ? 'Run Night' : 'Standings'}</span>
           </button>
         ) : null}
       </div>

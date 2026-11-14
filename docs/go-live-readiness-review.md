@@ -59,7 +59,7 @@ The two Cleveland Rock choices credit their measured **1.19 and 3.28 miles**, wh
 
 The owner Auth account was verified to exist, be enabled and have a verified email and Google provider, using a read-only lookup. Its admin Firestore role remains intact. Live owner sign-in and Admin access were observed on both production domains after the v1.5.14 service-worker correction. This is an owner-account check, not an enumeration of all Authentication users; no Auth records were changed.
 
-The owner reports most prior phone/sign-in checks have already been completed. Reuse those accepted results. For this release, focus the remaining live checks on maintenance enforcement, the new one/two-name deduplication flow, interrupted merchandise retry, owner Admin access and the installed app's updated release. Use an ordinary member for member-only paths. The old per-device matrix has not yet been reconciled case-by-case with the owner's report; do not claim new release paths passed solely because older flows or emulator tests passed. See [the device plan](real-device-test-plan.md) and [verification status](browser-device-testing.md).
+Release acceptance is complete as recorded above. The owner also accepted phone push, GPS, accessibility and icon/update behavior and verified installed-app calendar subscriptions. The original per-device matrix is an optional evidence template, not outstanding release work. See [the device plan](real-device-test-plan.md) and [verification status](browser-device-testing.md).
 
 ## Corrected execution outline
 

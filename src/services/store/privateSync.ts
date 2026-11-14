@@ -20,12 +20,16 @@ export function createPrivateSyncOps(ctx: StoreState & ReturnType<typeof createL
     setUsers((previous) => previous.filter((user) => user.email.toLowerCase() === email.trim().toLowerCase()));
     setMilestoneAlerts([]);
     setPrivateSyncError(null);
+    ctx.setStaffRunNightReady?.(false);
+    const liveParts = new Set<string>();
+    const liveReady = (part: string) => { if (!current()) return; liveParts.add(part); if (isStaff && liveParts.size === 2) ctx.setStaffRunNightReady?.(true); };
     const epoch = ++privateSyncEpoch.current;
     const current = () => epoch === privateSyncEpoch.current;
     const firestore = db;
     const cleanEmail = email.trim().toLowerCase();
     const fail = (err: unknown) => {
       if (!current()) return;
+      ctx.setStaffRunNightReady?.(false);
       console.warn('Private subscription failed:', err);
       if ((err as { code?: string })?.code === 'permission-denied') {
         resetStaffPages(ctx);
@@ -56,7 +60,7 @@ export function createPrivateSyncOps(ctx: StoreState & ReturnType<typeof createL
     if (isStaff) {
       loadLegacyPool().catch(fail);
       privateUnsubscribers.current.push(onSnapshot(query(collection(firestore, 'checkins'), where('date', '>=', recentCheckinCutoff())),
-        (snap) => { recent = snap.docs.map((d) => d.data() as CheckInRecord); publishCheckins(); }, fail));
+        (snap) => { recent = snap.docs.map((d) => d.data() as CheckInRecord); publishCheckins(); liveReady('attendance'); }, fail));
       privateUnsubscribers.current.push(onSnapshot(collection(firestore, 'meetup_secrets'), (snap) => {
         if (!current()) return;
         const words = Object.fromEntries(snap.docs.map((d) => [d.id, d.data().codeWord || '']));
@@ -65,14 +69,14 @@ export function createPrivateSyncOps(ctx: StoreState & ReturnType<typeof createL
       }, fail));
     }
     privateUnsubscribers.current.push(onSnapshot(isStaff ? query(collection(firestore, 'milestone_alerts'), where('fulfilled', '==', false)) : query(collection(firestore, 'milestone_alerts'), where('userEmail', '==', cleanEmail)),
-      (snap) => { if (current()) setMilestoneAlerts((previous) => [...(isStaff ? previous.filter((alert) => alert.fulfilled) : []), ...snap.docs.map((d) => ({ ...d.data(), id: d.id }) as MilestoneAlert)]); }, fail));
+      (snap) => { if (current()) { setMilestoneAlerts((previous) => [...(isStaff ? previous.filter((alert) => alert.fulfilled) : []), ...snap.docs.map((d) => ({ ...d.data(), id: d.id }) as MilestoneAlert)]); liveReady('gear'); } }, fail));
   };
   const clearPrivateData = () => {
     if (!isFirebaseConfigured) return;
     privateSyncEpoch.current++;
     resetStaffPages(ctx);
     if (ctx.privateSessionEpoch) ctx.privateSessionEpoch.current++;
-    setPrivateSyncError(null);
+    setPrivateSyncError(null); ctx.setStaffRunNightReady?.(false);
     stop();
     setUsers([]); setCheckins([]); setMilestoneAlerts([]); setOwnLegacyEvents([]); setLegacyMembers([]);
     staffCodeWords.current = {};

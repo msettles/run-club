@@ -348,3 +348,5 @@ export interface MilestoneAlert {
   fulfilledAt?: string;
   fulfilledBy?: string;
 }
+
+export type AppTab = 'runs' | 'routes' | 'milestones' | 'leaderboard' | 'admin' | 'organizer' | 'history';

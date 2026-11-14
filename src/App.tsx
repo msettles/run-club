@@ -1,3 +1,6 @@
+import type { AssistedCheckInInput } from './utils/assistedCheckIn';
+import { assertAssistedCheckIn } from './utils/assistedCheckIn';
+import { app as firebaseApp } from './services/firebase';
 import { friendlyRunError } from './utils/runSaveError';
 import { RouteSearch } from './components/RouteSearch';
 import { emptyRouteFilters, filterRoutes } from './utils/routeSearch';
@@ -8,7 +11,7 @@ import { LazyRouteMap } from './components/LazyRouteMap';
 import { routeVersionLabel } from './utils/runChoices';
 import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { useClubStore } from './services/storage';
-import { RunEvent, GPXRoute, UserProfile } from './types';
+import { RunEvent, GPXRoute, UserProfile, AppTab, MeetupEvent } from './types';
 import { deleteRunConfirmMessage, getRunChoices, resolveChoices } from './utils/runChoices';
 import { Navbar } from './components/Navbar';
 import { MaintenanceNotice } from './components/MaintenanceNotice';
@@ -42,6 +45,11 @@ const AdminDashboard = lazy(() => import('./components/AdminDashboard').then((m)
 const RouteStudioModal = lazy(() => import('./components/RouteStudioModal').then((m) => ({ default: m.RouteStudioModal })));
 const RouteImportModal = lazy(() => import('./components/RouteImportModal').then((m) => ({ default: m.RouteImportModal })));
 const CheckInModal = lazy(() => import('./components/CheckInModal').then((m) => ({ default: m.CheckInModal })));
+const PersonalHistoryPage = lazy(() => import('./components/PersonalHistoryPage').then((m) => ({ default: m.PersonalHistoryPage })));
+const ClaimHistoryModal = lazy(() => import('./components/ClaimHistoryModal').then((m) => ({ default: m.ClaimHistoryModal })));
+const RunNightPage = lazy(() => import('./components/RunNightPage').then((m) => ({ default: m.RunNightPage })));
+const AssistedCheckInModal = lazy(() => import('./components/AssistedCheckInModal').then((m) => ({ default: m.AssistedCheckInModal })));
+const RunSocialPostModal = lazy(() => import('./components/RunSocialPostModal').then((m) => ({ default: m.RunSocialPostModal })));
 const NewRunModal = lazy(() => import('./components/NewRunModal').then((m) => ({ default: m.NewRunModal })));
 const EditRunModal = lazy(() => import('./components/EditRunModal').then((m) => ({ default: m.EditRunModal })));
 const FirebaseSetupGuide = lazy(() => import('./components/FirebaseSetupGuide').then((m) => ({ default: m.FirebaseSetupGuide })));
@@ -64,7 +72,7 @@ import {
 } from 'lucide-react';
 
 export function App() {
-  const [activeTab, setActiveTab] = useState<'runs' | 'routes' | 'milestones' | 'leaderboard' | 'admin'>('runs');
+  const [activeTab, setActiveTab] = useState<AppTab>('runs');
 
   const {
     runs,
@@ -118,6 +126,7 @@ export function App() {
     currentUser,
     registerUser,
     updateOwnProfile,
+    loadPersonalHistory, loadPersonalHistoryRoute, claimOwnHistory, staffRunNightReady,
     checkInRunner,
     refreshDerivedStats,
     resolveRunByCodeWord,
@@ -206,6 +215,8 @@ export function App() {
   const [authReady, setAuthReady] = useState<boolean>(!isFirebaseConfigured);
   const [authLinkReady, setAuthLinkReady] = useState(!isFirebaseConfigured);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
+  const [claimHistoryOpen, setClaimHistoryOpen] = useState(false);
+  const [assistedEvent, setAssistedEvent] = useState<MeetupEvent | null>(null);
   const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
   const [rosterRun, setRosterRun] = useState<RunEvent | null>(null);
   const [isOnboardingOpen, setIsOnboardingOpen] = useState<boolean>(false);
@@ -241,8 +252,9 @@ export function App() {
   );
   // Standings are for signed-in runners; send anyone else back to Runs.
   useEffect(() => {
-    if (authReady && activeTab === 'leaderboard' && !isUserLoggedIn) setActiveTab('runs');
-  }, [authReady, activeTab, isUserLoggedIn]);
+    if (authReady && (['leaderboard', 'history', 'organizer'].includes(activeTab)) && !isUserLoggedIn) setActiveTab('runs');
+    if (authReady && activeTab === 'organizer' && !isOrganizerOrAdmin) setActiveTab('runs');
+  }, [authReady, activeTab, isUserLoggedIn, isOrganizerOrAdmin]);
   // Gear still owed to a runner who checks in again: the run card counts it too. Alerts are keyed by email
   // and RSVPs by member key, so keep a small email -> key map for the outstanding alerts.
   const [alertKeys, setAlertKeys] = useState<Record<string, string>>({});
@@ -477,9 +489,32 @@ export function App() {
     if (window.confirm(deleteRunConfirmMessage(run.title, count))) handleDeleteRun(run.id);
   };
 
+  const [socialPostRun, setSocialPostRun] = useState<RunEvent | null>(null);
+
+  const saveAssistedCheckIn = async (input: AssistedCheckInInput) => {
+    if (!isStaffProfile(currentUser) || !isOrganizerOrAdmin) throw new Error('Only organizers and admins may assist check-in.');
+    if (isFirebaseConfigured && firebaseApp) {
+      const { getFunctions, httpsCallable } = await import('firebase/functions');
+      const result = await httpsCallable<AssistedCheckInInput, { success: boolean; message: string }>(getFunctions(firebaseApp, 'us-central1'), 'assistedCheckIn', { timeout: 130000 })(input);
+      return result.data;
+    }
+    const target = await findStaffUser(input.userEmail);
+    const event = meetupEvents.find((e) => e.id === input.eventId);
+    if (!target || !event) throw new Error('The runner or run is unavailable.');
+    assertAssistedCheckIn(currentUser, target, event, false, false, new Date());
+    if (checkins.some((c) => c.runId === input.eventId && c.userEmail.toLowerCase() === input.userEmail.toLowerCase())) return { success: true, message: 'This runner is already checked in. No attendance or mileage was added.' };
+    const result = await checkInRunner({ ...input, codeWordEntered: event.codeWord, source: 'admin' });
+    if (result.success) {
+      const key = 'woodchuckers-assisted-checkins';
+      const previous = JSON.parse(localStorage.getItem(key) || '{}');
+      localStorage.setItem(key, JSON.stringify({ ...previous, [`${input.eventId}_${input.userEmail.toLowerCase()}`]: { ...input, assistedBy: currentUser.email, assistedAt: new Date().toISOString() } }));
+    }
+    return result;
+  };
+
   const handleAddRun = async (run: Omit<RunEvent, 'id' | 'attendees'>, codeWord: string) => {
     try {
-      await createRunWithCheckIn(run, codeWord);
+      return await createRunWithCheckIn(run, codeWord);
     } catch (err) {
       console.error('Creating run failed:', err);
       throw friendlyRunError(err);
@@ -556,7 +591,7 @@ export function App() {
     setCheckInNotice(null); setSelectedRunForCheckIn(null); setPendingCheckInRun(null);
     setIsNewRunOpen(false); setEditingRun(null); setIsRouteStudioOpen(false); setEditingRoute(null);
     setIsSetupGuideOpen(false); setIsBrandAssetsOpen(false); setIsVersionModalOpen(false);
-    setIsAuthModalOpen(false); setIsOnboardingOpen(false);
+    setIsAuthModalOpen(false); setIsOnboardingOpen(false); setSocialPostRun(null); setClaimHistoryOpen(false); setAssistedEvent(null);
   };
 
   return (
@@ -575,6 +610,7 @@ export function App() {
         firebaseUser={firebaseUser}
         isSignedIn={isUserLoggedIn}
         onEditProfile={isUserLoggedIn && isProfileVerified ? () => setIsEditProfileOpen(true) : undefined}
+        onClaimHistory={isUserLoggedIn && isProfileVerified ? () => setClaimHistoryOpen(true) : undefined}
         authReady={authReady}
         unreadNotifsCount={bellItems.filter((n) => !isBellItemRead(n)).length}
         onOpenUploadGpx={() => {
@@ -589,7 +625,7 @@ export function App() {
           try { if (await getPushStatus() === 'on') await disablePushOnThisDevice(); }
           catch (err) { console.warn('Notification cleanup failed during sign-out:', err); }
           setSelectedRunForCheckIn(null);
-          setPendingCheckInRun(null);
+          setPendingCheckInRun(null); setClaimHistoryOpen(false); setAssistedEvent(null);
           await logoutUser();
           setFirebaseUser(null);
           switchCurrentUser('');
@@ -699,6 +735,7 @@ export function App() {
                   Wednesdays at Blue Note Brewing Co. (6:30 PM) • All runs start &amp; finish on the brewery patio!
                 </p>
               </div>
+              {isOrganizerOrAdmin && <button type="button" onClick={() => setActiveTab('organizer')} className="rounded-xl border border-woodland-700 px-4 py-2 text-sm font-bold text-woodland-800">Run Night / Table Mode</button>}
               {isOrganizerOrAdmin && (
                 <button type="button" onClick={() => setIsNewRunOpen(true)} className="flex items-center gap-2 rounded-xl bg-woodland-700 px-4 py-2 text-sm font-bold text-white hover:bg-woodland-800">
                   <Plus className="w-4 h-4" />
@@ -728,6 +765,7 @@ export function App() {
                     notLive={!isRunLive(run, meetupEvents)}
                     onOpenRoster={isOrganizerOrAdmin ? setRosterRun : undefined}
                     milestoneAlertCount={isOrganizerOrAdmin && !past ? milestoneAlertsFor(run) : 0}
+                    onSocialPost={isOrganizerOrAdmin && !past && isRunLive(run, meetupEvents) ? setSocialPostRun : undefined}
                     onEdit={isOrganizerOrAdmin && !past ? setEditingRun : undefined}
                     onDelete={isAdmin && past ? confirmDeletePastRun : undefined}
                   />
@@ -899,6 +937,9 @@ export function App() {
           </div>
         )}
 
+        {activeTab === 'organizer' && isOrganizerOrAdmin && <Suspense fallback={<p role="status">Loading Table Mode…</p>}><RunNightPage runs={runs} events={meetupEvents} checkins={checkins} alerts={milestoneAlerts} now={clockNow} staffName={currentUser.displayName} loading={!scheduleLoaded || !staffRunNightReady} error={syncError} onRetry={retrySync} onAssist={setAssistedEvent} onEdit={setEditingRun} onRoster={setRosterRun} onFulfill={markMilestoneFulfilled} /></Suspense>}
+        {activeTab === 'history' && isUserLoggedIn && isProfileVerified && <Suspense fallback={<p role="status">Loading My Runs…</p>}><PersonalHistoryPage key={currentUser.email} user={currentUser} onLoad={loadPersonalHistory} onLoadRecordedRoute={loadPersonalHistoryRoute} onViewRoute={handleViewRouteFromRun} onClaim={() => setClaimHistoryOpen(true)} /></Suspense>}
+
         {/* TAB 3: MILESTONES & REWARDS SHOWCASE */}
         {activeTab === 'milestones' && (
           <MilestonesPage
@@ -980,6 +1021,7 @@ export function App() {
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         isSignedIn={isUserLoggedIn}
+        isStaff={isOrganizerOrAdmin}
         onQuickCheckIn={handleQuickCheckIn}
       />
 
@@ -1196,6 +1238,11 @@ export function App() {
           />
         )}
 
+        {claimHistoryOpen && isUserLoggedIn && isProfileVerified && <ClaimHistoryModal key={currentUser.email} user={currentUser} onLoadPool={loadLegacyPool} onClaim={claimOwnHistory} onClose={() => setClaimHistoryOpen(false)} />}
+        {assistedEvent && isOrganizerOrAdmin && <AssistedCheckInModal key={assistedEvent.id} event={meetupEvents.find((e) => e.id === assistedEvent.id) || assistedEvent} onSearch={searchStaffUsers} onSave={saveAssistedCheckIn} onClose={() => setAssistedEvent(null)} />}
+
+        {socialPostRun && isOrganizerOrAdmin && <RunSocialPostModal key={socialPostRun.id} run={socialPostRun} loadRoute={loadRoute} onClose={() => setSocialPostRun(null)} />}
+
         {isNewRunOpen && isOrganizerOrAdmin && (
           <NewRunModal
             isOpen={isNewRunOpen}
@@ -1204,6 +1251,7 @@ export function App() {
             organizerName={currentMember.name}
             onLoadMoreRoutes={loadMoreRoutes} hasMoreRoutes={hasMoreRoutes} routesLoading={routesLoading}
             onAddRun={handleAddRun}
+            onSocialPost={setSocialPostRun}
             specialEvents={specialEvents}
           />
         )}

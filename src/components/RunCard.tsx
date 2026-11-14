@@ -21,6 +21,7 @@ interface RunCardProps {
   notLive?: boolean;     // Missing its code word / check-in event: shown to staff only
   onOpenRoster?: (run: RunEvent) => void; // Organizers and admins: who checked in, gear to hand out
   milestoneAlertCount?: number; // Organizers and admins: milestones reached at this run still to be recognized / handed out
+  onSocialPost?: (run: RunEvent) => void;
   onEdit?: (run: RunEvent) => void; // Organizers and admins, upcoming runs only
   onDelete?: (run: RunEvent) => void; // Admins, past runs (which can't be edited)
 }
@@ -40,6 +41,7 @@ export const RunCard: React.FC<RunCardProps> = ({
   onOpenRoster,
   milestoneAlertCount = 0,
   onEdit,
+  onSocialPost,
   onDelete,
 }) => {
   const [shareStatus, setShareStatus] = useState('');
@@ -173,6 +175,8 @@ export const RunCard: React.FC<RunCardProps> = ({
           </div>
         </div>
       </div>
+
+      {onSocialPost && <div className="px-5 pb-2"><button type="button" onClick={() => onSocialPost(run)} className="text-xs font-bold text-woodland-800 underline underline-offset-2">Create Instagram / Facebook post</button></div>}
 
       {/* Description */}
       <div className="px-5 py-2">

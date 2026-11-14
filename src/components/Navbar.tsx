@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { UserProfile } from '../types';
+import { UserProfile, AppTab } from '../types';
 import { User as FirebaseUser } from 'firebase/auth';
 import { FULL_VERSION } from '../utils/version';
 import { calculateAge } from '../utils/dateUtils';
@@ -24,8 +24,8 @@ import {
 } from 'lucide-react';
 
 interface NavbarProps {
-  activeTab: 'runs' | 'routes' | 'milestones' | 'leaderboard' | 'admin';
-  setActiveTab: (tab: 'runs' | 'routes' | 'milestones' | 'leaderboard' | 'admin') => void;
+  activeTab: AppTab;
+  setActiveTab: (tab: AppTab) => void;
   currentUser: UserProfile;
   firebaseUser: FirebaseUser | null;
   isSignedIn?: boolean;
@@ -37,6 +37,7 @@ interface NavbarProps {
   onOpenRegister?: () => void;
   onOpenVersionModal?: () => void;
   onEditProfile?: () => void;
+  onClaimHistory?: () => void;
   onLogout: () => void;
 }
 
@@ -50,6 +51,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenUploadGpx,
   onToggleNotifications,
   onEditProfile,
+  onClaimHistory,
   onOpenAuthModal,
   onOpenRegister,
   onOpenVersionModal,
@@ -217,7 +219,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
                 {/* Dropdown Menu */}
                 {showProfileMenu && (
-                  <div className="absolute right-0 mt-2 w-64 bg-white rounded-2xl shadow-xl border border-stone-200 p-4 space-y-3 z-[100] animate-in fade-in duration-150">
+                  <div className="absolute right-0 mt-2 w-64 max-h-[calc(100dvh-5rem)] overflow-y-auto bg-white rounded-2xl shadow-xl border border-stone-200 p-4 space-y-3 z-[100] animate-in fade-in duration-150">
                     <div className="border-b border-stone-100 pb-2">
                       <div className="font-bold text-stone-900 text-sm">{currentUser.displayName}</div>
                       <div className="text-xs text-stone-500 font-mono truncate">{currentUser.email}</div>
@@ -275,6 +277,10 @@ export const Navbar: React.FC<NavbarProps> = ({
                           <span>Admin Portal</span>
                         </button>
                       )}
+                      {isOrganizerOrAdmin && <button type="button" onClick={() => { setShowProfileMenu(false); setActiveTab('organizer'); }} className="w-full text-left px-2.5 py-2 text-xs font-bold text-woodland-800 rounded-lg hover:bg-stone-100">Run Night / Table Mode</button>}
+                      <button type="button" onClick={() => { setShowProfileMenu(false); setActiveTab('history'); }} className="w-full text-left px-2.5 py-2 text-xs font-bold text-woodland-800 rounded-lg hover:bg-stone-100">My Runs</button>
+                      {onClaimHistory && <button type="button" onClick={() => { setShowProfileMenu(false); onClaimHistory(); }} className="w-full text-left px-2.5 py-2 text-xs font-bold text-woodland-800 rounded-lg hover:bg-stone-100">Claim historical runs</button>}
+                      {isOrganizerOrAdmin && <button type="button" onClick={() => { setShowProfileMenu(false); setActiveTab('leaderboard'); }} className="w-full text-left px-2.5 py-2 text-xs font-semibold rounded-lg hover:bg-stone-100">Standings</button>}
                       {onEditProfile && (
                         <button
                           onClick={() => {
