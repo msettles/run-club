@@ -57,13 +57,13 @@ export default defineConfig({
           options: { cacheName: 'on-demand-assets', expiration: { maxEntries: 40 }, cacheableResponse: { statuses: [200] } },
         }],
       },
-      includeAssets: ['favicon.ico', 'runclub-icon.png', 'apple-touch-icon.png', 'Woodchucker2.jpg', 'Woodchucker2026.png'],
+      includeAssets: ['favicon.ico', 'runclub-icon.png', 'apple-touch-icon.png', 'Woodchucker2.jpg', 'Woodchucker2026.png', 'Woodchucker2026-black-cream.png'],
       manifest: {
         name: 'Woodland Woodchuckers Run Club',
         short_name: 'Woodchuckers',
         description: 'Run schedules, member check-ins, and GPX trail routes for Woodland Woodchuckers',
         theme_color: '#1a607c',
-        background_color: '#edf7fa',
+        background_color: '#1a607c',
         display: 'standalone',
         icons: [
           {
@@ -75,6 +75,12 @@ export default defineConfig({
             src: 'pwa-512x512.png',
             sizes: '512x512',
             type: 'image/png'
+          },
+          {
+            src: 'pwa-maskable-512x512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'maskable'
           }
         ]
       }

@@ -7,6 +7,30 @@
     <meta name="theme-color" content="#1a607c" />
     <meta name="description" content="Woodland Woodchuckers Run Club - Run Schedules, Check-ins, and GPX Routes" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <style>
+      /* Available before the app bundle loads, including offline launches. */
+      #launch-splash { display: none; }
+      @media (display-mode: standalone), (display-mode: fullscreen) {
+        html:has(#launch-splash), body:has(#launch-splash) { background: #1a607c; }
+        #launch-splash {
+          position: fixed;
+          inset: 0;
+          z-index: 10000;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: max(24px, env(safe-area-inset-top)) max(24px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) max(24px, env(safe-area-inset-left));
+          background: #1a607c;
+          opacity: 1;
+          transition: opacity 180ms ease-out;
+        }
+        #launch-splash img { display: block; width: min(100%, 468px); max-height: 75dvh; object-fit: contain; }
+        #launch-splash.is-ready { opacity: 0; pointer-events: none; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #launch-splash { transition: none; }
+      }
+    </style>
     <title>Woodland Woodchuckers Run Club</title>
     <!-- Google Fonts: Oswald (Vintage Athletic Display), Outfit (Modern Sport / Run Crew), Plus Jakarta Sans (Clean Body) -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -24,6 +48,9 @@
     />
   </head>
   <body class="bg-stone-50 text-stone-900 antialiased selection:bg-woodland-500 selection:text-white">
+    <div id="launch-splash" role="status" aria-label="Opening Woodland Woodchuckers">
+      <img src="/Woodchucker2026-black-cream.png" width="468" height="355" alt="" fetchpriority="high" />
+    </div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

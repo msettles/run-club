@@ -153,6 +153,12 @@ fontFamily: {
 
 ## 4. Logo Assets & Media Inventory
 
+### Installed app identity
+
+* **Home-screen icon:** `woodchucker-bottlecap.png` isolates the full crimped bottle cap from `Woodchucker2.jpg`, excluding the surrounding teal field and stray marks. The extracted artwork supplies `pwa-192x192.png`, `pwa-512x512.png`, and `apple-touch-icon.png`, centered on Blue Note Teal. `pwa-maskable-512x512.png` adds safe padding for Android icon shapes.
+* **Launch splash:** the unchanged 2026 line art in black on Alabaster Cream (`Woodchucker2026-black-cream.png`), centered on a full Blue Note Teal screen. Static markup displays before the app bundle loads in installed standalone/fullscreen windows, then fades after React mounts. Ordinary browser tabs skip it. Launch artwork is precached for offline use; the manifest background is teal as well.
+* The operating system may show its own icon-based launch screen before the app's splash. Existing phone shortcuts may need to be removed and added again to refresh their cached icon after deployment.
+
 Both logos are bundled directly in `/public` for instant offline PWA access and high-speed delivery.
 
 | Asset File | Format | Dimensions | Alpha Channel | Primary Use Case |
