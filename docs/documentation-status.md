@@ -78,4 +78,4 @@ While Meta login setup is pending, the owner requested Run Night/Table Mode, My 
 
 ## Release authorization — November 14, 2026
 
-The owner subsequently authorized committing, pushing and deploying the table/self-service update while retaining app version 1.6.2. Earlier local-only statements record the pre-release stage. See [release scope](releases/1.6.2-table-mode.md); the deployment receipt identifies the live commit. The existing 1.6.2 artwork tag is not moved, and Meta sender activation remains separate.
+The owner subsequently authorized committing, pushing and deploying the table/self-service update as app version 1.6.3. Earlier local-only statements record the pre-release stage. See [release scope](releases/1.6.3.md); the deployment receipt identifies the live commit. The existing 1.6.2 artwork tag is not moved, and Meta sender activation remains separate.

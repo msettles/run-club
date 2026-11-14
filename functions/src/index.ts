@@ -41,5 +41,6 @@ export const calendar = onRequest({ region: 'us-central1', maxInstances: 3, memo
   res.status(200).send(req.method === 'HEAD' ? '' : buildCalendarFeed(runs));
 });
 
-export { runSocialPost, socialImage } from './social';
+// Meta publishing remains inactive until club accounts and its server secret are configured.
+// Export runSocialPost and socialImage from './social' when activating that integration.
 export { assistedCheckIn } from './assistedCheckIn';

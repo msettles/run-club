@@ -139,7 +139,7 @@ Source and the deployed-functions listing were checked November 14: app-sent ann
 
 ## Run Night and member self-service
 
-The implementation adds staff **Run Night / Table Mode** (live counts, gear and assisted check-in) and profile-menu **My Runs** / **Claim historical runs**. Assisted check-in uses a new authenticated server function and preserves the normal window; matching hosting/server deployment is described in the [1.6.2 update](docs/releases/1.6.2-table-mode.md). See [feature behavior and activation](docs/run-night-and-self-service.md).
+The implementation adds staff **Run Night / Table Mode** (live counts, gear and assisted check-in) and profile-menu **My Runs** / **Claim historical runs**. Assisted check-in uses a new authenticated server function and preserves the normal window; matching hosting/server deployment is described in the [1.6.3 release](docs/releases/1.6.3.md). See [feature behavior and activation](docs/run-night-and-self-service.md).
 
 ## Social run posts
 

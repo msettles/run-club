@@ -188,4 +188,4 @@ The owner subsequently requested all four self-service/table deliverables. Run N
 
 ## Deployment authorization — November 14, 2026
 
-The owner authorized commit, push and deployment of the completed table/self-service work using app version 1.6.2. Earlier local-only notes describe validation before that authorization. See [release scope and verification](docs/releases/1.6.2-table-mode.md); live verification is recorded separately. The original 1.6.2 artwork tag stays fixed. Meta publishing remains pending account configuration.
+The owner authorized commit, push and deployment of the completed table/self-service work using app version 1.6.3. Earlier local-only notes describe validation before that authorization. See [release scope and verification](docs/releases/1.6.3.md); live verification is recorded separately. The original 1.6.2 artwork tag stays fixed. Meta publishing remains pending account configuration.

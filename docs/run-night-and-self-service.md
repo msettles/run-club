@@ -1,6 +1,6 @@
 # Run Night, My Runs and historical claiming
 
-Implemented November 14, 2026 at the owner's request. The owner subsequently authorized commit, push and deployment while retaining app version 1.6.2; see [release scope and verification](releases/1.6.2-table-mode.md). The local validation below records the pre-deployment evidence, not live attendance changes. Social publishing and Meta account setup remain separate work.
+Implemented November 14, 2026 at the owner's request. The owner subsequently authorized commit, push and deployment as app version 1.6.3; see [release scope and verification](releases/1.6.3.md). The local validation below records the pre-deployment evidence, not live attendance changes. Social publishing and Meta account setup remain separate work.
 
 ## Run Night / Table Mode
 
