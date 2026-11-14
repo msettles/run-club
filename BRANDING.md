@@ -6,6 +6,27 @@
 
 ---
 
+## Current Logos & Brand download library — November 14, 2026
+
+The in-app **Logos & Brand** page provides these existing artwork files without modifying their pixels:
+
+| Artwork | File | Dimensions | Background |
+| --- | --- | --- | --- |
+| Run Crew, transparent | `public/Woodchucker2026.png` | 468 × 355 | Transparent |
+| Run Crew, black on cream | `public/Woodchucker2026-black-cream.png` | 468 × 355 | Solid cream |
+| Run Crew, cream with teal border | `public/Woodchucker2026-black-cream-teal-border.png` | 508 × 395 | Solid cream and teal border |
+| Run Crew, black on teal | `public/Woodchucker2026-black-teal.png` | 468 × 355 | Solid teal |
+| Run Crew, white on teal | `public/Woodchucker2026-white-teal.png` | 468 × 355 | Solid teal |
+| Current woodchuck mark | `public/woodland_woodchucker_app_icon-teal.png` | 960 × 960 | Solid teal |
+| Current woodchuck mark, transparent | `public/woodland_woodchucker_app_icon.png` | 960 × 960 | Transparent |
+| Heritage bottle cap | `public/Woodchucker2.jpg` | 960 × 960 | Solid teal |
+
+The Run Crew selector previews and downloads the selected variant. The checkerboard is a preview surface only. Downloads are raster PNG/JPG files; the page gives their actual pixel dimensions rather than promising print-ready resolution. The palette uses the configured app colors, and Oswald, Outfit and Plus Jakarta Sans are described as app fonts, not as identified source fonts for the artwork. Swatches are keyboard-accessible buttons and announce clipboard success or failure.
+
+The active installed-icon and launch-splash details below remain separate from the general download library. The implementation log records earlier stages and does not mean every downloadable image is precached offline.
+
+---
+
 ## 1. Mascot & Heritage: The Woodchucker Story
 
 The Woodland Woodchuckers Run Club brings together community runners, trail enthusiasts, and craft beer lovers in Woodland, CA. The visual identity bridges the club's brewery roots with its modern athletic community.
