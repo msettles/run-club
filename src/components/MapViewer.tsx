@@ -356,7 +356,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
         </div>
 
         {/* Layer Toggle Floating Button */}
-        <div className="absolute top-3 right-3 z-[400] flex gap-1 bg-white/95 backdrop-blur-xs rounded-xl shadow-md border border-stone-200 p-1">
+        <div className="absolute top-3 right-3 z-[400] flex flex-wrap justify-end max-w-[calc(100%_-_4rem)] gap-1 bg-white/95 backdrop-blur-xs rounded-xl shadow-md border border-stone-200 p-1">
           <button
             onClick={() => setActiveTileLayer('voyager')}
             className={`px-2.5 py-1 text-xs rounded-lg font-bold flex items-center gap-1 ${
@@ -412,7 +412,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
       {/* TURN-BY-TURN CUE SHEET SECTION */}
       {route.directions && route.directions.length > 0 ? (
         <div className="p-4 bg-stone-50 border-t border-stone-200 space-y-3">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <Compass className="w-4 h-4 text-woodland-600" />
               <h4 className="font-extrabold text-sm text-stone-900 font-display">
@@ -421,7 +421,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
             </div>
 
             {/* Concise / Verbose Mode Toggle */}
-            <div className="bg-stone-200 p-0.5 rounded-xl flex items-center text-xs font-bold">
+            <div className="bg-stone-200 p-0.5 rounded-xl flex shrink-0 items-center text-xs font-bold whitespace-nowrap">
               <button
                 onClick={() => setDirectionsMode('concise')}
                 className={`px-2.5 py-1 rounded-lg transition ${
@@ -480,7 +480,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
         </div>
       ) : (route.description || route.notes) ? (
         <div className="p-4 bg-stone-50 border-t border-stone-200 space-y-3">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <Compass className="w-4 h-4 text-woodland-600" />
               <h4 className="font-extrabold text-sm text-stone-900 font-display">
@@ -489,7 +489,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
             </div>
 
             {/* Concise / Verbose Mode Toggle */}
-            <div className="bg-stone-200 p-0.5 rounded-xl flex items-center text-xs font-bold">
+            <div className="bg-stone-200 p-0.5 rounded-xl flex shrink-0 items-center text-xs font-bold whitespace-nowrap">
               <button
                 onClick={() => setDirectionsMode('concise')}
                 className={`px-2.5 py-1 rounded-lg transition ${

@@ -39,7 +39,7 @@ export const EventsTab: React.FC<AdminDashboardProps> = (props) => {
 
       {/* Right: Scheduled Events Roster */}
       <div className="bg-white rounded-2xl p-5 shadow-sm border border-stone-200 space-y-3">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <h4 className="text-xs font-bold text-stone-800 uppercase tracking-wider flex items-center gap-1.5">
             <Calendar className="w-4 h-4 text-amber-500" />
             <span>Check-In Events &amp; Active Code Words</span>
@@ -64,7 +64,7 @@ export const EventsTab: React.FC<AdminDashboardProps> = (props) => {
               key={evt.id}
               className="p-3.5 bg-stone-50 rounded-xl border border-stone-200 text-xs space-y-2"
             >
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <strong className="text-stone-900 font-bold">{evt.title}</strong>
                   {evt.specialEvent && evt.specialEvent !== 'none' && (

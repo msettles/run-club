@@ -211,14 +211,14 @@ export const MilestonesTab: React.FC<AdminDashboardProps> = (props) => {
                     <div className="w-12 h-12 rounded-xl bg-amber-100 text-stone-950 flex items-center justify-center font-bold text-2xl shadow-inner shrink-0 border border-amber-200">
                       {alert.milestoneRuns === 5 ? '👕' : alert.milestoneRuns === 50 ? '🧢' : alert.milestoneRuns === 100 ? '🍺' : '🍶'}
                     </div>
-                    <div>
+                    <div className="min-w-0 break-words">
                       <div className="text-xs font-bold text-amber-800 uppercase tracking-wider">
                         {alert.milestoneName} ({alert.milestoneRuns} Runs)
                       </div>
                       <h4 className="text-lg font-black text-stone-900 font-display">
                         {runner.name(alert.userEmail, alert.runnerName)}
                       </h4>
-                      <span className="text-xs text-stone-500 font-mono">
+                      <span className="block break-all text-xs text-stone-500 font-mono">
                         {alert.userEmail}
                       </span>
                     </div>
@@ -226,8 +226,8 @@ export const MilestonesTab: React.FC<AdminDashboardProps> = (props) => {
 
                   {/* Reward Details & Shirt Size Badge */}
                   <div className="bg-stone-50 rounded-xl p-3 border border-stone-200 space-y-2 text-xs">
-                    <div className="flex items-center justify-between">
-                      <span className="text-stone-600 font-medium">Reward:</span>
+                    <div className="flex flex-col items-start gap-1 sm:flex-row sm:justify-between sm:gap-3">
+                      <span className="shrink-0 text-stone-600 font-medium">Reward:</span>
                       <strong className="text-stone-900 font-bold">{alert.reward}</strong>
                     </div>
 

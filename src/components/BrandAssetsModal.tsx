@@ -67,13 +67,13 @@ export const BrandAssetsModal: React.FC<BrandAssetsModalProps> = ({ isOpen, onCl
     <Modal title="Club brand assets" onClose={onClose} className="fixed inset-0 z-[1100] flex items-center justify-center p-3 sm:p-4 bg-stone-900/60 backdrop-blur-xs animate-in fade-in duration-150 overflow-y-auto">
       <div className="relative w-full max-w-4xl bg-white rounded-2xl shadow-2xl border border-stone-200 overflow-hidden my-6 max-h-[92vh] flex flex-col">
         {/* Header */}
-        <div className="px-6 py-5 bg-gradient-to-r from-woodland-950 via-woodland-900 to-woodland-800 text-white flex items-center justify-between shrink-0 border-b border-woodland-700/50">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-300 via-woodchuck-500 to-amber-600 border border-amber-300/80 p-1 flex items-center justify-center overflow-hidden shadow-xs">
+        <div className="px-4 sm:px-6 py-5 bg-gradient-to-r from-woodland-950 via-woodland-900 to-woodland-800 text-white flex items-start justify-between gap-2 shrink-0 border-b border-woodland-700/50">
+          <div className="flex flex-1 min-w-0 items-center gap-3">
+            <div className="w-10 h-10 shrink-0 rounded-xl bg-gradient-to-br from-amber-300 via-woodchuck-500 to-amber-600 border border-amber-300/80 p-1 flex items-center justify-center overflow-hidden shadow-xs">
               <img src="/Woodchucker2026.png" alt="2026 Logo" className="w-full h-full object-contain filter drop-shadow-xs" />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
                 <h2 className="text-lg sm:text-xl font-display font-bold tracking-wide uppercase">
                   Club Brand Resources & Logos
                 </h2>
@@ -88,7 +88,7 @@ export const BrandAssetsModal: React.FC<BrandAssetsModalProps> = ({ isOpen, onCl
           </div>
           <button aria-label="Close window"
             onClick={onClose}
-            className="p-2 rounded-xl text-woodland-200 hover:text-white hover:bg-white/10 transition"
+            className="shrink-0 p-2 rounded-xl text-woodland-200 hover:text-white hover:bg-white/10 transition"
           >
             <X className="w-5 h-5" />
           </button>

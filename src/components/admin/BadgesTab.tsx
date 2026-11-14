@@ -516,7 +516,7 @@ export const BadgesTab: React.FC<AdminDashboardProps> = (props) => {
                 <p className="text-xs text-stone-300 mt-1 leading-snug">
                   {newBadgeDesc || 'This full description will show when runners inspect their achievements or unlock rewards during check-in.'}
                 </p>
-                <div className="mt-2 flex items-center gap-2">
+                <div className="mt-2 flex flex-wrap items-center gap-2">
                   <span className="text-[9px] uppercase font-black px-2 py-0.5 rounded-full bg-white/10 text-stone-300">
                     Category: {newBadgeCategory}
                   </span>

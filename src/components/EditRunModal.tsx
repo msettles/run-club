@@ -144,7 +144,7 @@ export const EditRunModal: React.FC<EditRunModalProps> = ({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-stone-700 mb-1 flex items-center gap-1">
                 <Calendar className="w-3.5 h-3.5 text-stone-400" /> Date
@@ -299,7 +299,7 @@ export const EditRunModal: React.FC<EditRunModalProps> = ({
           </div>
 
           {/* Submit and Delete */}
-          <div className="pt-4 border-t border-stone-200 flex items-center justify-between">
+          <div className="pt-4 border-t border-stone-200 flex flex-wrap items-center justify-between gap-2">
             {onDelete && (
               <button
                 type="button"
@@ -315,7 +315,7 @@ export const EditRunModal: React.FC<EditRunModalProps> = ({
                 Delete Run
               </button>
             )}
-            <div className="flex gap-2 ml-auto">
+            <div className="flex flex-wrap gap-2 ml-auto">
               <button
                 type="button"
                 onClick={onClose}

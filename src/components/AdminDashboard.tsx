@@ -195,7 +195,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = (props) => {
       )}
 
       {/* Admin Tabs */}
-      <div className="flex border-b border-stone-200 gap-2 overflow-x-auto pb-1">
+      <div className="grid grid-cols-2 sm:flex sm:flex-wrap border-b border-stone-200 gap-2 pb-1 [&>button]:min-w-0 [&>button]:text-left [&_svg]:shrink-0">
         <button
           onClick={() => setAdminTab('events')}
           className={`flex items-center gap-2 px-4 py-2.5 font-bold text-xs rounded-t-xl transition ${

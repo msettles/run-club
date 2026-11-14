@@ -560,7 +560,7 @@ export function App() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-stone-100 font-sans pb-16 md:pb-0 w-full overflow-x-hidden">
+    <div className="min-h-screen flex flex-col bg-stone-100 font-sans pb-[calc(4rem+env(safe-area-inset-bottom))] md:pb-0 w-full overflow-x-hidden">
       {/* Mobile PWA Install & Push Notification Banner */}
       <InstallPwaBanner
         pushAccount={isUserLoggedIn && currentUser.email ? { email: currentUser.email, memberKey: currentMember.id } : undefined}
@@ -623,7 +623,7 @@ export function App() {
               <div className="absolute bottom-0 left-1/3 -mb-20 w-60 h-60 rounded-full bg-amber-500/10 blur-2xl pointer-events-none" />
 
               <div className="relative z-10 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
-                <div className="max-w-2xl">
+                <div className="w-full min-w-0 max-w-2xl">
                   <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-woodland-500/20 text-woodland-200 border border-woodland-400/30 text-xs font-semibold mb-3">
                     <Sparkles className="w-3.5 h-3.5 text-amber-300" />
                     <span>
@@ -633,7 +633,7 @@ export function App() {
                       ) : partner.name}
                     </span>
                   </div>
-                  <h1 className="text-3xl sm:text-5xl font-display font-extrabold tracking-wide uppercase leading-tight">
+                  <h1 className="text-2xl min-[375px]:text-3xl sm:text-5xl font-display font-extrabold tracking-wide uppercase leading-tight">
                     Woodland Woodchuckers
                   </h1>
                   <p className="mt-1 text-xs sm:text-sm font-semibold uppercase tracking-widest text-amber-300/90">Established {CLUB_ESTABLISHED}</p>
@@ -1075,7 +1075,7 @@ export function App() {
                   Mark all as read
                 </button>
               )}
-              <button onClick={() => setShowNotificationsDrawer(false)} className="text-stone-400 hover:text-stone-700 p-1">
+              <button aria-label="Close announcements" onClick={() => setShowNotificationsDrawer(false)} className="shrink-0 text-stone-400 hover:text-stone-700 p-1">
                 <X className="w-5 h-5" />
               </button>
             </div>

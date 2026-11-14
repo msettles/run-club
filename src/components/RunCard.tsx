@@ -57,16 +57,6 @@ export const RunCard: React.FC<RunCardProps> = ({
       setManualLink(url); setShareStatus('Copy this run link:');
     }
   };
-  const copyRunLink = async () => {
-    const url = runShareUrl(run.id, window.location.origin);
-    setShareStatus(''); setManualLink('');
-    try {
-      await navigator.clipboard.writeText(url);
-      setShareStatus('Run link copied.');
-    } catch {
-      setManualLink(url); setShareStatus('Copy this run link:');
-    }
-  };
   const isAttending = run.attendees.some((a) => a.memberId === currentMember.id);
   const checkedInCount = run.attendees.filter((a) => a.checkedIn).length;
 
@@ -194,7 +184,7 @@ export const RunCard: React.FC<RunCardProps> = ({
       {/* Available Runs & Route Names */}
       {availableRoutes.length > 0 && (
         <div className="px-5 py-2.5">
-          <div className="text-[11px] font-bold text-stone-500 uppercase tracking-wider mb-2 flex items-center justify-between">
+          <div className="text-[11px] font-bold text-stone-500 uppercase tracking-wider mb-2 flex flex-wrap items-center justify-between gap-1">
             <span className="flex items-center gap-1.5">
               <Map className="w-3.5 h-3.5 text-woodland-600" />
               <span>Available Runs ({availableRoutes.length}):</span>
@@ -237,7 +227,7 @@ export const RunCard: React.FC<RunCardProps> = ({
                 </div>
 
                 {/* Quick actions for this specific route */}
-                <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-center">
+                <div className="flex flex-wrap items-center justify-end gap-1.5 min-w-0 max-w-full self-end sm:self-center">
                   <button
                     type="button"
                     onClick={() => onViewRoute(choice.route)}
@@ -308,7 +298,7 @@ export const RunCard: React.FC<RunCardProps> = ({
       )}
 
       {/* Attendees summary */}
-      <div className="px-5 py-2.5 flex items-center justify-between border-t border-stone-100 bg-stone-50/50">
+      <div className="px-5 py-2.5 flex flex-wrap items-center justify-between gap-2 border-t border-stone-100 bg-stone-50/50">
         {isSignedIn ? (
         <div className="flex items-center gap-2">
           <div className="flex -space-x-1.5 overflow-hidden">
@@ -355,8 +345,7 @@ export const RunCard: React.FC<RunCardProps> = ({
           <span>Meet on patio @ Blue Note Brewing • All paces &amp; jog/walkers welcome!</span>
         </div>
 
-        <div className="flex items-center gap-2">
-          <button type="button" onClick={() => { void copyRunLink(); }} className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-white border border-stone-300" aria-label={`Copy link to ${run.title}`}>Copy link</button>
+        <div className="flex w-full min-w-0 flex-wrap items-center gap-2 sm:w-auto [&>button]:shrink-0 [&>button]:whitespace-nowrap">
           <button type="button" onClick={() => { void shareRun(); }} className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-white border border-stone-300" aria-label={`Share ${run.title}`}>Share run</button>
           {isSignedIn && (
             <>

@@ -513,12 +513,12 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
       <div className="relative w-full max-w-xl m-auto max-h-[90vh] flex flex-col bg-white rounded-3xl shadow-2xl border border-stone-200 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
         
         {/* Top Header */}
-        <div className="shrink-0 bg-gradient-to-r from-woodland-950 via-woodland-900 to-[#13495d] px-6 py-5 text-white flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-amber-400 text-stone-950 flex items-center justify-center font-bold text-xl shadow-md">
+        <div className="shrink-0 bg-gradient-to-r from-woodland-950 via-woodland-900 to-[#13495d] px-4 sm:px-6 py-5 text-white flex items-center justify-between gap-2">
+          <div className="flex flex-1 min-w-0 items-center gap-3">
+            <div className="w-10 h-10 shrink-0 rounded-xl bg-amber-400 text-stone-950 flex items-center justify-center font-bold text-xl shadow-md">
               🦫
             </div>
-            <div>
+            <div className="min-w-0 break-words">
               <h2 className="text-lg font-display font-extrabold tracking-wide uppercase">
                 {activeEvent.title}
               </h2>
@@ -529,7 +529,7 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
           </div>
           <button aria-label="Close window"
             onClick={onClose}
-            className="p-2 text-stone-300 hover:text-white rounded-full hover:bg-white/10 transition"
+            className="shrink-0 p-2 text-stone-300 hover:text-white rounded-full hover:bg-white/10 transition"
           >
             <X className="w-5 h-5" />
           </button>
@@ -1099,7 +1099,7 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
                     🐕
                   </div>
                   <div>
-                    <label htmlFor="runningWithPetCheckbox" className="text-xs font-bold text-stone-900 cursor-pointer flex items-center gap-1.5">
+                    <label htmlFor="runningWithPetCheckbox" className="text-xs font-bold text-stone-900 cursor-pointer flex flex-wrap items-center gap-1.5">
                       <span>Running or Walking with a Pet?</span>
                       <span className="text-[10px] px-1.5 py-0.2 bg-amber-200 text-amber-900 rounded-full font-black">
                         🐾 Badge Track
@@ -1126,9 +1126,9 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({
                   type="button"
                   onClick={handlePerformCheckIn}
                   disabled={isSubmitting || !selectedOption}
-                  className="w-full py-3.5 bg-amber-500 hover:bg-amber-600 active:scale-98 text-stone-950 font-black text-base rounded-2xl transition shadow-lg flex items-center justify-center gap-2 font-display uppercase tracking-wide cursor-pointer disabled:opacity-50"
+                  className="w-full px-3 py-3.5 bg-amber-500 hover:bg-amber-600 active:scale-98 text-stone-950 font-black text-base rounded-2xl transition shadow-lg flex items-center justify-center gap-2 font-display uppercase tracking-wide cursor-pointer disabled:opacity-50"
                 >
-                  <Sparkles className="w-5 h-5 text-stone-950" />
+                  <Sparkles className="w-5 h-5 shrink-0 text-stone-950" />
                   <span>
                     {isSubmitting
                       ? (existingCheckIn ? 'Updating Check-In...' : 'Checking In...')

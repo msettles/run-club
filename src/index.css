@@ -3,9 +3,25 @@
 @tailwind utilities;
 
 @layer base {
+  /* Native Safari controls must be allowed to shrink inside flex/grid forms. */
+  input, select, textarea {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  input[type="date"], input[type="time"], input[type="datetime-local"] {
+    display: block;
+    min-height: 2.5rem;
+  }
+
   body {
     @apply min-h-screen bg-stone-50 text-stone-800 font-sans;
   }
+}
+
+/* Keep the top of tall dialogs reachable on short screens and with the keyboard open. */
+dialog.items-center {
+  align-items: safe center;
 }
 
 /* Fix leaflet tile z-index and container sizing */

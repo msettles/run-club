@@ -49,7 +49,7 @@ export const RouteChoicesEditor: React.FC<RouteChoicesEditorProps> = ({ routes, 
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <label className="text-xs font-bold text-stone-800 uppercase tracking-wider flex items-center gap-1.5">
             <MapPin className="w-3.5 h-3.5 text-woodland-600" />
@@ -175,7 +175,7 @@ export const RouteChoicesEditor: React.FC<RouteChoicesEditorProps> = ({ routes, 
       </div>
 
       {choices.length > 0 && (
-        <div className="p-2.5 rounded-xl bg-woodland-50 border border-woodland-200 text-xs text-woodland-900 flex items-center justify-between">
+        <div className="p-2.5 rounded-xl bg-woodland-50 border border-woodland-200 text-xs text-woodland-900 flex flex-wrap items-center justify-between gap-2">
           <span className="font-semibold text-[11px] text-woodland-800">
             📊 Derived from selected routes:
           </span>

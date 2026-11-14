@@ -183,25 +183,25 @@ export const NewUserModal: React.FC<NewUserModalProps> = ({
           )}
 
           {/* Verified Email Badge */}
-          <div className="bg-emerald-50 border border-emerald-200/90 rounded-2xl p-3 flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
+          <div className="bg-emerald-50 border border-emerald-200/90 rounded-2xl p-3 flex flex-wrap items-center justify-between gap-2">
+            <div className="flex min-w-0 w-full sm:w-auto sm:flex-1 items-center gap-2.5">
               <div className="w-8 h-8 rounded-full bg-emerald-600 text-white flex items-center justify-center shrink-0">
                 <CheckCircle className="w-4 h-4" />
               </div>
-              <div>
+              <div className="min-w-0">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 block">
                   Verified Account Email
                 </span>
-                <span className="text-xs font-bold font-mono text-emerald-950">{email}</span>
+                <span className="block break-all text-xs font-bold font-mono text-emerald-950">{email}</span>
               </div>
             </div>
-            <span className="text-[10px] bg-emerald-200/80 text-emerald-900 font-bold px-2 py-0.5 rounded-full">
+            <span className="shrink-0 text-[10px] bg-emerald-200/80 text-emerald-900 font-bold px-2 py-0.5 rounded-full">
               Authenticated
             </span>
           </div>
 
           {/* First & Last Name */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label htmlFor={`${fieldId}-firstName`} className="block text-xs font-bold text-stone-700 mb-1">First Name *</label>
               <input id={`${fieldId}-firstName`}
@@ -227,7 +227,7 @@ export const NewUserModal: React.FC<NewUserModalProps> = ({
           </div>
 
           {/* Shirt Size & Pace Preference */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label htmlFor={`${fieldId}-shirtSize`} className="block text-xs font-bold text-stone-700 mb-1">Shirt Size (Milestones)</label>
               <select id={`${fieldId}-shirtSize`}
@@ -260,7 +260,7 @@ export const NewUserModal: React.FC<NewUserModalProps> = ({
           </div>
 
           {/* Optional Birthday & Zip Code */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <div className="flex items-center justify-between mb-1">
                 <label htmlFor={`${fieldId}-birthday`} className="text-xs font-bold text-stone-700">Birthday</label>
@@ -291,7 +291,7 @@ export const NewUserModal: React.FC<NewUserModalProps> = ({
           </div>
 
           {/* Optional emergency contact */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label htmlFor={`${fieldId}-ecName`} className="block text-xs font-bold text-stone-700 mb-1">Emergency Contact</label>
               <input id={`${fieldId}-ecName`}
@@ -333,7 +333,7 @@ export const NewUserModal: React.FC<NewUserModalProps> = ({
             {/* Pinned Selected Records Box */}
             {selectedList.length > 0 && (
               <div className="bg-amber-100/90 border-2 border-amber-400 rounded-2xl p-3 space-y-2 animate-in fade-in">
-                <div className="flex items-center justify-between text-xs font-black text-amber-950">
+                <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-black text-amber-950">
                   <span className="flex items-center gap-1.5">
                     <CheckCircle className="w-4 h-4 text-emerald-700" />
                     <span>Selected to Merge ({selectedList.length} records):</span>

@@ -143,7 +143,7 @@ export const NewRunModal: React.FC<NewRunModalProps> = ({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-stone-700 mb-1 flex items-center gap-1">
                 <Calendar className="w-3.5 h-3.5 text-stone-400" /> Date
