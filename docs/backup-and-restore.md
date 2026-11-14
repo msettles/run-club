@@ -1,47 +1,29 @@
 # Backup and restore
 
-**FYI: backups are not set up by default, because they aren't free.** A new club starts with none. This page says what the options are and what to do if you want them.
+## Woodland status — November 13, 2026
 
-There are two separate jobs.
+A one-time typed Firestore backup was taken with maintenance enforced before the approved history replacement. All **4,988 documents**, including 54 routes, were restored into an isolated emulator and compared to that snapshot. A prior readiness snapshot contains 4,987 documents. These are dated cutover backups, not evidence that recurring backups are enabled today.
 
-## 1. Disaster recovery: the database is lost or damaged
+Private backups, manifests and verification evidence are under ignored `data/backups/` and `data/deployment-preparation/`. Do not commit them to the public repository. A fresh snapshot of later live activity needs its own backup; the cutover snapshot cannot recover future check-ins.
 
-Use Firestore's own backups: **scheduled backups** and **point-in-time recovery (PITR)**. They are complete and exact (everything in the database, including things like RSVPs, claims and gear handouts), and they are the right tool if you can't afford to lose data.
+The one-time export contains Firestore documents and typed values, not Firebase Authentication accounts, deployed code/rules, all service configuration or billing settings. Keep the repository/release configuration and access to the club-owned deployment account as separate recovery requirements. No one-click backup/restore screen is implemented.
 
-- They need the **Blaze** (pay-as-you-go) plan. The platform's calendar feed already needs Blaze, so a club running this app is normally on it.
-- They **bill for storage**. We found no free quota for backup storage. Third-party figures put it at a few cents per GB per month, and a club's database is small (a few megabytes), so expect **cents a month**, but it is **not zero**. PITR also has a small minimum charge. We could not confirm the exact official rates, so check the current pricing before turning it on:
-  - [Firestore backups](https://firebase.google.com/docs/firestore/backups)
-  - [Point-in-time recovery](https://firebase.google.com/docs/firestore/pitr)
-- **Restoring** a backup creates a **new database** (it does not overwrite the live one); you then point the app at it or copy data across. Restores are billed by the size of the backup.
+## Owner decision — no paid recurring backups
 
-### If you want them: what to do
+The owner explicitly declined recurring paid backups because of cost. Do not enable scheduled backups or PITR to close a checklist item. Preserve the existing one-time cutover backup. There is no automatic recovery copy for later attendance from this workflow; accepting that scope is the owner's recorded decision.
 
-In the Firebase console, open **Firestore Database → Disaster recovery** and use the screens there. Or, from a terminal signed in as a project owner (`gcloud auth login`), the commands look like this. The exact flags change over time, so check `gcloud firestore --help` and the docs above if one is rejected:
+The owner separately approved billing alerts: a USD 2 monthly project budget, with actual-spend emails at USD 1, 1.80 and 2 to both approved addresses, is now configured and verified. No automatic shutdown or backups were enabled. A new backup strategy remains a future owner decision, not a current launch blocker.
 
-```bash
-gcloud firestore backups schedules create --database='(default)' --recurrence=daily --retention=7d --project YOUR_PROJECT_ID
-```
+If the owner revisits backups later, agree recovery goals, access/restore ownership, copy retention, Auth recovery and a dated isolated restore drill before implementation.
 
-```bash
-gcloud firestore databases update --database='(default)' --enable-pitr --project YOUR_PROJECT_ID
-```
+Firestore provides scheduled backups and point-in-time recovery. Scheduled backups require Blaze, charge for stored backup data and restore operations, and restore into a new database. Consult the current [official backup instructions](https://firebase.google.com/docs/firestore/backups), [PITR instructions](https://firebase.google.com/docs/firestore/pitr) and [pricing](https://firebase.google.com/docs/firestore/pricing) before enabling a service. Rates, command flags, region and project permissions must be checked for the actual project; this guide does not promise a monthly price or enable any service.
 
-To restore from a backup into a new database:
+First inspect the project's configured schedules/PITR state in the console or current CLI. A working calendar function does not prove that backups are enabled. Billing-alert setup is a separate requested follow-up; paid recurring backups remain declined.
 
-```bash
-gcloud firestore backups list --project YOUR_PROJECT_ID
-```
+Backup-copy retention is separate from club-record retention. Nothing here schedules expiration or deletion of live users, runs, routes, check-ins or reward history. See [go-live-policy.md](go-live-policy.md).
 
-```bash
-gcloud firestore databases restore --source-backup=BACKUP_RESOURCE_NAME --destination-database=restored-db --project YOUR_PROJECT_ID
-```
+## Imports and exports are migration tools
 
-Keep an eye on the project's billing page for the first month or two so the cost is what you expect, and set a small **budget alert** (Google Cloud console → Billing → Budgets & alerts) so a surprise can't grow unnoticed.
+The three [attendance CSV formats](import-format.md) support importing names, runs and attendance. They omit routes, Auth accounts, existing claim ownership, much reward/gear evidence, push registrations and other project state. They are **not a complete disaster-recovery backup**. A CSV export also does not guarantee the corresponding Auth account can be restored.
 
-Tell the club's other admins whether backups are on, and who can run a restore.
-
-## 2. Moving data in or out
-
-For migrating from another system, correcting data in a spreadsheet, or starting a fresh club from old records, use the three CSV import formats in [import-format.md](import-format.md). They are free. A one-click "club backup" bundle (profiles, runs, check-ins, routes, the milestone and badge catalog, gear handouts) is planned, and would be the free way to keep your own copy of the club's records.
-
-Logins live in Firebase Auth, not in the database. A runner re-links to their profile by signing in with the same email.
+The one-time deployment scripts in ignored `data/` were scoped to the completed cutover. Do not rerun a deletion/import phase to make a backup or restore routine. Before an actual restore, prepare a reviewed destination and scope, pause mutations if needed, preserve a fresh pre-restore copy, then verify the recovered data and owner access before resuming.

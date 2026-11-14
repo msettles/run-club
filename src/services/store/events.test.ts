@@ -6,7 +6,7 @@ const api = vi.hoisted(() => ({ runTransaction: vi.fn(), set: vi.fn(), update: v
 vi.mock('../firebase', () => ({ isFirebaseConfigured: true, db: {} }));
 vi.mock('firebase/firestore', () => ({
   doc: (_db: unknown, collection: string, id: string) => `${collection}/${id}`,
-  collection: vi.fn(), getDoc: vi.fn(), getCountFromServer: vi.fn(),
+  collection: vi.fn(), getDoc: vi.fn().mockResolvedValue({ data: () => ({ active: false }) }), getCountFromServer: vi.fn(),
   runTransaction: api.runTransaction, deleteField: () => 'delete-field', Timestamp: { fromDate: (date: Date) => date },
 }));
 const event = { id: 'run', date: '2026-11-11', time: '06:00 PM', title: 'Updated', codeWord: 'NEW', activeDistances: [], routes: {} };

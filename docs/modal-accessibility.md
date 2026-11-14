@@ -10,4 +10,4 @@ The app's check-in, sign-in, profile, scheduling, route studio, brand, version, 
 
 Browser smoke checks on localhost verified sign-in focus containment in both directions, Escape and opener restoration. A temporary Strict Mode harness verified nested Escape behavior, retained parent scroll locks, deliberate rendering failure and recovery to the opener. The harness was removed after verification. No sign-in, production writes or deployment was performed.
 
-Validation: 94 unit tests pass. Type checking, lint (zero errors, 48 existing warnings), production build and bundle limits pass. Native dialog behavior should still be included in the planned real-device Safari/Android smoke tests.
+Release-time validation (historical counts): 94 unit tests pass. Type checking, lint (zero errors, 48 existing warnings), production build and bundle limits pass. Native dialog behavior should still be included in the planned real-device Safari/Android smoke tests.

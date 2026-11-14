@@ -8,6 +8,7 @@ import type { Badge, UserProfile } from '../../types';
 import { clubYmd } from '../../utils/dateUtils';
 import { sha256Hex } from '../../utils/hash';
 import { attendanceWeek } from './rewardProofs';
+import { ATTENDANCE_POLICY_VERSION } from '../../utils/attendanceIdentity';
 
 const KEY = 'woodchuckers_reward_sync_v1';
 const sorted = (record: Record<string, number> | undefined) => Object.entries(record || {}).sort(([a], [b]) => a.localeCompare(b));
@@ -15,7 +16,7 @@ const sorted = (record: Record<string, number> | undefined) => Object.entries(re
 /** Everything a reward refresh depends on, plus what it last produced. */
 export function rewardSyncFingerprint(user: UserProfile, badges: Badge[]): Promise<string> {
   return sha256Hex(JSON.stringify([
-    user.email.toLowerCase(), user.rewardEpoch || 0, user.totalRuns, user.loggedRuns, user.runCount, user.walkCount, user.petRunCount || 0,
+    user.email.toLowerCase(), user.attendancePolicyVersion || 0, user.rewardEpoch || 0, user.totalRuns, user.loggedRuns, user.runCount, user.walkCount, user.petRunCount || 0,
     sorted(user.distanceCounts), user.lastCheckInUpdatedAt || '', user.linkedLegacyIds || [],
     sorted(user.badgeCounts), [...(user.unlockedBadgeIds || [])].sort(),
     user.currentStreakWeeks || 0, user.longestStreakWeeks || 0, user.streakProofWeek || 0, user.longestStreakProofWeek || 0,
@@ -31,6 +32,7 @@ export function streakLapsed(user: UserProfile, today = clubYmd()): boolean {
 
 export async function rewardsAreCurrent(user: UserProfile, badges: Badge[]): Promise<boolean> {
   try {
+    if (user.attendancePolicyVersion !== ATTENDANCE_POLICY_VERSION || user.pendingLegacyClaim || user.claimGearPending) return false;
     if (streakLapsed(user)) return false;
     return localStorage.getItem(KEY) === await rewardSyncFingerprint(user, badges);
   } catch {

@@ -43,7 +43,7 @@ export const RUN_COLUMNS = {
   date: { header: 'Date', aliases: ['Run Date'], required: 'always', meaning: 'The day of the run, as 2026-10-07 or 10/7/2026.', whenBlank: 'The row is skipped.' },
   time: { header: 'Time', aliases: ['Start Time'], required: 'no', meaning: 'When the run started, such as 18:30.', whenBlank: '18:30.' },
   title: { header: 'Title', aliases: ['Run Title', 'Event', 'Event Title'], required: 'no', meaning: 'The run’s name.', whenBlank: '"Group run".' },
-  codeWord: { header: 'Code Word', aliases: ['Code Name', 'CodeWord', 'Code'], required: 'no', meaning: 'The code word used at that run. It identifies the run, and tells two runs on the same day apart.', whenBlank: 'Left empty.' },
+  codeWord: { header: 'Code Word', aliases: ['Code Name', 'CodeWord', 'Code'], required: 'no', meaning: 'Check-in validation credential only. It does not identify or classify a run.', whenBlank: 'Left empty.' },
   specialEvent: { header: 'Special Event', aliases: ['Special'], required: 'no', meaning: 'The special event this run was, such as Turkey Trot (one of your special events, by name or id). Check-ins at the run count toward it, so the tag lives here and not in the check-ins file.', whenBlank: 'Not a special event.' },
   location: { header: 'Location', aliases: ['Venue'], required: 'no', meaning: 'Where it met.', whenBlank: 'The club’s usual location.' },
   address: { header: 'Address', aliases: [], required: 'no', meaning: 'The street address.', whenBlank: 'Left empty.' },
@@ -58,7 +58,7 @@ export const CHECKIN_COLUMNS = {
   ...PERSON,
   date: { header: 'Date', aliases: ['Check-In Date', 'Run Date'], required: 'always', meaning: 'The day of the run they were at. It finds the run (a run is made for a date that has none).', whenBlank: 'The row is skipped.' },
   runId: { header: 'Run ID', aliases: [], required: 'no', meaning: 'The run, when it is known (this app’s own export). Beats the Date.', whenBlank: 'The run on that Date.' },
-  codeWord: { header: 'Code Word', aliases: ['Code Name', 'CodeWord', 'Code'], required: 'no', meaning: 'Only needed to pick the right run when two runs share a date.', whenBlank: 'Not used.' },
+  codeWord: { header: 'Code Word', aliases: ['Code Name', 'CodeWord', 'Code'], required: 'no', meaning: 'Recorded check-in credential only. Use Run ID to match separate runs on one date.', whenBlank: 'Not used.' },
   time: { header: 'Time', aliases: ['Check-In Time'], required: 'no', meaning: 'When they signed in, such as 18:35:00.', whenBlank: '18:30:00.' },
   activity: { header: 'Activity', aliases: [], required: 'no', meaning: 'running or walking.', whenBlank: 'running.' },
   withPet: { header: 'With Pet', aliases: ['Pet'], required: 'no', meaning: 'Yes or No.', whenBlank: 'No.' },
@@ -116,7 +116,7 @@ export function normalizeTime(value: string): string | undefined {
 }
 
 const yes = (v: string) => /^(y|yes|true|1|x)$/i.test(v.trim());
-const codeKey = (v: string) => normalizeName(v).replace(/ /g, '');
+const normalizeCodeWord = (v: string) => v.trim().toUpperCase();
 
 interface Table {
   rows: { row: number; cell: (key: string) => string }[];
@@ -263,7 +263,8 @@ export function planRunsImport(csvText: string, now = new Date(), knownSpecialEv
   if (!table.mapped.has('date')) { plan.issues.push({ row: 0, level: 'error', message: 'A run history file needs a Date column.' }); return plan; }
   const today = now.toISOString().slice(0, 10);
   const seen = new Set<string>();
-  const ids = new Set<string>();
+  const runDates = new Map<string, string>();
+  const automaticDates = new Set<string>();
   for (const { row, cell } of table.rows) {
     plan.stats.rows++;
     const dateText = cell('date');
@@ -275,16 +276,22 @@ export function planRunsImport(csvText: string, now = new Date(), knownSpecialEv
     }
     if (date < '2018-05-01') plan.issues.push({ row, level: 'warning', message: `${date} is before the club was established (May 2018).` });
     if (date > today) plan.issues.push({ row, level: 'warning', message: `${date} is in the future.` });
-    const codeWord = codeKey(cell('codeWord'));
-    const dup = `${date}|${codeWord}`;
-    if (seen.has(dup)) { plan.stats.duplicateRuns++; plan.issues.push({ row, level: 'warning', message: `A run on ${date}${codeWord ? ` with code word ${codeWord}` : ''} is already listed. This row was dropped.` }); continue; }
+    const codeWord = normalizeCodeWord(cell('codeWord'));
+    const givenId = cell('runId');
+    const runId = givenId || `run-${date}`;
+    const dup = runId;
+    if (seen.has(dup)) {
+      plan.stats.duplicateRuns++;
+      plan.issues.push({ row, level: !givenId || runDates.get(runId) !== date ? 'error' : 'warning', message: !givenId ? `Repeated run date ${date}. Remove duplicate rows, or give every separate run on that date a unique Run ID.` : `Run ID "${runId}" is repeated. A run ID identifies one run; this row was dropped.` });
+      continue;
+    }
+    if (plan.runs.some(r => r.date === date) && (!givenId || automaticDates.has(date))) {
+      plan.issues.push({ row, level: 'error', message: `Several runs share ${date}. Give every run on that date an explicit unique Run ID.` });
+      plan.stats.skippedRows++; continue;
+    }
     seen.add(dup);
-    // An id: the one given, otherwise made from the date (and the code word when two runs share a day).
-    // The first run on a date is run-<date>, so correcting its code word or title in a later file updates the same run.
-    // A second run on the same date adds its code word (or a number).
-    let runId = cell('runId') || (ids.has(`run-${date}`) && codeWord ? `run-${date}-${codeWord.toLowerCase()}` : `run-${date}`);
-    for (let n = 2; ids.has(runId); n++) runId = `${cell('runId') || `run-${date}`}-${n}`;
-    ids.add(runId);
+    runDates.set(runId,date);
+    if (!givenId) automaticDates.add(date);
     const timeText = cell('time');
     const time = normalizeTime(timeText);
     if (!time) plan.stats.timesDefaulted++;
@@ -372,22 +379,22 @@ export function planCheckinsImport(csvText: string, knownRuns: Pick<ImportedRun,
     let date = dateText ? toIsoDate(dateText) : null;
     if (dateText && (!date || !validDay(date))) { plan.issues.push({ row, level: 'error', message: `"${dateText}" is not a date I understand (use 2026-10-07 or 10/7/2026).` }); plan.stats.skippedRows++; continue; }
     const byId = givenRunId ? runsById.get(givenRunId) : undefined;
-    if (givenRunId && !byId && knownRuns.length) plan.issues.push({ row, level: 'warning', message: `Run ID "${givenRunId}" isn't in the run history; matching by date instead.` });
+    if (givenRunId && !byId && knownRuns.length) { plan.issues.push({ row, level: 'error', message: `Run ID "${givenRunId}" isn't in the run history. Correct the ID before importing.` }); continue; }
+    if (byId && date && date !== byId.date) { plan.issues.push({ row, level: 'error', message: `Date ${date} does not match Run ID "${givenRunId}" (${byId.date}).` }); continue; }
     if (!date && byId) date = byId.date;
     if (!date) { plan.issues.push({ row, level: 'error', message: 'The row needs a Date (or a Run ID that is in the run history).' }); plan.stats.skippedRows++; continue; }
     if (date < '2018-05-01') plan.issues.push({ row, level: 'warning', message: `${date} is before the club was established (May 2018).` });
     if (date > today) plan.issues.push({ row, level: 'warning', message: `${date} is in the future.` });
 
-    const codeWord = codeKey(cell('codeWord'));
+    const codeWord = normalizeCodeWord(cell('codeWord'));
     let run = byId;
     if (!run) {
       const sameDay = runsByDate.get(date) || [];
-      run = sameDay.length > 1 ? sameDay.find((r) => codeWord && r.codeWord === codeWord) : sameDay[0];
-      if (sameDay.length > 1 && !run) plan.issues.push({ row, level: 'warning', message: `Several runs are listed on ${date}; add a Code Word or Run ID to say which. The first was used.` });
-      if (!run && sameDay.length > 1) run = sameDay[0];
+      if (sameDay.length > 1) { plan.issues.push({ row, level: 'error', message: `Several runs are listed on ${date}; provide a Run ID. Code words are not used to match historical attendance.` }); continue; }
+      run = sameDay[0];
     }
     if (!run && knownRuns.length && !runsByDate.has(date)) noRun.add(date);
-    const runId = run?.runId || `run-${date}`;
+    const runId = run?.runId || givenRunId || `run-${date}`;
 
     const key = email || `name:${normalizeName(rawName)}`;
     const dup = `${key}|${runId}`;

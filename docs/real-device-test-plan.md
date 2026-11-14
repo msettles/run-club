@@ -2,7 +2,7 @@
 
 Priority: highest. Prepared November 10, 2026 for the v1.2.5 release; section H added the same day for v1.2.6.
 
-Status: **Not executed.** Automated browser results are separate evidence and do not establish that these real-device cases pass.
+Status, November 13: **core launch acceptance passed by owner report** (ordinary signup/history claims, correct attendance/mileage after reload); live owner Google/Admin access was observed on both production hosts. This original per-device matrix has not been filled in case-by-case. The owner subsequently reported that phone push, GPS, accessibility and icon/update checks all look good and verified the installed-app calendar subscription. Treat these categories as owner-accepted; individual case/device records were not supplied. This plan is an evidence template, not an instruction to repeat accepted tests. See [browser-device-testing.md](browser-device-testing.md). Automated results remain separate evidence.
 
 ## Objective and scope
 

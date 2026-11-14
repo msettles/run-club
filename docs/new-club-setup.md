@@ -1,6 +1,6 @@
 # Setting up a new club on Run Club
 
-Run Club is the platform; each club runs its own copy. The model is **fork, edit, deploy**: one fork of this repository, one Firebase project and one website per club. Everything used is on Firebase's free Spark plan; no credit card is needed.
+Run Club is the platform; each club runs its own copy. The model is **fork, edit, deploy**: one fork of this repository, one Firebase project and one website per club. The core client services have no-cost quotas, but the supplied `/calendar.ics` subscription feed uses a Cloud Function whose production deployment requires Blaze. Confirm billing/quotas before provisioning; there is no blanket zero-cost guarantee.
 
 > **Where this stands (November 10, 2026).** The club's settings are not yet gathered in one place. Step 3 below lists the files a fork has to edit by hand today. Once [club-extraction-plan.md](club-extraction-plan.md) is done, step 3 becomes "edit the `club/` folder" and the rest of this guide stays the same.
 
@@ -36,7 +36,7 @@ With no `.env` file the app runs in **local mode** with sample data in the brows
 
 Signed in to the [Firebase console](https://console.firebase.google.com/) as the club's Google account:
 
-1. **Add project.** The project ID (for example `riverside-runners`) also becomes the free web address `riverside-runners.web.app`. Stay on the Spark plan.
+1. **Add project.** The project ID (for example `riverside-runners`) also becomes the free web address `riverside-runners.web.app`. Spark supports the core client-only setup; the included server calendar feed requires Blaze for function deployment.
 2. **Register a web app** (the `</>` icon) and copy its configuration values.
 3. **Authentication → Sign-in method:** enable **Google** and **Email/Password** with **Email link (passwordless sign-in)**.
 4. **Firestore Database → Create database** (production mode; the rules come from this repository).
@@ -112,6 +112,9 @@ npx firebase login
 npm run build && npx firebase deploy --only firestore:rules,hosting --project YOUR_PROJECT_ID
 ```
 
+For the supplied calendar subscription endpoint, also build and deploy the existing calendar function with `npm run build:functions` and `npx firebase deploy --only functions:calendar --project YOUR_PROJECT_ID`. Production function deployment requires Blaze. A static-only alternate host needs separate routing/authentication work. Preserve the service-worker exclusion for Firebase reserved `/__` pages so OAuth callbacks reach Firebase.
+
+
 ## 6. First sign-in
 
 1. Open `https://YOUR_PROJECT_ID.web.app` and sign in as the owner email. That account is an admin immediately and cannot be demoted.
@@ -123,7 +126,7 @@ npm run build && npx firebase deploy --only firestore:rules,hosting --project YO
 
 ## 7. Backups (optional, and not free)
 
-**FYI: a new club has no database backups.** Firestore's scheduled backups and point-in-time recovery need the Blaze plan and **bill for storage**. For a club-sized database that is cents a month, but it is not zero, so they are off until you choose to turn them on. If losing data would hurt, turn them on and set a small budget alert; [backup-and-restore.md](backup-and-restore.md) has the steps, the restore commands, and what to check first. The free alternative for moving or keeping your own copy of records is the CSV formats in [import-format.md](import-format.md).
+**FYI: a new club has no database backups.** Firestore's scheduled backups and point-in-time recovery need the Blaze plan and **bill for storage**. Costs depend on location, retained backup size and restores; check current official rates and confirm the actual schedule instead of assuming one is enabled. If losing data would hurt, turn them on and set a small budget alert; [backup-and-restore.md](backup-and-restore.md) describes current backup scope, recovery requirements and links to official restore instructions. The CSV formats in [import-format.md](import-format.md) support migration and attendance corrections; they omit Auth, routes, claims, rewards and other database state and are not a full disaster-recovery backup.
 
 ## Keeping up with the platform
 

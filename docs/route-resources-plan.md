@@ -1,6 +1,6 @@
 # Run Club Route Resources — Implementation Plan
 
-_As of 2026-11-07. Status 2026-11-10: rollout phases 1–3 are built in the app (see [route-creation-architecture-plan.md](route-creation-architecture-plan.md)). Still open from phase 4: Print option, "report a problem", mile markers, and the first/last 200 m privacy trim. The open questions at the end are still unanswered._
+_As of 2026-11-07. Status 2026-11-10: rollout phases 1–3 are built in the app (see [route-creation-architecture-plan.md](route-creation-architecture-plan.md)). Still open from phase 4: Print option, "report a problem", mile markers, and the first/last 200 m privacy trim. The questions at the end belong to the original design discussion. The app stack, public route browsing, staff roles and branding are now established; re-check only genuine future feature decisions._
 
 ## Overview
 
@@ -17,7 +17,7 @@ Organizers create a run once from a GPX file. Members who check in on run night 
 - Numbered turn-by-turn directions with street names and landmarks, e.g. "Start in Dead Cat Alley behind Blue Note Brewing; turn right on 3rd Street."
 - Buttons for Garmin, Strava and RunGo, a GPX download, and "Directions to start" in Google or Apple Maps.
 
-The core pieces are already proven: a working GPX-to-directions script (`gpx_directions.py`) and a tested sample route, The Road to El Dorado (1.27 mi loop, downtown Woodland).
+The original GPX-to-directions Python prototype is historical and has been removed. The implemented source of truth is `src/utils/routeEngine/` and Route Studio; do not look for `gpx_directions.py` as a current dependency.
 
 ## Features
 
@@ -60,7 +60,7 @@ flowchart LR
 
 Organizer review sits between the automatic steps and the saved route, so members only ever see checked directions.
 
-**Platform options** — the choice depends on what the club site is built on:
+**Original platform options (historical)** — the implemented app uses React/Vite, Firebase and the browser TypeScript engine; these are not pending platform decisions:
 
 | Site built on | Where directions are generated | What has to be built |
 | --- | --- | --- |
@@ -68,7 +68,7 @@ Organizer review sits between the automatic steps and the saved route, so member
 | WordPress | In the organizer's browser on the Create page (JavaScript port) | A small plugin: custom post type "Run", admin page, shortcode for the check-in view |
 | Squarespace, Wix or similar | In the organizer's browser on a standalone Create page | Results saved as JSON and embedded in a code block on the check-in page |
 
-The browser-side JavaScript version works on any host and needs no server code, so it is the safest default until the platform is confirmed.
+The browser-side TypeScript route engine is implemented. Hosting the complete app elsewhere still requires deliberate authentication/calendar routing; this original platform comparison is not a current deployment guide.
 
 ## Data model
 
@@ -92,7 +92,7 @@ Each direction step stores the turn's coordinates so the map can place a numbere
 
 ## Directions engine
 
-The engine turns a GPX line into street-by-street steps using free OpenStreetMap data; it already works on the sample route and needs a port plus a review step, not new research.
+The engine turns a GPX line into street-by-street steps using free OpenStreetMap data; the TypeScript port and organizer review step are implemented.
 
 1. **Read and clean the GPX.** Parse track or route points, drop duplicates, smooth GPS jitter (about 12 m window) and simplify the line.
 2. **Fetch streets once.** One Overpass API query for every street, path and named place in the route's bounding box plus about 200 m.
@@ -138,7 +138,7 @@ Ship in four phases, each usable on its own, so members benefit from the first r
 3. **Create Run in the site.** Upload form, editable directions, drafts, copy a past route, several routes per night. Gate: two organizers create runs unaided.
 4. **Extras.** Mile markers, Print, "report a problem", route library with search, elevation profile.
 
-## Open questions
+## Original design questions — historical
 
 - [ ] What is the club website built on, and who maintains it?
 - [ ] How does check-in work today (form, app, paper), and can it show a page afterwards?

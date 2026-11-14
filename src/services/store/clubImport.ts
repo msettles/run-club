@@ -12,6 +12,8 @@ import { isFirebaseConfigured, db } from '../firebase';
 import { codeKeyFor, memberKeyFor } from '../../utils/memberKey';
 import { datedEventsFrom, recomputeBadges, type LegacyEvent } from '../../utils/legacy';
 import { totalsFromCheckins } from '../../utils/memberTotals';
+import { historicalRunKeys } from '../../utils/attendanceIdentity';
+import { rebuildAttendanceCredit } from './attendanceCredit';
 import type { ImportCommit } from '../../utils/importCommit';
 import { assertDocumentFitsFirestore, cleanFirestoreData, toPublicMember } from './helpers';
 import { prepareRewardProofs } from './rewardProofs';
@@ -67,9 +69,10 @@ export function createClubImportOps(ctx: StoreState & ReturnType<typeof createLe
     if (!isFirebaseConfigured || !db) throw new Error('Recomputing rewards needs the live club database.');
     const firestore = db;
     const clean = email.toLowerCase();
+    await ctx.reconcileLegacyAttendance(clean);
     const snapshot = await getDoc(doc(firestore, 'users', clean));
     if (!snapshot.exists()) throw new Error(`${clean} has no profile.`);
-    const base = snapshot.data() as UserProfile;
+    const base = await ctx.retryClaimGear(snapshot.data() as UserProfile);
     if (base.deleting) throw new Error(`${clean} is being deleted.`);
     const [history, legacy] = await Promise.all([ctx.fetchRunnerCheckins(clean), ctx.fetchLegacyEvents(base.linkedLegacyIds || [])]);
     const totals = totalsFromCheckins(base, history, legacy.map((e) => e.d), begin ?? await recordsBegin());
@@ -97,6 +100,9 @@ export function createClubImportOps(ctx: StoreState & ReturnType<typeof createLe
   /** Admin: recompute rewards for the given members, or for everyone when no list is given (an empty list recomputes nobody). */
   const recomputeRewards = async (emails?: string[], onProgress?: Progress): Promise<{ updated: number; failed: { email: string; reason: string }[] }> => {
     if (!isFirebaseConfigured || !db) throw new Error('Recomputing rewards needs the live club database.');
+    if (emails?.length === 0) return { updated: 0, failed: [] };
+    await onProgress?.('Preparing historical attendance identities…');
+    await ctx.prepareLegacyAttendance();
     const targets = emails ? [...new Set(emails.map((e) => e.toLowerCase()))] : (await getDocs(collection(db, 'users'))).docs.map((d) => d.id);
     const begin = await recordsBegin();
     let updated = 0;
@@ -253,11 +259,11 @@ export function createClubImportOps(ctx: StoreState & ReturnType<typeof createLe
         const ref = doc(firestore, 'legacy_profiles', alias.id);
         const historyRef = doc(firestore, 'legacy_history', alias.id);
         const [saved, history] = await Promise.all([getDoc(ref), getDoc(historyRef)]);
-        const profile = { id: alias.id, name: alias.name, oldCount: alias.oldCount, newCount, totalRuns: alias.oldCount + newCount };
+        const profile = { id: alias.id, name: alias.name, oldCount: alias.oldCount, newCount, totalRuns: alias.oldCount + newCount, attendanceReady: true };
         if (!saved.exists()) {
           const batch = writeBatch(firestore);
           batch.set(ref, { ...profile, claimedBy: null, claimedAt: null });
-          batch.set(historyRef, { id: alias.id, events: alias.events });
+          batch.set(historyRef, { id: alias.id, events: alias.events, attendanceKeys: historicalRunKeys(alias.events) });
           await batch.commit();
           entries.set(alias.id, { id: alias.id, name: alias.name, oldCount: alias.oldCount, newCount });
           poolChanged = true; result.aliasesHeld++;
@@ -265,7 +271,7 @@ export function createClubImportOps(ctx: StoreState & ReturnType<typeof createLe
         }
         const old = saved.data() as { name: string; oldCount: number; newCount: number; claimedBy?: string | null };
         const sameEvents = JSON.stringify(((history.data()?.events as LegacyEvent[]) || []).map((e) => sortKeys(e))) === JSON.stringify(alias.events.map((e) => sortKeys(e)));
-        if (old.name === alias.name && old.oldCount === alias.oldCount && old.newCount === newCount && sameEvents) { result.aliasesUnchanged++; return; }
+        if (old.name === alias.name && old.oldCount === alias.oldCount && old.newCount === newCount && sameEvents && saved.data()?.attendanceReady === true && JSON.stringify(history.data()?.attendanceKeys) === JSON.stringify(historicalRunKeys(alias.events))) { result.aliasesUnchanged++; return; }
         // Update the name's record, and the totals of whoever has claimed it, together.
         const owners = await getDocs(query(collection(firestore, 'users'), where('linkedLegacyIds', 'array-contains', alias.id)));
         await runTransaction(firestore, async (tx) => {
@@ -275,13 +281,13 @@ export function createClubImportOps(ctx: StoreState & ReturnType<typeof createLe
             if (!snap.exists()) continue;
             const u = snap.data() as UserProfile;
             if (u.deleting) continue;
-            changed.push({ ...u, rewardEpoch: (u.rewardEpoch || 0) + 1, pre2021Runs: Math.max(0, u.pre2021Runs + alias.oldCount - old.oldCount),
+            changed.push(await rebuildAttendanceCredit(tx, firestore, { ...u, rewardEpoch: (u.rewardEpoch || 0) + 1, pre2021Runs: Math.max(0, u.pre2021Runs + alias.oldCount - old.oldCount),
               legacyEventRuns: Math.max(0, (u.legacyEventRuns || 0) + newCount - old.newCount),
-              totalRuns: Math.max(0, u.totalRuns + alias.oldCount + newCount - old.oldCount - old.newCount) });
+              totalRuns: Math.max(0, u.totalRuns + alias.oldCount + newCount - old.oldCount - old.newCount) }, new Map([[alias.id, alias.events]])));
           }
           const keys = await Promise.all(changed.map((u) => memberKeyFor(u.email)));
           tx.update(ref, profile);
-          tx.set(historyRef, { id: alias.id, events: alias.events });
+          tx.set(historyRef, { id: alias.id, events: alias.events, attendanceKeys: historicalRunKeys(alias.events) });
           changed.forEach((u, i) => { tx.set(doc(firestore, 'users', u.email), cleanFirestoreData(u)); tx.set(doc(firestore, 'members', keys[i]), toPublicMember(u, keys[i])); touched.add(u.email); });
         });
         entries.set(alias.id, { id: alias.id, name: alias.name, oldCount: alias.oldCount, newCount });
@@ -297,7 +303,14 @@ export function createClubImportOps(ctx: StoreState & ReturnType<typeof createLe
       await onProgress?.(`Past names: ${result.aliasesHeld} held, ${result.aliasesUpdated} updated…`);
     }
 
-    // 5. Rewards: recomputed from the check-ins for every member the import changed (a runs-only import changes none).
+    // Aliases can introduce canonical IDs for older date/code histories under other names.
+    // Reconcile every claimant so a later claim cannot mix old and new identity formats.
+    if (commit.aliases.length) {
+      const owners = await getDocs(collection(firestore, 'users'));
+      owners.docs.forEach(owner => { if (owner.data().linkedLegacyIds?.length) touched.add(owner.id); });
+      if (!touched.size) await ctx.prepareLegacyAttendance();
+    }
+    // A runs-only import changes no member attendance.
     const rewards = await recomputeRewards([...touched], onProgress);
     result.rewards = { updated: rewards.updated, failed: rewards.failed.length };
     return result;

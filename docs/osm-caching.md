@@ -15,6 +15,8 @@ Per-mirror network deadlines still cover body parsing. Closing/replacing a route
 
 ## Validation
 
+The counts below are the checks recorded when this feature shipped, not the current total test suite. Current launch evidence is in [go-live-readiness-review.md](go-live-readiness-review.md).
+
 106 unit tests pass, including seven cache scenarios, two worker-broker scenarios and three Overpass cancellation/timeout scenarios. Type checking, production build, bundle boundaries and ESLint pass (48 existing warnings, zero errors).
 
 A temporary localhost browser harness exercised two real workers with a simulated Overpass response: both produced identical directions and only one download occurred. The harness was removed afterward. No real OSM requests, production writes or deployment were needed for this verification.

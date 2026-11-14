@@ -1,5 +1,7 @@
 # Removing deepmerge — v1.1.5
 
+> Historical release evidence: version-specific findings, test totals and dependency advisories below are retained as recorded. They are not the current launch checklist. See [documentation status](documentation-status.md) and the [November 13 readiness review](go-live-readiness-review.md).
+
 November 9, 2026. Follow-up to [tooling maintenance](tooling-maintenance.md).
 
 ## What changed

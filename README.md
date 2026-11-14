@@ -10,11 +10,11 @@ An installable web app (PWA) for running clubs: run schedule, code-word check-in
 
 > *"Pounding trails & pavement — one burrow at a time!"*
 
-This repository currently builds the Woodland Woodchuckers app: the installed app name, bottle-cap install icon, colours and wording are all Woodland's. The browser tab icon and the footer's "Built with Run Club" credit are the platform's.
+This repository currently builds the Woodland Woodchuckers app: the installed app name, approved woodchuck-face install icon, colours and wording are all Woodland's. The browser tab icon and the footer's "Built with Run Club" credit are the platform's.
 
 Starting another club? See [`docs/new-club-setup.md`](docs/new-club-setup.md) (fork, edit, deploy) and [`docs/club-extraction-plan.md`](docs/club-extraction-plan.md) (the plan to gather every club-specific setting into one place).
 
-**Live:** https://woodland-woodchuckers.web.app · **Stack:** React 18 · TypeScript · Vite 6 · Tailwind 3 · Firebase 13 (Spark plan: Auth, Firestore, Hosting, Cloud Messaging) · Leaflet / OpenStreetMap
+**Live:** https://woodland-woodchuckers.web.app · **Stack:** React 18 · TypeScript · Vite 6 · Tailwind 3 · Firebase 13 (Auth, Firestore, Hosting, Cloud Messaging; Cloud Function for the calendar feed) · Leaflet / OpenStreetMap
 
 ![CI](https://github.com/msettles/run-club/actions/workflows/ci.yml/badge.svg)
 
@@ -28,7 +28,7 @@ Starting another club? See [`docs/new-club-setup.md`](docs/new-club-setup.md) (f
   - Check-in opens **2 hours before the start** and closes at **midnight**.
   - The table QR code (`/?checkin=true`) opens whichever run is open right now. If two runs are open, the code word decides which.
 - **Totals:** runs, miles (from the route chosen at check-in), weekly streaks, milestone gear and badges.
-- **Old-app history:** at sign-up, runners claim their old sign-in names (typo-tolerant search). Each name can only be claimed once.
+- **Old-app history:** at sign-up, runners claim their old sign-in names (typo-tolerant search). Each name can only be claimed once. Shared dated runs across claimed names count once; undated credits remain additive. Only explicit run tags award special-event credit.
 - **Bell:** club announcements and received push notifications, with read/unread and **Mark all as read**.
 - **Phone notifications:** turned on per device, from **Enable Alerts** or the profile menu. iPhones need the Home Screen app.
 - **Install app:** from the banner or the footer link.
@@ -39,7 +39,8 @@ Starting another club? See [`docs/new-club-setup.md`](docs/new-club-setup.md) (f
 
 **Admins** (Admin dashboard)
 - **Runners & Claims:** promote or demote roles, delete runners, assign or unclaim old-app names, and import the old app's CSV exports.
-- **Check-In Log** (last 60 days), **Milestones & Gear** queue, **Badges & Special Events**.
+- **Club maintenance:** pause member/organizer mutations during repairs while retaining admin access.
+- **Check-In Log** (recent 60-day query; older records are retained), **Milestones & Gear** queue, **Badges & Special Events**.
 - **Push Alerts:** post announcements, and see how many devices have notifications on.
 - **Delete a run:** rolls back each runner's runs, miles, badges and streaks.
 
@@ -75,10 +76,12 @@ npm run dev             # http://localhost:5173
 | `npm test` | Unit tests for club logic (Vitest) |
 | `npm run test:watch` | Unit tests in watch mode |
 | `npm run test:resolver` | Verify the pinned resolver fork and Workbox compatibility |
+| `npm run test:integration` | Store integration tests against Firestore emulator (run separately from rules tests; both use port 8085) |
+| `npm run build:functions` | Build the server calendar function |
 | `npm run test:rules` | Firestore security-rules tests in the emulator (needs Java 21+) |
 | `npx firebase deploy --only firestore:rules,hosting` | Deploy rules + site (**always deploy both together**) |
 
-**CI** (`.github/workflows/ci.yml`) runs a dependency audit, type-check, lint, unit tests, resolver compatibility tests, build and the rules tests on every PR and every push to `main`.
+**CI** (`.github/workflows/ci.yml`) runs a dependency audit, type-check, lint, unit tests, Cloud Functions build, resolver compatibility tests, production build/bundle checks, store integration tests and the rules tests on every PR and every push to `main`.
 
 ## How it's put together
 
@@ -119,6 +122,14 @@ docs/                        plans (route engine, push notifications Plan B)
 
 **Roles:** `woodlandwoodchuckers@gmail.com` is the only hardcoded owner (always admin). Everyone else's role (`member` / `organizer` / `admin`) is set by an admin in Runners & Claims.
 
+## Hosting, calendar and backups
+
+Core client services have no-cost quotas; this repository does not guarantee zero cost for every feature. The live `/calendar.ics` subscription feed uses the `calendar` Cloud Function. Production function deployment requires Blaze; review billing, quotas and budget alerts for the actual project. [Firebase function deployment requirements](https://firebase.google.com/docs/functions/get-started#deploy-functions-to-a-production-environment).
+
+Deploy rules and hosting together. Deploy the calendar function separately when provisioning a new club or changing its server code: `npm run build:functions`, then `npx firebase deploy --only functions:calendar --project YOUR_PROJECT_ID`. The deploy commands in this README do not reset data.
+
+A recoverable one-time cutover backup was restored and verified. The owner declined paid recurring backups because of cost; a separate USD 2 monthly alert-only billing budget is configured for the owner-approved recipients. CSV imports/exports are not a complete disaster-recovery backup. See [backup-and-restore.md](docs/backup-and-restore.md).
+
 ## Push notifications
 
 Today (**Plan A**, free): devices sign up in the app, and admins send from **Firebase console → Messaging → New campaign → Notifications**, targeting the web app.
@@ -150,6 +161,8 @@ These tests use synthetic local data with Firebase disabled and external request
 
 ### Go-live data policy
 
-The app is currently in testing. The [go-live reset policy](docs/go-live-policy.md) preserves routes, removes test users/runs and related records, reloads the approved name-based historical database, and establishes the first real club run. A deployment does not trigger this reset.
+Launch preparation and owner acceptance completed November 13, 2026. The approved refresh is complete: 300 historical runs plus the next real run, 1,199 historical names, 6,231 dated check-ins, 2,371 undated credits, 54 routes, five retained staff accounts and eight claims. The designated acceptance-test run and attendance are gone; maintenance and the import lock are off. See the [readiness review](docs/go-live-readiness-review.md) for dated evidence and [documentation status](docs/documentation-status.md) for remaining operational/device checks. Readiness is not a record of a public launch announcement.
+
+The [go-live reset policy](docs/go-live-policy.md) records the completed retained-staff scope and rules for any separately requested reset. Do not repeat the reset merely because another release is deployed.
 
 Records are retained indefinitely. There is no automatic deletion: users and check-ins are admin-only deletions; organizers or admins may delete runs and routes, subject to existing integrity safeguards.

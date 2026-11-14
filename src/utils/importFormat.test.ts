@@ -57,10 +57,11 @@ describe('run history file', () => {
     expect(plan.stats.timesDefaulted).toBe(2);
   });
 
-  it('keeps two runs on one day apart by code word, and drops a true repeat', () => {
-    const plan = planRunsImport('Date,Code Word\n2026-10-07,APPLE\n2026-10-07,PEAR\n2026-10-07,apple\n', NOW);
-    expect(plan.runs.map((r) => r.runId)).toEqual(['run-2026-10-07', 'run-2026-10-07-pear']);
+  it('uses explicit run IDs, never code words, for separate runs on one date', () => {
+    const plan = planRunsImport('Date,Run ID,Code Word\n2026-10-07,morning,SAME\n2026-10-07,evening,SAME\n2026-10-07,morning,DIFFERENT\n', NOW);
+    expect(plan.runs.map((r) => r.runId)).toEqual(['morning', 'evening']);
     expect(plan.stats.duplicateRuns).toBe(1);
+    expect(planRunsImport('Date,Code Word\n2026-10-07,APPLE\n2026-10-07,PEAR\n',NOW).issues.some(i=>i.level==='error')).toBe(true);
   });
 
   it('flags bad and odd dates', () => {
@@ -103,13 +104,19 @@ describe('special event tags on the run history', () => {
 });
 
 describe('check-ins file', () => {
-  const runs = planRunsImport('Date,Code Word\n2026-10-07,APPLE\n2026-10-14,GOLDEN\n2026-10-14,PEAR\n', NOW).runs;
+  const runs = planRunsImport('Date,Code Word\n2026-10-07,APPLE\n2026-10-14,GOLDEN\n', NOW).runs;
 
-  it('matches a check-in to its run by date, using the code word when two runs share a day', () => {
+  it('matches the single historical run by date regardless of its recorded code word', () => {
     const plan = planCheckinsImport('Email,Date,Code Word\na@x.com,2026-10-07,\na@x.com,2026-10-14,pear\nb@x.com,10/14/26,GOLDEN\n', runs, NOW);
     expect(plan.checkins.map((c) => [c.person.email, c.runId])).toEqual([
-      ['a@x.com', 'run-2026-10-07'], ['a@x.com', 'run-2026-10-14-pear'], ['b@x.com', 'run-2026-10-14'],
+      ['a@x.com', 'run-2026-10-07'], ['a@x.com', 'run-2026-10-14'], ['b@x.com', 'run-2026-10-14'],
     ]);
+  });
+  it('requires a Run ID for an ambiguous date even when the code word matches',()=>{
+    const multiple=planRunsImport('Date,Run ID,Code Word\n2026-10-07,morning,APPLE\n2026-10-07,evening,PEAR\n',NOW).runs;
+    expect(planCheckinsImport('Name,Date,Code Word\nPAT,2026-10-07,PEAR\n',multiple,NOW).issues.some(i=>i.level==='error')).toBe(true);
+    const selected=planCheckinsImport('Name,Date,Run ID,Code Word\nPAT,2026-10-07,evening,APPLE\n',multiple,NOW);
+    expect(selected.checkins[0].runId).toBe('evening');
   });
 
   it('only a person and a date are needed; blanks get defaults and miles stay unknown', () => {

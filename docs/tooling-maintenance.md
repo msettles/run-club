@@ -1,5 +1,7 @@
 # Development tooling maintenance — v1.1.4
 
+> Historical release evidence: version-specific findings, test totals and dependency advisories below are retained as recorded. They are not the current launch checklist. See [documentation status](documentation-status.md) and the [November 13 readiness review](go-live-readiness-review.md).
+
 The remaining deepmerge issue and the Node engine correction are addressed in the [v1.1.5 resolver follow-up](resolver-fork.md). Counts below describe v1.1.4.
 
 November 9, 2026. This follows the v1.1.3 review audit; application behavior is unchanged.

@@ -1,11 +1,12 @@
 import type { MilestoneAlert, MilestoneReward } from '../types';
 import { milestoneMeasure, milestoneTarget } from './milestones';
+import { historicalRunKey, uniqueHistoricalAttendance, type HistoricalAttendance } from './attendanceIdentity';
 
 /** One claimed old name: runs with no sign-in date, and its dated sign-ins. */
 export interface ClaimedHistory {
   id: string;
   oldCount: number;
-  events: { d: string }[];
+  events: HistoricalAttendance[];
 }
 
 export interface ClaimGearResult {
@@ -20,26 +21,26 @@ export interface ClaimGearResult {
  *
  * Old names were all handed gear in the old app, so the claimed name with the most runs is taken as the
  * runner's main one, with everything up to its count already given. The other claimed names are then
- * added to it, biggest first. Runs on a day an earlier name already signed in are not counted again (the
+ * added to it, biggest first. Runs an earlier name already signed in to are not counted again (the
  * runner signed in twice to one run). Every milestone the running count crosses while adding them is owed,
  * unfulfilled. Only run-count milestones apply: old sign-ins have no mileage.
  */
 export function claimGearMilestones(claimed: ClaimedHistory[], milestones: MilestoneReward[]): ClaimGearResult {
-  const total = (p: ClaimedHistory) => p.oldCount + p.events.length;
+  const total = (p: ClaimedHistory) => p.oldCount + uniqueHistoricalAttendance(p.events).length;
   const ordered = [...claimed].sort((a, b) => total(b) - total(a) || a.id.localeCompare(b.id));
   const [primary, ...others] = ordered;
   if (!primary) return { milestones: [], primaryId: undefined };
   const runsMilestones = milestones.filter((m) => milestoneMeasure(m) === 'runs').sort((a, b) => milestoneTarget(a) - milestoneTarget(b));
-  const seenDays = new Set(primary.events.map((e) => e.d));
+  const seenDays = new Set(primary.events.map(historicalRunKey));
   let count = total(primary);
   const owed = new Map<number, MilestoneReward>();
   for (const profile of others) {
-    // Days are judged against the names counted before this one, not against this name's own repeats.
-    const fresh = profile.events.filter((e) => !seenDays.has(e.d)).length;
+    // Compare run identities rather than days: separate runs on one day remain separate.
+    const fresh = uniqueHistoricalAttendance(profile.events).filter((e) => !seenDays.has(historicalRunKey(e))).length;
     const before = count;
     count += profile.oldCount + fresh;
     for (const m of runsMilestones) if (milestoneTarget(m) > before && milestoneTarget(m) <= count) owed.set(milestoneTarget(m), m);
-    profile.events.forEach((e) => seenDays.add(e.d));
+    profile.events.forEach((e) => seenDays.add(historicalRunKey(e)));
   }
   return { milestones: [...owed.values()].sort((a, b) => milestoneTarget(a) - milestoneTarget(b)), primaryId: primary.id };
 }

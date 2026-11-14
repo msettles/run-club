@@ -1,3 +1,4 @@
+import { MaintenancePanel } from './MaintenanceNotice';
 import type { StaffSearchResult, StaffSearchRole } from '../services/store/staffLoading';
 import { roundMiles } from '../utils/miles';
 import type { ImportCommit } from '../utils/importCommit';
@@ -133,6 +134,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = (props) => {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
+      <MaintenancePanel />
       {/* Top Banner */}
       <div className="bg-stone-900 text-white rounded-2xl p-6 shadow-md border border-stone-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>

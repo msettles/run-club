@@ -1,5 +1,7 @@
 # Independent application code review
 
+> Historical release evidence: version-specific findings, test totals and dependency advisories below are retained as recorded. They are not the current launch checklist. See [documentation status](documentation-status.md) and the [November 13 readiness review](go-live-readiness-review.md).
+
 Implementation follow-up: [repair details and verification](audit-fixes-2026-11-09.md). The findings below describe the reviewed v1.1.5 behavior.
 
 Reviewed November 9, 2026, at commit `757a961` (v1.1.5). This is a new review of the current implementation, rather than a check of the earlier review's completion list. Application code, rules and deployment were not changed.

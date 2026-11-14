@@ -6,6 +6,8 @@ import {
   MilestoneAlert,
 } from '../../types';
 import { claimGearAlerts, claimGearMilestones, type ClaimedHistory } from '../../utils/claimGear';
+import { attendanceKeyResolver, historicalRunKeys, legacyAttendanceCredit } from '../../utils/attendanceIdentity';
+import { rebuildAttendanceCredit } from './attendanceCredit';
 import {
   buildLegacyImport,
   datedEventsFrom,
@@ -22,7 +24,7 @@ import {
   query,
   where,
   runTransaction,
-  setDoc,
+  deleteField,
 } from 'firebase/firestore';
 import { fetchMeetups } from './scheduleLoading';
 import { sha256Hex } from '../../utils/hash';
@@ -31,6 +33,7 @@ import { rememberRewardSync } from './rewardSync';
 import { memberKeyFor } from '../../utils/memberKey';
 import { assertDocumentFitsFirestore, cleanFirestoreData, memberFromUser, toPublicMember } from './helpers';
 import type { StoreState } from './state';
+import { isAdminProfile } from '../../utils/roles';
 
 function stableJson(value: unknown): string {
   const normalize = (value: unknown): unknown => Array.isArray(value) ? value.map(normalize) :
@@ -82,6 +85,76 @@ export function createLegacyOps(ctx: StoreState) {
     return pool;
   };
 
+  /** Admin migration/reconciliation; no historical attendance or fulfilled rewards are deleted. */
+  const prepareLegacyAttendance = async () => {
+    if (!isFirebaseConfigured || !db) return;
+    const firestore = db;
+    const profiles = await getDocs(collection(firestore, 'legacy_profiles'));
+    const histories = await getDocs(collection(firestore, 'legacy_history'));
+    const runs = await getDocs(collection(firestore,'runs'));
+    const context = [...histories.docs.flatMap(d => (d.data().events || []) as LegacyEvent[]), ...runs.docs.map(d=>({d:d.data().date as string,r:d.id,c:''}))];
+    const resolveIdentity = attendanceKeyResolver(context);
+    for (const profile of profiles.docs) await runTransaction(firestore, async tx => {
+      const ref = doc(firestore, 'legacy_profiles', profile.id);
+      const [saved, history] = await Promise.all([tx.get(ref), tx.get(doc(firestore, 'legacy_history', profile.id))]);
+      if (!saved.exists()) return;
+      if (!history.exists() && saved.data().newCount) throw new Error(`Historical attendance is missing for ${profile.id}.`);
+      const events = ((history.data()?.events || []) as LegacyEvent[]).map(e => {
+        const key = resolveIdentity(e);
+        return !e.r && key.startsWith('run:') ? { ...e, r: key.slice(4) } : e;
+      });
+      const attendanceKeys = historicalRunKeys(events);
+      if (saved.data().attendanceReady !== true || saved.data().attendanceKeys) tx.update(ref, { attendanceReady: true, ...(saved.data().attendanceKeys ? { attendanceKeys: deleteField() } : {}) });
+      if (!history.exists() || stableJson(events) !== stableJson(history.data().events) || stableJson(attendanceKeys) !== stableJson(history.data().attendanceKeys)) {
+        tx.set(doc(firestore, 'legacy_history', profile.id), { ...(history.data() || {}), events, attendanceKeys });
+      }
+    });
+  };
+
+  const reconcileLegacyAttendance = async (email: string): Promise<void> => {
+    if (!isFirebaseConfigured || !db) return;
+    const firestore = db;
+    const key = await memberKeyFor(email);
+    await runTransaction(firestore, async tx => {
+      const ref = doc(firestore, 'users', email.toLowerCase());
+      const saved = await tx.get(ref);
+      if (!saved.exists() || saved.data().deleting) return;
+      const before = saved.data() as UserProfile;
+      const next = await rebuildAttendanceCredit(tx, firestore, before);
+      delete next.pendingLegacyClaim;
+      const changed = next.attendancePolicyVersion !== before.attendancePolicyVersion || Boolean(before.pendingLegacyClaim) || next.legacyEventRuns !== before.legacyEventRuns || next.totalRuns !== before.totalRuns ||
+        stableJson(next.legacyRunKeys) !== stableJson(before.legacyRunKeys) || stableJson(next.appRunKeys) !== stableJson(before.appRunKeys);
+      if (!changed) return;
+      next.rewardEpoch = (before.rewardEpoch || 0) + 1;
+      tx.set(ref, cleanFirestoreData(next));
+      tx.set(doc(firestore, 'members', key), toPublicMember(next, key));
+    });
+  };
+
+  /** Reserve the name first; only its owner can then read private attendance and finish the credit. */
+  const finishLegacyClaim = async (email: string): Promise<UserProfile> => {
+    if (!db) throw new Error('Database unavailable.');
+    const firestore = db, key = await memberKeyFor(email);
+    return runTransaction(firestore, async tx => {
+      const ref = doc(firestore, 'users', email);
+      const [saved, lock] = await Promise.all([tx.get(ref), tx.get(doc(firestore, 'settings', 'legacy_import'))]);
+      if (!saved.exists()) throw new Error('Profile unavailable.');
+      const before = saved.data() as UserProfile;
+      if (!before.pendingLegacyClaim) return before;
+      if (lock.data()?.active) throw new Error('Historical records are being updated. Retry the claim when the import finishes.');
+      const history = await tx.get(doc(firestore, 'legacy_history', before.pendingLegacyClaim));
+      const added = history.data()?.attendanceKeys as string[] | undefined;
+      if (!added) throw new Error('An admin needs to run Recompute rewards for everyone to finish this claim.');
+      const legacyRunKeys = [...new Set([...(before.legacyRunKeys || []), ...added])].sort();
+      const legacyEventRuns = legacyAttendanceCredit(legacyRunKeys, before.appRunKeys || []);
+      const next = { ...before, legacyRunKeys, legacyEventRuns, totalRuns: before.totalRuns + legacyEventRuns - (before.legacyEventRuns || 0) };
+      delete next.pendingLegacyClaim;
+      tx.set(ref, cleanFirestoreData(next));
+      tx.set(doc(firestore, 'members', key), toPublicMember(next, key));
+      return next;
+    });
+  };
+
   /** Dated sign-ins for legacy names (readable by their claimer and staff). */
   const fetchLegacyEvents = async (ids: string[]): Promise<LegacyEvent[]> => {
     if (!ids.length || !isFirebaseConfigured || !db) return [];
@@ -112,6 +185,7 @@ export function createLegacyOps(ctx: StoreState) {
     const epoch = ctx.privateSessionEpoch?.current;
     let events = legacyEvents ?? [];
     const calculate = async (current: UserProfile) => {
+      current = await retryClaimGear(current);
       events = legacyEvents ?? (await fetchLegacyEvents(current.linkedLegacyIds || []));
       const own = await fetchRunnerCheckins(current.email);
       return { ...current, ...recomputeBadges(current, badges, datedEventsFrom(events, own, meetupEvents)) };
@@ -122,7 +196,8 @@ export function createLegacyOps(ctx: StoreState) {
       const firestore = db;
       const initial = await getDoc(doc(firestore, 'users', user.email));
       if (!initial.exists()) throw new Error('Profile unavailable.');
-      const base = initial.data() as UserProfile;
+      let base = initial.data()?.pendingLegacyClaim ? await finishLegacyClaim(user.email) : initial.data() as UserProfile;
+      base = await retryClaimGear(base);
       const history = await fetchRunnerCheckins(user.email);
       events = legacyEvents ?? await fetchLegacyEvents(base.linkedLegacyIds || []);
       const streakSteps = badges.filter((b) => b.triggerConfig?.type === 'streak' && b.triggerConfig.isIncremental).map((b) => b.triggerConfig!.streakWeeks || 4);
@@ -171,19 +246,20 @@ export function createLegacyOps(ctx: StoreState) {
     const key = await memberKeyFor(email);
     await runTransaction(firestore, async (tx) => {
       const [owner, row] = await Promise.all([tx.get(doc(firestore, 'users', email)), tx.get(doc(firestore, 'members', key))]);
-      if (!owner.exists() || owner.data().deleting) return;
+      if (!owner.exists() || owner.data().deleting || owner.data().pendingLegacyClaim) return;
       const member = toPublicMember(owner.data() as UserProfile, key);
       if (stableJson(row.data()) !== stableJson(member)) tx.set(doc(firestore, 'members', key), member);
     });
   };
 
   /**
-   * After a claim: the gear a runner is owed for old names they have claimed, which is the only time an old
-   * sign-in history creates gear alerts (importing and recomputing never do). Claiming a single name owes nothing.
+   * Deliver the gear owed for a saved claim, including durable retries. Ordinary
+   * imported history does not create a gear backlog. Claiming a single name owes nothing.
    * The claimed name with the most runs is taken as already rewarded; each other name is added to it, skipping
-   * days already counted, and every milestone crossed is an unfulfilled alert. See utils/claimGear.ts.
+   * shared runs already counted, and every milestone crossed is an unfulfilled alert. See utils/claimGear.ts.
    */
   const grantClaimGear = async (user: UserProfile): Promise<MilestoneAlert[]> => {
+    const session = ctx.privateSessionEpoch?.current;
     const ids = user.linkedLegacyIds || [];
     if (ids.length < 2) return [];
     let claimed: ClaimedHistory[];
@@ -200,53 +276,108 @@ export function createLegacyOps(ctx: StoreState) {
     for (const alert of owed) {
       // An alert that already exists (made at a check-in, or by an earlier claim) is never made again.
       if (isFirebaseConfigured && db) {
-        if ((await getDoc(doc(db, 'milestone_alerts', alert.id))).exists()) continue;
-        await setDoc(doc(db, 'milestone_alerts', alert.id), alert);
+        const firestore = db;
+        const created = await runTransaction(firestore, async tx => {
+          const ref = doc(firestore, 'milestone_alerts', alert.id);
+          const [saved, owner] = await Promise.all([tx.get(ref), tx.get(doc(firestore, 'users', user.email))]);
+          if (!owner.exists() || owner.data().deleting || owner.data().pendingLegacyClaim ||
+              (owner.data().rewardEpoch || 0) !== (user.rewardEpoch || 0) ||
+              stableJson(owner.data().linkedLegacyIds || []) !== stableJson(user.linkedLegacyIds || [])) throw new Error('Historical claims changed. Retry the merchandise check.');
+          if (saved.exists()) return false;
+          tx.set(ref, alert);
+          return true;
+        });
+        if (!created) continue;
       } else if (ctx.milestoneAlerts.some((a) => a.id === alert.id)) continue;
       fresh.push(alert);
     }
-    if (fresh.length) ctx.setMilestoneAlerts((prev) => [...fresh, ...prev.filter((a) => !fresh.some((f) => f.id === a.id))]);
+    if (fresh.length && session === ctx.privateSessionEpoch?.current) ctx.setMilestoneAlerts((prev) => [...fresh, ...prev.filter((a) => !fresh.some((f) => f.id === a.id))]);
     return fresh;
   };
 
+  /** Only saved claim work is retried; ordinary imports never manufacture historical gear alerts. */
+  const retryClaimGear = async (user: UserProfile): Promise<UserProfile> => {
+    const session = ctx.privateSessionEpoch?.current;
+    let current = user;
+    if (isFirebaseConfigured && db) {
+      const saved = await getDoc(doc(db, 'users', user.email));
+      if (!saved.exists()) throw new Error('Runner unavailable.');
+      current = saved.data() as UserProfile;
+    }
+    const clearGearWarning = () => {
+      if (ctx.privateSyncError?.startsWith('Your history is saved. Merchandise pickup')) ctx.setPrivateSyncError?.(null);
+    };
+    if (!current.claimGearPending) { clearGearWarning(); return current; }
+    if (session !== ctx.privateSessionEpoch?.current) throw new Error('The signed-in account changed. Retry after signing in.');
+    if (current.pendingLegacyClaim) throw new Error('Finish the pending historical claim before checking merchandise.');
+    await grantClaimGear(current);
+    if (session !== ctx.privateSessionEpoch?.current) throw new Error('The signed-in account changed. Retry after signing in.');
+    if (!isFirebaseConfigured || !db) { clearGearWarning(); return { ...current, claimGearPending: false }; }
+    const firestore = db;
+    const completed = await runTransaction(firestore, async tx => {
+      const ref = doc(firestore, 'users', current.email);
+      const saved = await tx.get(ref);
+      if (!saved.exists()) throw new Error('Runner unavailable.');
+      const latest = saved.data() as UserProfile;
+      if (latest.deleting || latest.pendingLegacyClaim || (latest.rewardEpoch || 0) !== (current.rewardEpoch || 0) ||
+          stableJson(latest.linkedLegacyIds || []) !== stableJson(current.linkedLegacyIds || [])) throw new Error('Historical claims changed. Retry the merchandise check.');
+      if (latest.claimGearPending) tx.update(ref, { claimGearPending: false });
+      return { ...latest, claimGearPending: false };
+    });
+    clearGearWarning();
+    return completed;
+  };
+
   /**
-   * Runner claims one legacy name. The rules only accept it if the name is
-   * still unclaimed and the totals grow by exactly that name's counts.
+   * Reserve an unclaimed name, then reconcile its private run identities before
+   * publishing totals. A saved reservation is resumable after an interruption.
    */
   const claimLegacyProfile = async (user: UserProfile, legacyId: string): Promise<UserProfile> => {
     const session = ctx.privateSessionEpoch?.current;
     const email = user.email.toLowerCase();
     const key = await memberKeyFor(email);
-    if ((user.linkedLegacyIds || []).includes(legacyId)) return user;
+    if ((user.linkedLegacyIds || []).includes(legacyId) && !user.pendingLegacyClaim) return retryClaimGear(user);
     const claimedAt = new Date().toISOString();
     const apply = (u: UserProfile, lp: LegacyMember): UserProfile => {
       if (u.deleting) throw new Error('This profile is being deleted.');
       if (isLegacyClaimed(lp)) throw new Error(`${lp!.name} has already been claimed.`);
-      return { ...u, linkedLegacyIds: [...(u.linkedLegacyIds || []), legacyId],
+      if (isFirebaseConfigured && (!lp.attendanceReady || (u.linkedLegacyIds?.length && !u.legacyRunKeys) || (u.loggedRuns && !u.appRunKeys))) {
+        throw new Error('An admin needs to run Recompute rewards for everyone before this historical name can be claimed.');
+      }
+      // The offline demo has aggregate counts only, so keep its unmatchable credits separate.
+      if (isFirebaseConfigured) return { ...u, claimGearPending: true, pendingLegacyClaim: legacyId, linkedLegacyIds: [...(u.linkedLegacyIds || []), legacyId], linkedLegacyNames: [...u.linkedLegacyNames, lp.name], pre2021Runs: u.pre2021Runs + lp.oldCount, legacyEventRuns: (u.legacyEventRuns || 0) + lp.newCount, totalRuns: u.totalRuns + lp.oldCount + lp.newCount };
+      const previousKeys = u.legacyRunKeys || Array.from({ length: u.legacyEventRuns || 0 }, (_, i) => `demo:previous:${i}`);
+      const addedKeys = Array.from({ length: lp.newCount }, (_, i) => `demo:${lp.id}:${i}`);
+      const legacyRunKeys = [...new Set([...previousKeys, ...addedKeys])].sort();
+      const legacyEventRuns = legacyAttendanceCredit(legacyRunKeys, u.appRunKeys || []);
+      return { ...u, claimGearPending: true, linkedLegacyIds: [...(u.linkedLegacyIds || []), legacyId],
         linkedLegacyNames: [...(u.linkedLegacyNames || []), lp!.name],
         pre2021Runs: u.pre2021Runs + lp!.oldCount,
-        legacyEventRuns: (u.legacyEventRuns || 0) + lp!.newCount,
-        totalRuns: u.totalRuns + lp!.oldCount + lp!.newCount };
+        legacyRunKeys, legacyEventRuns,
+        totalRuns: u.totalRuns + lp!.oldCount + legacyEventRuns - (u.legacyEventRuns || 0) };
     };
     let updated: UserProfile;
     if (isFirebaseConfigured && db) {
       const firestore = db;
+      await finishLegacyClaim(email);
       updated = await runTransaction(firestore, async (tx) => {
         const lpRef = doc(firestore, 'legacy_profiles', legacyId);
         const uRef = doc(firestore, 'users', email);
-        const [lpSnap, uSnap, lock] = await Promise.all([
-          tx.get(lpRef), tx.get(uRef), tx.get(doc(firestore, 'settings', 'legacy_import')),
+        const [lpSnap, uSnap, lock, maintenance] = await Promise.all([
+          tx.get(lpRef), tx.get(uRef), tx.get(doc(firestore, 'settings', 'legacy_import')), tx.get(doc(firestore, 'settings', 'maintenance')),
         ]);
         if (lock.data()?.active) throw new Error('Historical records are being updated. Please try again shortly.');
         if (!lpSnap.exists() || !uSnap.exists()) throw new Error('Profile no longer exists.');
         const current = uSnap.data() as UserProfile;
+        if (maintenance.data()?.active && !isAdminProfile(current)) throw new Error('Club updates are in progress. Historical claims are temporarily paused; please try again later.');
+        if (current.pendingLegacyClaim) throw new Error('Finish the pending historical claim first.');
         if ((current.linkedLegacyIds || []).includes(legacyId)) return current;
         const result = apply(current, lpSnap.data() as LegacyMember);
         tx.update(lpRef, { claimedBy: key, claimedAt });
         tx.set(uRef, cleanFirestoreData(result));
-        tx.set(doc(firestore, 'members', key), toPublicMember(result, key));
         return result;
       });
+      updated = await finishLegacyClaim(email);
     } else {
       const lp = legacyPool.find((m) => m.id === legacyId);
       if (!lp) throw new Error('That old profile no longer exists.');
@@ -255,8 +386,13 @@ export function createLegacyOps(ctx: StoreState) {
     if (session !== ctx.privateSessionEpoch?.current) throw new Error('The signed-in account changed. Sign in again to continue.');
     setLegacyMembers((prev) => prev.map((m) => (m.id === legacyId ? { ...m, claimedBy: key, claimedAt } : m)));
     setUsers((prev) => [updated, ...prev.filter((u) => u.email.toLowerCase() !== email)]);
-    try { await grantClaimGear(updated); }
-    catch (error) { console.warn('Claim saved; gear owed for the claimed names could not be recorded:', error); }
+    try { updated = await retryClaimGear(updated); }
+    catch (error) {
+      console.warn('Claim saved; merchandise will be retried:', error);
+      if (session === ctx.privateSessionEpoch?.current) ctx.setPrivateSyncError?.('Your history is saved. Merchandise pickup is still being updated and will retry when you reload.');
+    }
+    if (session !== ctx.privateSessionEpoch?.current) throw new Error('The signed-in account changed. Sign in again to continue.');
+    setUsers((prev) => [updated, ...prev.filter((u) => u.email.toLowerCase() !== email)]);
     return updated;
   };
 
@@ -280,6 +416,7 @@ export function createLegacyOps(ctx: StoreState) {
 
     const withoutClaim = (u: UserProfile): UserProfile => ({
       ...u,
+      ...(u.pendingLegacyClaim === legacyId ? { pendingLegacyClaim: undefined } : {}),
       rewardEpoch: (u.rewardEpoch || 0) + 1,
       linkedLegacyIds: (u.linkedLegacyIds || []).filter((id) => id !== legacyId),
       linkedLegacyNames: (u.linkedLegacyNames || []).filter((n) => n.toUpperCase() !== lp!.name.toUpperCase()),
@@ -289,6 +426,8 @@ export function createLegacyOps(ctx: StoreState) {
     });
     const withClaim = (u: UserProfile): UserProfile => ({
       ...u,
+      claimGearPending: true,
+      rewardEpoch: (u.rewardEpoch || 0) + 1,
       linkedLegacyIds: [...(u.linkedLegacyIds || []), legacyId],
       linkedLegacyNames: [...(u.linkedLegacyNames || []), lp!.name],
       pre2021Runs: u.pre2021Runs + lp!.oldCount,
@@ -320,8 +459,8 @@ export function createLegacyOps(ctx: StoreState) {
           if (u.deleting) throw new Error('This profile is being deleted.');
           const owns = (u.linkedLegacyIds || []).includes(legacyId);
           const receives = u.email.toLowerCase() === toEmail?.toLowerCase();
-          if (owns && !receives) result.push(withoutClaim(u));
-          if (!owns && receives) result.push(withClaim(u));
+          if (owns && !receives) result.push(await rebuildAttendanceCredit(tx, firestore, withoutClaim(u)));
+          if (!owns && receives) result.push(await rebuildAttendanceCredit(tx, firestore, withClaim(u)));
         }
         const keys = await Promise.all(result.map((u) => memberKeyFor(u.email)));
         tx.update(ref, { claimedBy: toKey, claimedAt });
@@ -337,9 +476,10 @@ export function createLegacyOps(ctx: StoreState) {
     setUsers((prev) => prev.map((u) => changed.find((c) => c.email === u.email) || u));
     const receiver = changed.find((u) => u.email.toLowerCase() === toEmail?.toLowerCase());
     if (receiver) {
-      try { await grantClaimGear(receiver); }
+      try { await retryClaimGear(receiver); }
       catch (error) { console.warn('Claim saved; gear owed for the claimed names could not be recorded:', error); }
     }
+    if (session !== ctx.privateSessionEpoch?.current) return;
     for (const u of changed) {
       try { await refreshDerivedStats(u); }
       catch (error) { console.warn('Claim saved; derived rewards need a refresh:', error); ctx.setPrivateSyncError?.('The historical claim was saved. Rewards will refresh at the runner’s next sign-in.'); }
@@ -394,11 +534,12 @@ export function createLegacyOps(ctx: StoreState) {
           const u = snap.data() as UserProfile;
           if (u.deleting || !(u.linkedLegacyIds || []).includes(p.id)) continue;
           const before = old.data();
-          const updated = { ...u, rewardEpoch: (u.rewardEpoch || 0) + 1,
+          let updated: UserProfile = { ...u, rewardEpoch: (u.rewardEpoch || 0) + 1,
             ...(p.removed ? { linkedLegacyIds: (u.linkedLegacyIds || []).filter((id) => id !== p.id), linkedLegacyNames: (u.linkedLegacyNames || []).filter((name) => name !== p.name) } : {}),
             pre2021Runs: u.pre2021Runs + p.oldCount - (before?.oldCount || 0),
             legacyEventRuns: (u.legacyEventRuns || 0) + p.newCount - (before?.newCount || 0),
             totalRuns: u.totalRuns + p.oldCount + p.newCount - (before?.oldCount || 0) - (before?.newCount || 0) };
+          updated = await rebuildAttendanceCredit(tx, currentDb, updated, new Map([[p.id, imp.histories[p.id] || []]]));
           changed.push(updated);
         }
         const keys = await Promise.all(changed.map((u) => memberKeyFor(u.email)));
@@ -408,8 +549,9 @@ export function createLegacyOps(ctx: StoreState) {
           tx.delete(doc(currentDb, 'legacy_history', p.id));
         } else {
           const { removed: _removed, ...profile } = p;
+          Object.assign(profile, { attendanceReady: true });
           tx.set(ref, { ...profile, claimedBy: old.data()?.claimedBy || null, claimedAt: old.data()?.claimedAt || null });
-          tx.set(doc(currentDb, 'legacy_history', p.id), { id: p.id, events: imp.histories[p.id] || [] });
+          tx.set(doc(currentDb, 'legacy_history', p.id), { id: p.id, events: imp.histories[p.id] || [], attendanceKeys: historicalRunKeys(imp.histories[p.id] || []) });
         }
         changed.forEach((u, n) => {
           tx.set(doc(currentDb, 'users', u.email), cleanFirestoreData(u));
@@ -450,5 +592,5 @@ export function createLegacyOps(ctx: StoreState) {
   };
 
 
-  return { syncMemberProjection, loadLegacyPool, fetchLegacyEvents, fetchRunnerCheckins, refreshDerivedStats, claimLegacyProfile, adminSetLegacyClaim, importLegacyData };
+  return { retryClaimGear, syncMemberProjection, loadLegacyPool, fetchLegacyEvents, fetchRunnerCheckins, refreshDerivedStats, claimLegacyProfile, adminSetLegacyClaim, importLegacyData, prepareLegacyAttendance, reconcileLegacyAttendance };
 }

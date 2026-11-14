@@ -121,6 +121,7 @@ function checkInBatch(db, email, { codeWord = 'ACORN', bump = 1, milestone = fal
     ...user,
     totalRuns: user.totalRuns + bump,
     loggedRuns: user.loggedRuns + bump,
+    appRunKeys: [...new Set([...(user.appRunKeys || []), `run:${RUN}`])],
     runCount: user.runCount + bump,
     totalMiles: user.totalMiles + 3.1,
     distanceCounts: { '3': 1, '3.1': 1, '3.1 mi': 1 },
@@ -363,7 +364,7 @@ test('same-night edit keeps run count and needs the code word', async () => {
   });
   const alice = ctx(ALICE);
   await assertSucceeds(checkInBatch(alice, ALICE));
-  const after1 = { ...baseUser(ALICE), totalRuns: 5, loggedRuns: 5, runCount: 5, totalMiles: 15.1, distanceCounts: { '3': 1, '3.1': 1, '3.1 mi': 1 }, lastCheckInDate: DATE, lastCheckInRunId: RUN };
+  const after1 = { ...baseUser(ALICE), appRunKeys: [`run:${RUN}`], totalRuns: 5, loggedRuns: 5, runCount: 5, totalMiles: 15.1, distanceCounts: { '3': 1, '3.1': 1, '3.1 mi': 1 }, lastCheckInDate: DATE, lastCheckInRunId: RUN };
   const edit = (codeWord, totalRuns) => {
     const b = writeBatch(alice);
     b.set(doc(alice, 'checkins', `${RUN}_${ALICE}`), checkIn(ALICE, { codeWord, distanceChoice: 'route-5', actualMiles: 5.2, updatedAt: '2026-11-11T18:30:00.000Z' }));
@@ -393,6 +394,27 @@ async function seedAdmin() {
     await setDoc(doc(c.firestore(), 'users', ADMIN), baseUser(ADMIN, { role: 'admin' }));
   });
 }
+
+test('maintenance stops member and organizer mutations, keeps reads and admin repair available, and resumes explicitly', async () => {
+  await seedAdmin();
+  const admin=ctx(ADMIN),alice=ctx(ALICE),org=ctx(ORGANIZER);
+  await assertSucceeds(setDoc(doc(admin,'settings','maintenance'),{active:true,updatedAt:'2026-11-13T12:00:00Z'}));
+  await assertFails(updateDoc(doc(org,'settings','maintenance'),{active:false}));
+  await assertFails(deleteDoc(doc(alice,'settings','maintenance')));
+  await assertSucceeds(getDoc(doc(env.unauthenticatedContext().firestore(),'runs',RUN)));
+  await assertFails(updateDoc(doc(alice,'users',ALICE),{shirtSize:'L'}));
+  await assertFails(checkInBatch(alice,ALICE));
+  const email='new.runner@example.test';
+  await assertFails(setDoc(doc(ctx(email),'users',email),freshUser(email)));
+  await assertFails(setDoc(doc(org,'runs','paused-run'),{...run,id:'paused-run'}));
+  await assertFails(updateDoc(doc(org,'runs',RUN),{title:'Changed while paused'}));
+  await assertSucceeds(updateDoc(doc(admin,'users',ALICE),{shirtSize:'L'}));
+  await assertSucceeds(updateDoc(doc(admin,'runs',RUN),{title:'Admin maintenance repair'}));
+  await assertSucceeds(updateDoc(doc(admin,'settings','maintenance'),{active:false}));
+  await assertSucceeds(updateDoc(doc(alice,'users',ALICE),{shirtSize:'XL'}));
+  await assertSucceeds(setDoc(doc(ctx(email),'users',email),freshUser(email)));
+  await assertSucceeds(setDoc(doc(org,'runs','paused-run'),{...run,id:'paused-run'}));
+});
 
 test('admin can promote a runner to organizer and admin, and demote back', async () => {
   await seedAdmin();
@@ -471,27 +493,31 @@ test('a former owner email is a normal admin: demotable, and cannot self-create 
 
 // ---- Legacy (old app) claims ----
 
-const LP = { id: 'matt-settles', name: 'MATT SETTLES', oldCount: 124, newCount: 129, totalRuns: 253, claimedBy: null, claimedAt: null };
-const LP2 = { id: 'matt-l-settles', name: 'MATT L SETTLES', oldCount: 0, newCount: 5, totalRuns: 5, claimedBy: null, claimedAt: null };
+const LP = { id: 'matt-settles', name: 'MATT SETTLES', attendanceKeys: Array.from({length:129}, (_,i)=>`run:main-${i}`), oldCount: 124, newCount: 129, totalRuns: 253, claimedBy: null, claimedAt: null };
+const LP2 = { id: 'matt-l-settles', name: 'MATT L SETTLES', attendanceKeys: Array.from({length:5}, (_,i)=>`run:other-${i}`), oldCount: 0, newCount: 5, totalRuns: 5, claimedBy: null, claimedAt: null };
 
 async function seedLegacy() {
   await env.withSecurityRulesDisabled(async (c) => {
     const db = c.firestore();
+    for (const email of [ALICE, BOB]) await updateDoc(doc(db, 'users', email), { appRunKeys: [] });
     await setDoc(doc(db, 'legacy_index', 'pool'), { entries: [LP, LP2].map(({ id, name, oldCount, newCount }) => ({ id, name, oldCount, newCount })) });
     for (const lp of [LP, LP2]) {
-      await setDoc(doc(db, 'legacy_profiles', lp.id), lp);
-      await setDoc(doc(db, 'legacy_history', lp.id), { events: [{ d: '2024-11-27', t: '18:00:00', c: 'TURKEY' }] });
+      const { attendanceKeys, ...publicProfile } = lp;
+      await setDoc(doc(db, 'legacy_profiles', lp.id), { ...publicProfile, attendanceReady: true });
+      await setDoc(doc(db, 'legacy_history', lp.id), { attendanceKeys, events: [{ d: '2024-11-27', t: '18:00:00', c: 'TURKEY' }] });
     }
   });
 }
 
 function claimBatch(db, email, lps, { extraRuns = 0 } = {}) {
-  const u = baseUser(email);
+  const u = { ...baseUser(email), appRunKeys: [] };
   const updated = {
     ...u,
+    claimGearPending: true,
     linkedLegacyIds: lps.map((l) => l.id),
     linkedLegacyNames: lps.map((l) => l.name),
     pre2021Runs: u.pre2021Runs + lps.reduce((s, l) => s + l.oldCount, 0),
+    legacyRunKeys: [...new Set(lps.flatMap(l=>l.attendanceKeys))],
     legacyEventRuns: lps.reduce((s, l) => s + l.newCount, 0),
     totalRuns: u.totalRuns + lps.reduce((s, l) => s + l.totalRuns, 0) + extraRuns,
   };
@@ -551,7 +577,7 @@ test('claiming two or more old names lets the runner record the gear their runs 
   const alice = ctx(ALICE);
   const second = writeBatch(alice);
   const u = (await getDoc(doc(alice, 'users', ALICE))).data();
-  const next = { ...u, linkedLegacyIds: [LP.id, LP2.id], linkedLegacyNames: [LP.name, LP2.name], pre2021Runs: u.pre2021Runs + LP2.oldCount, legacyEventRuns: u.legacyEventRuns + LP2.newCount, totalRuns: u.totalRuns + LP2.totalRuns };
+  const next = { ...u, legacyRunKeys: [...u.legacyRunKeys, ...LP2.attendanceKeys], linkedLegacyIds: [LP.id, LP2.id], linkedLegacyNames: [LP.name, LP2.name], pre2021Runs: u.pre2021Runs + LP2.oldCount, legacyEventRuns: u.legacyEventRuns + LP2.newCount, totalRuns: u.totalRuns + LP2.totalRuns };
   second.update(doc(alice, 'legacy_profiles', LP2.id), { claimedBy: memberKeyFor(ALICE), claimedAt: '2026-11-09T00:00:00Z' });
   second.set(doc(alice, 'users', ALICE), next);
   second.set(doc(alice, 'members', memberKeyFor(ALICE)), memberFromUser(next));
@@ -567,14 +593,17 @@ test('claiming two or more old names lets the runner record the gear their runs 
 
 test('a held sign-in tagged with a special event counts for that event once claimed, and only that one', async () => {
   const sourceFor = (c) => ({ legacyId: LP.id, event: { d: '2025-05-28', t: '18:30:00', c, s: 'anniversary' } });
-  const proof = (specialId, source) => ({ userEmail: ALICE, epoch: 0, kind: 'special', specialId, count: 1, sourceId: `legacy:${LP.id}:2025-05-28:18:30:00:${source.event.c}`, sources: [`legacy:${LP.id}:2025-05-28:18:30:00:${source.event.c}`], source });
+  const proof = (specialId, source) => ({ userEmail: ALICE, epoch: 0, kind: 'special', specialId, count: 1, sourceId: 'date:2025-05-28', sources: ['date:2025-05-28'], source });
   await seedLegacy();
-  await env.withSecurityRulesDisabled((c) => setDoc(doc(c.firestore(), 'legacy_history', LP.id), { events: [sourceFor('FIRST').event, { d: '2024-11-27', t: '18:00:00', c: 'PLAIN' }] }));
+  await env.withSecurityRulesDisabled((c) => setDoc(doc(c.firestore(), 'legacy_history', LP.id), { attendanceKeys: LP.attendanceKeys, events: [sourceFor('FIRST').event, { d: '2024-11-27', t: '18:00:00', c: 'TURKEY', s: 'none' }] }));
   // Not before the name is claimed.
   await assertFails(setDoc(doc(ctx(ALICE), 'reward_proofs', `${ALICE}_0_special_anniversary`), proof('anniversary', sourceFor('FIRST'))));
   await assertSucceeds(claimBatch(ctx(ALICE), ALICE, [LP]).commit());
   // The code word FIRST says nothing, but the run's tag does.
   await assertSucceeds(setDoc(doc(ctx(ALICE), 'reward_proofs', `${ALICE}_0_special_anniversary`), proof('anniversary', sourceFor('FIRST'))));
+  // A suggestive code word cannot award a special-event proof without a tag.
+  const untagged = { legacyId: LP.id, event: { d: '2024-11-27', t: '18:00:00', c: 'TURKEY', s: 'none' } };
+  await assertFails(setDoc(doc(ctx(ALICE), 'reward_proofs', `${ALICE}_0_special_turkey_trot`), { ...proof('turkey_trot', untagged), sourceId: 'date:2024-11-27', sources: ['date:2024-11-27'] }));
   // The tag is for anniversary only, and an event that is not in the history cannot be invented.
   await assertFails(setDoc(doc(ctx(ALICE), 'reward_proofs', `${ALICE}_0_special_halloween`), proof('halloween', sourceFor('FIRST'))));
   const invented = { legacyId: LP.id, event: { d: '2025-05-28', t: '18:30:00', c: 'FIRST', s: 'halloween' } };

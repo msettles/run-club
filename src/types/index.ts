@@ -263,7 +263,12 @@ export interface UserProfile {
   // Attendance & Miles
   pre2021Runs: number;       // Sum of claimed legacy names' pre-2021 OldCounts, plus importedRuns
   importedRuns?: number;     // Runs with no check-in record that an import gave this member (part of pre2021Runs)
-  legacyEventRuns?: number;  // Sum of claimed legacy names' sign-ins since 2021
+  legacyEventRuns?: number;  // Unique claimed runs not already represented by an app check-in
+  legacyRunKeys?: string[];  // Admin-prepared union of claimed run identities, validated on each claim
+  appRunKeys?: string[];     // App run identities, maintained with check-ins and admin recomputation
+  pendingLegacyClaim?: string; // Reserved name awaiting private attendance reconciliation
+  claimGearPending?: boolean; // Durable delivery retry, saved atomically with a historical claim
+  attendancePolicyVersion?: number; // Admin migration invalidates proofs from older identity/tag rules
   loggedRuns: number;        // Check-ins in this app
   totalRuns: number;         // pre2021Runs + legacyEventRuns + loggedRuns
   totalMiles: number;        // Cumulative miles walked + run
@@ -286,6 +291,7 @@ export interface UserProfile {
 }
 
 export interface LegacyMember {
+  attendanceReady?: boolean; // Private attendance identities have been prepared by the admin
   id: string;                // Normalized name or unique ID
   name: string;              // Exact legacy roster name
   newCount: number;          // From 2021-2026 log (sum is 6,263)

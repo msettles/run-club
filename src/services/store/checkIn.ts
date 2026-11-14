@@ -122,6 +122,11 @@ export function createCheckInOps(ctx: StoreState & ReturnType<typeof createLegac
     } catch (error) {
       console.error('Check-in failed:', error);
       const err = error as { code?: string; message?: string };
+      if (err.code === 'permission-denied' && db) {
+        try {
+          if ((await getDocFromServer(doc(db, 'settings', 'maintenance'))).data()?.active) return { success: false, message: 'Club updates are in progress. Check-ins are temporarily paused; please try again later.' };
+        } catch { /* Keep the original save error if the status cannot be fetched. */ }
+      }
       return { success: false, message: err.code === 'permission-denied' ? 'Check-in was not accepted. Refresh this run and verify its code word and check-in window.' : ['unavailable', 'deadline-exceeded'].includes(err.code || '') ? 'Could not confirm your check-in changes. Reconnect and try again; retrying will not create a duplicate check-in.' : err.message || 'Could not save check-in. Check your connection and try again.' };
     }
   };

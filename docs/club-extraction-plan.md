@@ -1,6 +1,6 @@
 # Plan: one build-time club setup
 
-Status: planned, not started. Written November 10, 2026.
+Status: planned, not started. Written November 10, 2026; current-value corrections checked November 13. The `club/` layout below is proposed and does not exist yet.
 
 ## Goal
 
@@ -39,7 +39,7 @@ club/
 | `storagePrefix` | `woodchuckers` | Browser storage keys, push inbox database, downloaded file names |
 | `memberKeySalt` | `woodchuckers` | Leaderboard key hash. Also in `firestore.rules`. **Never change for an existing club** |
 | `timeZone` | America/Los_Angeles | Check-in windows, run dates, build time stamp |
-| `schedule` | Wednesday, 6:00 PM | "Wednesday Night Runs", next-run date, new-run defaults |
+| `schedule` | Wednesday, 6:30 PM | "Wednesday Night Runs", next-run date, new-run defaults |
 | `venue` | Blue Note Brewing Co., 750 Dead Cat Alley, Woodland, CA; 38.6781, -121.7712; 🍺 | Map centre, start/finish pins, directions wording, new-run defaults, default city |
 | `wording` | "All runs start and finish at…", "Meet on patio @…", perk text | The dozen venue sentences across run cards, check-in and milestones |
 | `theme.primary`, `theme.accent` | Teal `#1a607c` scale, gold `#de9c1e` scale | Tailwind palette, manifest theme colour, map lines, confetti |

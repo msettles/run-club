@@ -7,8 +7,10 @@ type Totals = Pick<UserProfile, 'loggedRuns' | 'totalRuns' | 'totalMiles' | 'run
 /**
  * A member's totals, rebuilt from their check-ins alone.
  *
- * Runs with no check-in record (`pre2021Runs`) and claimed old sign-ins (`legacyEventRuns`) are kept
- * as they are and only added to the run total. The first run date is mm/yyyy of the oldest check-in, or "Before mm/yyyy" (when the club's records begin) when some runs have no record. Everything else is counted from the check-ins, so the
+ * Runs with no check-in record (`pre2021Runs`) are preserved. `legacyEventRuns` is the
+ * reconciled count of unique claimed runs not already represented by an app check-in.
+ * The admin recompute rebuilds that contribution before calling this function.
+ * The first run date is mm/yyyy of the oldest check-in, or "Before mm/yyyy" (when the club's records begin) when some runs have no record. Everything else is counted from the check-ins, so the
  * result is the same whether the history was imported, claimed or checked in live.
  */
 export function totalsFromCheckins(user: Pick<UserProfile, 'pre2021Runs' | 'legacyEventRuns' | 'firstRunDate' | 'lastCheckInUpdatedAt'>, checkins: CheckInRecord[], legacyDates: string[] = [], recordsBegin?: string): Totals {

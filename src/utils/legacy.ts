@@ -1,4 +1,5 @@
 import { formatMiles } from './miles';
+import { uniqueHistoricalAttendance } from './attendanceIdentity';
 /**
  * Legacy (old app) data: import, fuzzy name matching, streaks and badge recompute.
  *
@@ -6,17 +7,17 @@ import { formatMiles } from './miles';
  *   - totals CSV:   Name, ..., OldCounts   -> pre-2021 run count per sign-in name
  *   - check-ins CSV: Name, Date, Time, ..., Code Name  -> one row per sign-in since 2021
  *
- * One event = one run. An event is identified by date + code word, so a double
- * sign-in to the same event counts once, while two events on one day count twice.
+ * One event = one run. Run IDs identify attendance; code words are credentials only.
  */
 import type { Badge, CheckInRecord, LegacyMember, MeetupEvent, UserProfile } from '../types';
 import { clubYmd } from './dateUtils';
 
 export interface LegacyEvent {
+  r?: string; // Canonical imported run ID; older exports fall back to the date
   legacyId?: string;
   d: string; // YYYY-MM-DD
   t: string; // HH:MM:SS
-  c: string; // event code word (old events only; identifies the event)
+  c: string; // recorded check-in credential; never identifies or classifies attendance
   /** The special event this sign-in counts for (an id such as 'halloween'), set when it was imported from a tagged run. */
   s?: string;
 }
@@ -142,14 +143,15 @@ export function buildLegacyImport(totalsCsv: string, checkinsCsv: string): Legac
       names.set(id, name);
       namesOnlyInCheckins++;
     }
-    const c = normalizeName(r['Code Name'] || '').replace(/ /g, '');
-    const key = `${id}|${d}|${c}`;
+    const c = (r['Code Name'] || '').trim().toUpperCase();
+    const runId = (r['Run ID'] || r.RunID || '').trim() || `run-${d}`;
+    const key = `${id}|${runId}`;
     if (seen.has(key)) {
       duplicatesDropped++;
       continue;
     }
     seen.add(key);
-    (histories[id] ||= []).push({ d, t: (r.Time || '').trim(), c });
+    (histories[id] ||= []).push({ r: runId, d, t: (r.Time || '').trim(), c, s: 'none' });
     events++;
   }
   for (const list of Object.values(histories)) list.sort((a, b) => (a.d + a.t).localeCompare(b.d + b.t));
@@ -309,19 +311,8 @@ export function specialEventIdsFor(specialEvent?: string): string[] {
   return specialEvent && specialEvent !== 'none' ? [specialEvent] : [];
 }
 
-/**
- * Old-app sign-ins carry only a code word (no run to tag), so they are still matched by keyword.
- * Same keywords as before; revisit when deciding how old sign-ins should count.
- */
-export function legacySpecialEventIds(codeWord: string, tag?: string): string[] {
-  const cw = (codeWord || '').toUpperCase();
-  // A tag from an imported run counts directly; the code-word keywords still count for untagged old sign-ins.
-  const ids: string[] = tag && tag !== 'none' ? [tag] : [];
-  if (cw.includes('TURKEY')) ids.push('turkey_trot');
-  if (cw.includes('HALLOWEEN') || cw.includes('SPOOKY')) ids.push('halloween');
-  if (cw.includes('ANNIVERSARY')) ids.push('anniversary');
-  return [...new Set(ids)];
-}
+/** Only the explicit run tag classifies historical attendance. */
+export function legacySpecialEventIds(tag?: string): string[] { return specialEventIdsFor(tag); }
 
 // ---------- badge recompute ----------
 
@@ -340,7 +331,7 @@ export function datedEventsFrom(
   const byId = new Map(meetupEvents.map((e) => [e.id, e]));
   const byDate = new Map(meetupEvents.map((e) => [e.date, e]));
   return [
-    ...legacyEvents.map((e) => ({ date: e.d, specialEventIds: legacySpecialEventIds(e.c, e.s) })),
+    ...uniqueHistoricalAttendance(legacyEvents, appCheckins).map((e) => ({ date: e.d, specialEventIds: legacySpecialEventIds(e.s) })),
     ...appCheckins.map((c) => {
       const ev = c.runId ? byId.get(c.runId) : byDate.get(c.date);
       return { date: c.date, specialEventIds: specialEventIdsFor(c.eventSpecial ?? ev?.specialEvent) };

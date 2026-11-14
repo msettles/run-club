@@ -45,6 +45,9 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       workbox: {
+        // Firebase's hosted OAuth callback/iframe must reach the server rather
+        // than the offline app shell; intercepting them silently loses sign-in.
+        navigateFallbackDenylist: [/^\/__/],
         // Staff-only screens, the route generator and local-mode sample data are
         // not downloaded for every visitor. They are cached when first opened.
         globIgnores: ['**/node_modules/**/*', 'sw.js', 'workbox-*.js'].concat(

@@ -6,4 +6,4 @@ Links contain only the public run ID, never code words or authentication paramet
 
 Firebase Hosting serves a static app, so social-media crawlers receive the site's general metadata. Per-run preview titles/images would require an additional server-rendered metadata endpoint.
 
-Validation: 92 unit tests pass, including URL encoding, parameter stripping and invalid ID handling. Type checking, production build and bundle limits pass; lint has zero errors and the existing 48 warnings. No rules or data migration is needed.
+Release-time validation (historical counts): 92 unit tests pass, including URL encoding, parameter stripping and invalid ID handling. Type checking, production build and bundle limits pass; lint has zero errors and the existing 48 warnings. No rules or data migration is needed.

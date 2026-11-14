@@ -1,3 +1,4 @@
+import { assertSchedulingAvailable } from './schedulingGuard';
 /** Club store operations: runs. */
 import { 
   RunEvent, 
@@ -7,6 +8,7 @@ import {
   CheckInRecord,
 } from '../../types';
 import { routeSummary } from '../routeCatalog';
+import { appAttendanceKeys, legacyAttendanceCredit } from '../../utils/attendanceIdentity';
 import { computeCheckInWindow } from '../../utils/checkInWindow';
 import { buildMeetupFromRun } from '../../utils/runChoices';
 import {
@@ -102,6 +104,7 @@ export function createRunOps(ctx: StoreState & ReturnType<typeof createLegacyOps
    * The creator is not RSVP'd automatically.
    */
   const createRunWithCheckIn = async (newRun: Omit<RunEvent, 'id' | 'attendees'>, codeWord: string): Promise<RunEvent> => {
+    await assertSchedulingAvailable(currentUser);
     const word = codeWord.trim().toUpperCase();
     if (!word) throw new Error('Enter the check-in code word.');
     const duplicateError = () =>
@@ -249,12 +252,16 @@ export function createRunOps(ctx: StoreState & ReturnType<typeof createLegacyOps
   };
 
   /** Undo one check-in's effect on a runner's totals (badges/streaks are recomputed separately). */
-  const rollBackCheckIn = (u: UserProfile, c: CheckInRecord): UserProfile => {
+  const rollBackCheckIn = (u: UserProfile, c: CheckInRecord, remaining?: CheckInRecord[]): UserProfile => {
     const m = c.actualMiles || 0;
+    const removed = new Set(appAttendanceKeys([c]));
+    const appRunKeys = remaining ? appAttendanceKeys(remaining) : (u.appRunKeys || []).filter(key => !removed.has(key));
+    const legacyEventRuns = u.legacyRunKeys ? legacyAttendanceCredit(u.legacyRunKeys, appRunKeys) : (u.legacyEventRuns || 0);
     return {
       ...u,
       rewardEpoch: (u.rewardEpoch || 0) + 1,
-      totalRuns: Math.max(0, u.totalRuns - 1),
+      appRunKeys, legacyEventRuns,
+      totalRuns: Math.max(0, u.totalRuns - 1 + legacyEventRuns - (u.legacyEventRuns || 0)),
       loggedRuns: Math.max(0, u.loggedRuns - 1),
       runCount: c.activity === 'running' ? Math.max(0, u.runCount - 1) : u.runCount,
       walkCount: c.activity === 'walking' ? Math.max(0, u.walkCount - 1) : u.walkCount,
@@ -325,9 +332,9 @@ export function createRunOps(ctx: StoreState & ReturnType<typeof createLegacyOps
           let final: UserProfile | undefined;
           let key: string | undefined;
           if (userSnap.exists()) {
-            const rolled = rollBackCheckIn(userSnap.data() as UserProfile, c);
-            const legacy = await fetchLegacyEvents(rolled.linkedLegacyIds || []);
             const remaining = (await fetchRunnerCheckins(email)).filter((x) => x.id !== c.id);
+            const rolled = rollBackCheckIn(userSnap.data() as UserProfile, c, remaining);
+            const legacy = await fetchLegacyEvents(rolled.linkedLegacyIds || []);
             final = { ...rolled, ...recomputeBadges(rolled, badges, datedEventsFrom(legacy, remaining, remainingEvents)), ...lastCheckInFields(remaining) };
             key = await memberKeyFor(email);
           }
@@ -355,7 +362,7 @@ export function createRunOps(ctx: StoreState & ReturnType<typeof createLegacyOps
         const user = users.find((u) => u.email.toLowerCase() === c.userEmail.toLowerCase());
         if (!user) continue;
         const remaining = checkins.filter((x) => x.id !== c.id && x.userEmail.toLowerCase() === c.userEmail.toLowerCase());
-        const rolled = rollBackCheckIn(user, c);
+        const rolled = rollBackCheckIn(user, c, remaining);
         const legacy = await fetchLegacyEvents(user.linkedLegacyIds || []);
         touchedUsers.push({ ...rolled, ...recomputeBadges(rolled, badges, datedEventsFrom(legacy, remaining, remainingEvents)), ...lastCheckInFields(remaining) });
       }

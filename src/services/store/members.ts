@@ -1,3 +1,4 @@
+import { ATTENDANCE_POLICY_VERSION } from '../../utils/attendanceIdentity';
 /** Club store operations: members. */
 import { 
   UserProfile,
@@ -69,6 +70,7 @@ export function createMemberOps(ctx: StoreState & ReturnType<typeof createLegacy
     // Profiles start empty: legacy runs arrive one claim at a time (each checked
     // by the rules), and new runs through check-ins.
     const newUser: UserProfile = {
+      attendancePolicyVersion: ATTENDANCE_POLICY_VERSION,
       email: cleanEmail,
       firstName: profileData.firstName.trim(),
       lastName: profileData.lastName.trim(),
@@ -105,8 +107,9 @@ export function createMemberOps(ctx: StoreState & ReturnType<typeof createLegacy
     const firestore = db;
     const registered = isFirebaseConfigured && firestore ? await runTransaction(firestore, async (tx) => {
       const ref = doc(firestore, 'users', cleanEmail);
-      const saved = await tx.get(ref);
+      const [saved, maintenance] = await Promise.all([tx.get(ref), tx.get(doc(firestore, 'settings', 'maintenance'))]);
       if (saved.exists()) return saved.data() as UserProfile;
+      if (maintenance.data()?.active && newUser.role !== 'admin') throw new Error('Club updates are in progress. Registration is temporarily paused; please try again later.');
       tx.set(ref, cleanFirestoreData(newUser));
       tx.set(doc(firestore, 'members', memberKey), toPublicMember(newUser, memberKey));
       return newUser;
@@ -142,7 +145,7 @@ export function createMemberOps(ctx: StoreState & ReturnType<typeof createLegacy
 
     if (failed.length) {
       throw Object.assign(
-        new Error(`Your profile was created, but these old profiles were already claimed: ${failed.join(', ')}. Ask an organizer if one of them is yours.`),
+        new Error(`Your profile was created, but these historical names could not finish linking: ${failed.join(', ')}. Reload to resume an interrupted claim, or ask an admin for help if a name belongs to another runner.`),
         { user: finalUser }
       );
     }

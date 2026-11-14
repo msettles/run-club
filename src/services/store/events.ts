@@ -1,3 +1,4 @@
+import { assertSchedulingAvailable } from './schedulingGuard';
 /** Club store operations: events. */
 import { 
   MeetupEvent,
@@ -30,6 +31,7 @@ export function createEventOps(ctx: StoreState) {
    * Save / update a meetup event (Admin)
    */
   const saveMeetupEvent = async (event: MeetupEvent, run?: RunEvent) => {
+    await assertSchedulingAvailable(ctx.currentUser);
     assertDocumentFitsFirestore(event, 'This run');
     const win = computeCheckInWindow(event.date, event.time);
     const runId = event.runId || event.id;

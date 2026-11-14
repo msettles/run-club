@@ -44,6 +44,13 @@ service cloud.firestore {
     // Helper Functions
     // ===============================================================
 
+    // Maintenance pauses client mutations for members and organizers. Admins retain
+    // the migration/rebuild path; normal validation still applies to every write.
+    function maintenanceAllowsWrites() {
+      let p = /databases/$(database)/documents/settings/maintenance;
+      return !exists(p) || get(p).data.get('active', false) == false || isAdmin();
+    }
+
     function isAuthenticated() {
       return request.auth != null;
     }
@@ -154,8 +161,9 @@ service cloud.firestore {
 
     function participationAllowed(runId, email) {
       let run = /databases/$(database)/documents/runs/$(runId);
+      let user = get(userPath(email)).data;
       return legacyClaimsOpen() && exists(run) && !get(run).data.get('deleting', false) &&
-        exists(userPath(email)) && !get(userPath(email)).data.get('deleting', false);
+        !user.get('deleting', false) && user.get('pendingLegacyClaim', '') == '';
     }
 
     function checkInMetadataMatches(c) {
@@ -360,7 +368,7 @@ service cloud.firestore {
     // The leaderboard row must mirror the user doc as it stands after this batch.
     function memberMirrorsUser(data, email) {
       let u = getAfter(userPath(email)).data;
-      return data.name == u.displayName &&
+      return u.get('pendingLegacyClaim', '') == '' && data.name == u.displayName &&
         data.totalRuns == u.totalRuns &&
         data.totalMiles == u.totalMiles &&
         data.unlockedBadgeIds == u.unlockedBadgeIds &&
@@ -412,7 +420,7 @@ service cloud.firestore {
                'createdAt', 'age', 'birthday', 'city', 'zipCode', 'preferredPace',
                'petRunCount', 'distanceCounts', 'firstRunDate', 'badgeCounts',
                'emergencyContact', 'lastCheckInDate', 'lastCheckInRunId', 'linkedLegacyIds',
-               'lastCheckInUpdatedAt', 'legacyEventRuns', 'currentStreakWeeks', 'longestStreakWeeks', 'deleting', 'rewardEpoch', 'streakProofWeek', 'longestStreakProofWeek', 'rewardChanges', 'importedRuns'
+               'lastCheckInUpdatedAt', 'legacyEventRuns', 'legacyRunKeys', 'appRunKeys', 'pendingLegacyClaim', 'claimGearPending', 'attendancePolicyVersion', 'currentStreakWeeks', 'longestStreakWeeks', 'deleting', 'rewardEpoch', 'streakProofWeek', 'longestStreakProofWeek', 'rewardChanges', 'importedRuns'
              ]) &&
              data.keys().hasAll([
                'email', 'firstName', 'lastName', 'displayName', 'shirtSize',
@@ -446,6 +454,11 @@ service cloud.firestore {
              (!('lastCheckInRunId' in data) || (data.lastCheckInRunId is string && data.lastCheckInRunId.size() <= 128)) &&
              (!('linkedLegacyIds' in data) || (data.linkedLegacyIds is list && data.linkedLegacyIds.size() <= 50)) &&
              (!('legacyEventRuns' in data) || (data.legacyEventRuns is int && data.legacyEventRuns >= 0)) &&
+             (!('legacyRunKeys' in data) || data.legacyRunKeys is list) &&
+             (!('appRunKeys' in data) || data.appRunKeys is list) &&
+             (!('pendingLegacyClaim' in data) || data.pendingLegacyClaim is string) &&
+             (!('claimGearPending' in data) || data.claimGearPending is bool) &&
+             (!('attendancePolicyVersion' in data) || (data.attendancePolicyVersion is int && data.attendancePolicyVersion >= 0)) &&
              (!('importedRuns' in data) || (data.importedRuns is int && data.importedRuns >= 0 && data.importedRuns <= 100000)) &&
              (!('currentStreakWeeks' in data) || (data.currentStreakWeeks is int && data.currentStreakWeeks >= 0)) &&
              (!('longestStreakWeeks' in data) || (data.longestStreakWeeks is int && data.longestStreakWeeks >= 0)) &&
@@ -458,14 +471,14 @@ service cloud.firestore {
     // Fields a runner can never change on their own profile after sign-up.
     function coreProfileFieldsUnchanged() {
       return !request.resource.data.diff(resource.data).affectedKeys().hasAny([
-        'email', 'role', 'createdAt', 'deleting', 'rewardEpoch'
+        'email', 'role', 'createdAt', 'deleting', 'rewardEpoch', 'attendancePolicyVersion'
       ]);
     }
 
     // Legacy claim fields: only change through isLegacyClaimBacked (or an admin).
     function legacyFieldsUnchanged() {
       return !request.resource.data.diff(resource.data).affectedKeys().hasAny([
-        'pre2021Runs', 'linkedLegacyNames', 'linkedLegacyIds', 'legacyEventRuns', 'importedRuns'
+        'pre2021Runs', 'linkedLegacyNames', 'linkedLegacyIds', 'legacyRunKeys', 'pendingLegacyClaim', 'claimGearPending', 'importedRuns'
       ]);
     }
 
@@ -476,12 +489,15 @@ service cloud.firestore {
         d.linkedLegacyNames.size() == 0 && d.unlockedBadgeIds.size() == 0 &&
         d.get('linkedLegacyIds', []).size() == 0 &&
         d.get('legacyEventRuns', 0) == 0 &&
+        d.get('legacyRunKeys', []).size() == 0 && d.get('appRunKeys', []).size() == 0 &&
+        d.get('pendingLegacyClaim', '') == '' && !d.get('claimGearPending', false) &&
         d.get('petRunCount', 0) == 0 && d.get('badgeCounts', {}) == {} && d.get('distanceCounts', {}) == {} &&
         d.get('currentStreakWeeks', 0) == 0 && d.get('longestStreakWeeks', 0) == 0 && d.get('rewardEpoch', 0) == 0;
     }
 
-    // Claiming one legacy name: the legacy doc goes from unclaimed to this runner
-    // in the same batch, and the totals grow by exactly that name's counts.
+    // Reserve one name using its trusted counts, then reconcile private attendance
+    // before publishing totals. A caller that already knows the private keys may
+    // also submit the exact verified union in the initial atomic claim.
     function legacyClaimsOpen() {
       let p = /databases/$(database)/documents/settings/legacy_import;
       return !exists(p) || get(p).data.get('active', false) == false;
@@ -491,11 +507,11 @@ service cloud.firestore {
       let before = resource.data.get('linkedLegacyIds', []);
       let after = request.resource.data.get('linkedLegacyIds', []);
       let added = after.removeAll(before);
-      return legacyClaimsOpen() && !resource.data.get('deleting', false) && added.size() == 1 &&
+      return legacyClaimsOpen() && !resource.data.get('deleting', false) && resource.data.get('pendingLegacyClaim', '') == '' && added.size() == 1 &&
         after.size() == before.size() + 1 &&
         before.removeAll(after).size() == 0 &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'linkedLegacyIds', 'linkedLegacyNames', 'pre2021Runs', 'legacyEventRuns', 'totalRuns'
+          'linkedLegacyIds', 'linkedLegacyNames', 'pre2021Runs', 'legacyEventRuns', 'legacyRunKeys', 'pendingLegacyClaim', 'claimGearPending', 'totalRuns'
         ]) &&
         claimAddsCounts(email, added[0]);
     }
@@ -504,12 +520,48 @@ service cloud.firestore {
       let d = request.resource.data;
       let o = resource.data;
       let lp = getAfter(legacyPath(id)).data;
-      return exists(legacyPath(id)) &&
+      return d.get('claimGearPending', false) == true && exists(legacyPath(id)) &&
         get(legacyPath(id)).data.get('claimedBy', null) == null &&
         lp.claimedBy == memberKeyFor(email) &&
         d.pre2021Runs == o.pre2021Runs + lp.oldCount &&
-        d.get('legacyEventRuns', 0) == o.get('legacyEventRuns', 0) + lp.newCount &&
-        d.totalRuns == o.totalRuns + lp.oldCount + lp.newCount;
+        (o.get('linkedLegacyIds', []).size() == 0 || ('legacyRunKeys' in o)) &&
+        (o.loggedRuns == 0 || ('appRunKeys' in o)) &&
+        (d.get('pendingLegacyClaim', '') == id ? (
+          lp.get('attendanceReady', false) && d.get('legacyRunKeys', []) == o.get('legacyRunKeys', []) &&
+          d.get('legacyEventRuns', 0) == o.get('legacyEventRuns', 0) + lp.newCount && d.totalRuns == o.totalRuns + lp.oldCount + lp.newCount
+        ) : (d.get('pendingLegacyClaim', '') == '' &&
+        d.legacyRunKeys.toSet() == o.get('legacyRunKeys', []).toSet().union(getAfter(/databases/$(database)/documents/legacy_history/$(id)).data.attendanceKeys.toSet()) &&
+        d.legacyRunKeys.size() == d.legacyRunKeys.toSet().size() &&
+        d.get('legacyEventRuns', 0) == d.legacyRunKeys.toSet().difference(o.get('appRunKeys', []).toSet()).size() &&
+        d.totalRuns == o.totalRuns + lp.oldCount + d.get('legacyEventRuns', 0) - o.get('legacyEventRuns', 0)));
+    }
+
+    function isLegacyClaimCompletion(email) {
+      let d = request.resource.data;
+      let o = resource.data;
+      let id = o.get('pendingLegacyClaim', '');
+      let history = get(/databases/$(database)/documents/legacy_history/$(id)).data;
+      return id != '' && legacyClaimsOpen() && !o.get('deleting', false) && d.get('pendingLegacyClaim', '') == '' &&
+        get(legacyPath(id)).data.claimedBy == memberKeyFor(email) && id in o.linkedLegacyIds &&
+        d.diff(o).affectedKeys().hasOnly(['pendingLegacyClaim', 'legacyRunKeys', 'legacyEventRuns', 'totalRuns']) &&
+        d.legacyRunKeys.toSet() == o.get('legacyRunKeys', []).toSet().union(history.attendanceKeys.toSet()) &&
+        d.legacyRunKeys.size() == d.legacyRunKeys.toSet().size() &&
+        d.legacyEventRuns == d.legacyRunKeys.toSet().difference(o.get('appRunKeys', []).toSet()).size() &&
+        d.totalRuns == o.totalRuns + d.legacyEventRuns - o.get('legacyEventRuns', 0);
+    }
+
+    function isClaimGearCompletion() {
+      return resource.data.get('claimGearPending', false) == true &&
+        resource.data.get('pendingLegacyClaim', '') == '' && !resource.data.get('deleting', false) &&
+        request.resource.data.get('claimGearPending', true) == false &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['claimGearPending']);
+    }
+
+    // Only these fields may change in a claim; validating unchanged profile fields
+    // again wastes the expression budget needed for the atomic attendance checks.
+    function validClaimResult(d) {
+      return d.totalRuns >= 0 && d.totalRuns <= 100000 && d.pre2021Runs >= 0 && d.pre2021Runs <= 100000 && d.legacyEventRuns is int && d.legacyEventRuns >= 0 &&
+        d.linkedLegacyIds.size() <= 50 && d.linkedLegacyNames is list && d.linkedLegacyNames.size() <= 50;
     }
 
     // Badges and streaks are recalculated on the client from the runner's dated
@@ -525,12 +577,13 @@ service cloud.firestore {
     function proofDate(s, email) {
       return s.get('checkinId', null) is string ? get(/databases/$(database)/documents/checkins/$(s.checkinId)).data.date : s.event.d;
     }
-    function proofWord(s, email) {
-      return s.get('checkinId', null) is string ? get(/databases/$(database)/documents/checkins/$(s.checkinId)).data.get('codeWord', '') : s.event.c;
-    }
     function proofSourceId(s) {
-      return s.get('checkinId', null) is string ? 'checkin:' + s.checkinId :
-        'legacy:' + s.legacyId + ':' + s.event.d + ':' + s.event.t + ':' + s.event.c;
+      return s.get('checkinId', null) is string ? appProofRunKey(s.checkinId) :
+        (s.event.get('r', '') != '' ? 'run:' + s.event.r : 'date:' + s.event.d);
+    }
+    function appProofRunKey(id) {
+      let c = get(/databases/$(database)/documents/checkins/$(id)).data;
+      return c.get('runId', '') != '' ? 'run:' + c.runId : 'date:' + c.date;
     }
     function checkinProofRunOpen(id) {
       let c = get(/databases/$(database)/documents/checkins/$(id)).data;
@@ -547,19 +600,15 @@ service cloud.firestore {
       );
     }
     // App check-ins count toward a special event only when the run was tagged with it ("Is Special Event?").
-    // Old-app sign-ins have no run to tag, so they match by code word, or by the special event tag an import gave them.
+    // Historical attendance also uses only its explicit imported tag. Code words never award rewards.
     function proofSpecial(s, email, specialId) {
       let isCheckin = s.get('checkinId', null) is string;
       let c = isCheckin ? get(/databases/$(database)/documents/checkins/$(s.checkinId)).data : {};
       let runId = c.get('runId', '');
       let event = runId != '' ? get(eventPath(runId)).data : {};
       let special = c.get('eventSpecial', event.get('specialEvent', ''));
-      let word = isCheckin ? '' : proofWord(s, email).upper();
       return isCheckin ? (specialId != 'none' && special == specialId) :
-        ((specialId != 'none' && s.event.get('s', '') == specialId) ||
-         (specialId == 'turkey_trot' && word.matches('.*TURKEY.*')) ||
-         (specialId == 'halloween' && (word.matches('.*HALLOWEEN.*') || word.matches('.*SPOOKY.*'))) ||
-         (specialId == 'anniversary' && word.matches('.*ANNIVERSARY.*')));
+        (specialId != 'none' && s.event.get('s', 'none') == specialId);
     }
     function validWeekProof(d, id) {
       let previous = rewardPath(d.userEmail, d.epoch, 'week', d.week - 1);
@@ -572,6 +621,7 @@ service cloud.firestore {
     function validSpecialProof(d, id) {
       let old = resource == null ? [] : resource.data.sources;
       return d.keys().hasOnly(['userEmail', 'epoch', 'kind', 'specialId', 'count', 'sources', 'sourceId', 'source']) &&
+        (old.size() == 0 || old[0].matches('^(run:|date:).*')) &&
         d.specialId is string && d.specialId.size() <= 100 &&
         id == d.userEmail + '_' + string(d.epoch) + '_special_' + d.specialId &&
         d.sourceId == proofSourceId(d.source) && !(d.sourceId in old) &&
@@ -685,7 +735,7 @@ service cloud.firestore {
     }
 
     function isBadgeRefreshOnly() {
-      return legacyClaimsOpen() && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+      return legacyClaimsOpen() && resource.data.get('pendingLegacyClaim', '') == '' && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
         'unlockedBadgeIds', 'badgeCounts', 'currentStreakWeeks', 'longestStreakWeeks', 'streakProofWeek', 'longestStreakProofWeek', 'rewardChanges'
       ]) && validDerivedRefresh(request.resource.data, resource.data, tokenEmail());
     }
@@ -697,7 +747,7 @@ service cloud.firestore {
     // Stats a runner may only change while writing a valid check-in in the same batch.
     function statsUnchanged() {
       return !request.resource.data.diff(resource.data).affectedKeys().hasAny([
-        'totalRuns', 'loggedRuns', 'totalMiles', 'runCount', 'walkCount',
+        'totalRuns', 'loggedRuns', 'totalMiles', 'runCount', 'walkCount', 'legacyEventRuns', 'appRunKeys',
         'petRunCount', 'distanceCounts', 'unlockedBadgeIds', 'badgeCounts',
         'lastCheckInUpdatedAt', 'lastCheckInDate', 'lastCheckInRunId', 'firstRunDate', 'currentStreakWeeks', 'longestStreakWeeks', 'streakProofWeek', 'longestStreakProofWeek', 'rewardChanges'
       ]);
@@ -708,21 +758,24 @@ service cloud.firestore {
       let label = string(int(tenths / 10)) + '.' + string(tenths % 10);
       return [miles <= 2 ? '1' : miles <= 4 ? '3' : '5', label, label + ' mi'];
     }
-    function distanceKeyMatches(key, after, before, added, removed) {
-      let expected = before.get(key, 0) + (key in added ? 1 : 0) - (key in removed ? 1 : 0);
+    function distanceKeyMatches(key, after, before, delta) {
+      let expected = before.get(key, 0) + delta;
       return after.get(key, 0) == (expected < 0 ? 0 : expected);
     }
-    function distanceCreditMatches(d, o, c, old, isNew) {
+    function distanceDeltaMatches(d, o, c, old, isNew) {
       let after = d.get('distanceCounts', {});
       let before = o.get('distanceCounts', {});
       let added = distanceKeys(c.actualMiles);
       let removed = isNew ? [] : distanceKeys(old.actualMiles);
       return after.diff(before).affectedKeys().hasOnly(added.concat(removed)) &&
-        distanceKeyMatches(added[0], after, before, added, removed) &&
-        distanceKeyMatches(added[1], after, before, added, removed) &&
-        distanceKeyMatches(added[2], after, before, added, removed) &&
-        (isNew || (distanceKeyMatches(removed[0], after, before, added, removed) &&
-         distanceKeyMatches(removed[1], after, before, added, removed) && distanceKeyMatches(removed[2], after, before, added, removed)));
+        distanceKeyMatches(added[0], after, before, added[0] in removed ? 0 : 1) &&
+        distanceKeyMatches(added[1], after, before, added[1] in removed ? 0 : 1) &&
+        distanceKeyMatches(added[2], after, before, added[2] in removed ? 0 : 1) &&
+        (isNew || (distanceKeyMatches(removed[0], after, before, removed[0] in added ? 0 : -1) &&
+         distanceKeyMatches(removed[1], after, before, removed[1] in added ? 0 : -1) && distanceKeyMatches(removed[2], after, before, removed[2] in added ? 0 : -1)));
+    }
+    function distanceCreditMatches(d, o, c, old, isNew) {
+      return !isNew && c.actualMiles == old.actualMiles ? d.get('distanceCounts', {}) == o.get('distanceCounts', {}) : distanceDeltaMatches(d, o, c, old, isNew);
     }
     function checkInProfileCredit(c, id) {
       let before = get(userPath(c.userEmail)).data;
@@ -733,10 +786,20 @@ service cloud.firestore {
     function checkInStatsOnly() {
       let d = request.resource.data;
       return d.diff(resource.data).affectedKeys().hasOnly([
-        'totalRuns', 'loggedRuns', 'totalMiles', 'runCount', 'walkCount', 'petRunCount', 'distanceCounts',
+        'totalRuns', 'loggedRuns', 'totalMiles', 'runCount', 'walkCount', 'petRunCount', 'distanceCounts', 'legacyEventRuns', 'appRunKeys',
         'lastCheckInUpdatedAt', 'lastCheckInDate', 'lastCheckInRunId'
       ]) && d.totalRuns <= 100000 && d.loggedRuns <= 100000 && d.totalMiles <= 1000000 &&
         d.totalMiles >= 0 && d.runCount >= 0 && d.walkCount >= 0 && d.get('petRunCount', 0) >= 0;
+    }
+
+    function validAttendanceCredit(d, o, c, isNew) {
+      let keys = ['run:' + c.runId];
+      return !isNew && d.get('appRunKeys', []) == o.get('appRunKeys', []) ? d.get('legacyEventRuns', 0) == o.get('legacyEventRuns', 0) :
+        !('appRunKeys' in d) ? (!('appRunKeys' in o) && !('legacyRunKeys' in o) && d.get('legacyEventRuns', 0) == o.get('legacyEventRuns', 0)) :
+        d.get('appRunKeys', []).toSet() == o.get('appRunKeys', []).toSet().union(keys.toSet()) &&
+        d.get('appRunKeys', []).size() == d.get('appRunKeys', []).toSet().size() &&
+        d.get('legacyEventRuns', 0) == ('legacyRunKeys' in o ?
+          o.legacyRunKeys.toSet().difference(d.get('appRunKeys', []).toSet()).size() : o.get('legacyEventRuns', 0));
     }
 
     function isStatsChangeBackedByCheckIn(email) {
@@ -750,7 +813,8 @@ service cloud.firestore {
         d.get('lastCheckInUpdatedAt', '') == c.updatedAt && d.lastCheckInDate == c.date &&
         derivedUnchanged(d, o) && distanceCreditMatches(d, o, c, old, added == 1) && participationAllowed(c.runId, email) &&
         (isCheckInCreatedInBatch(p) || isCheckInEditedInBatch(p)) &&
-        d.totalRuns == o.totalRuns + added && d.loggedRuns == o.loggedRuns + added &&
+        validAttendanceCredit(d, o, c, added == 1) &&
+        d.totalRuns == o.totalRuns + added + d.get('legacyEventRuns', 0) - o.get('legacyEventRuns', 0) && d.loggedRuns == o.loggedRuns + added &&
         d.runCount == o.runCount + (c.activity == 'running' ? 1 : 0) - (old.activity == 'running' ? 1 : 0) &&
         d.walkCount == o.walkCount + (c.activity == 'walking' ? 1 : 0) - (old.activity == 'walking' ? 1 : 0) &&
         d.get('petRunCount', 0) == o.get('petRunCount', 0) + (c.get('withPet', false) ? 1 : 0) - (old.get('withPet', false) ? 1 : 0) &&
@@ -767,55 +831,55 @@ service cloud.firestore {
     match /runs/{runId} {
       allow read: if true;
 
-      allow create: if isStaff() &&
+      allow create: if maintenanceAllowsWrites() && (isStaff() &&
                        isValidRun(request.resource.data) &&
-                       request.resource.data.id == runId;
+                       request.resource.data.id == runId);
 
       // Past runs can't be edited (only their RSVP list, e.g. when a runner is deleted).
-      allow update: if request.resource.data.id == resource.data.id &&
+      allow update: if maintenanceAllowsWrites() && (request.resource.data.id == resource.data.id &&
                        request.resource.data.id == runId &&
                        (isOwnRsvpToggle(runId) || (isStaff() && isValidRun(request.resource.data) &&
                          (!runIsOver(runId) ||
-                          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['attendees', 'attendeeIds', 'deleting']))));
+                          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['attendees', 'attendeeIds', 'deleting'])))));
 
       // Organizers can delete a run until its check-in opens; after that only an admin can
       // (check-ins, run totals and gear alerts depend on it).
-      allow delete: if isAdmin() || (isStaff() && !checkInHasOpened(runId));
+      allow delete: if maintenanceAllowsWrites() && (isAdmin() || (isStaff() && !checkInHasOpened(runId)));
     }
 
     // 2. ROUTES — public library, staff-managed.
     match /routes/{routeId} {
       allow read: if true;
 
-      allow create: if isStaff() &&
+      allow create: if maintenanceAllowsWrites() && (isStaff() &&
                        isValidGPXRoute(request.resource.data) &&
-                       request.resource.data.id == routeId;
+                       request.resource.data.id == routeId);
 
-      allow update: if isStaff() &&
+      allow update: if maintenanceAllowsWrites() && (isStaff() &&
                        isValidGPXRoute(request.resource.data) &&
                        request.resource.data.id == resource.data.id &&
                        request.resource.data.id == routeId &&
                        request.resource.data.createdAt == resource.data.createdAt &&
                        (!resource.data.get('referenced', false) ||
                         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['referenced'])) &&
-                       (!resource.data.get('referenced', false) || request.resource.data.referenced == true);
+                       (!resource.data.get('referenced', false) || request.resource.data.referenced == true));
 
-      allow delete: if isStaff() && !resource.data.get('referenced', false);
+      allow delete: if maintenanceAllowsWrites() && (isStaff() && !resource.data.get('referenced', false));
     }
 
     // 3. MEMBERS — public leaderboard projection keyed by memberKey (hashed email).
     match /members/{memberKey} {
       allow read: if true;
 
-      allow create, update: if isValidMember(request.resource.data) &&
+      allow create, update: if maintenanceAllowsWrites() && (isValidMember(request.resource.data) &&
                                request.resource.data.id == memberKey &&
                                (
                                  (hasVerifiedEmail() &&
                                   memberKey == memberKeyFor(tokenEmail()) &&
                                   memberMirrorsUser(request.resource.data, tokenEmail())) || isAdmin()
-                               );
+                               ));
 
-      allow delete: if isAdmin();
+      allow delete: if maintenanceAllowsWrites() && (isAdmin());
     }
 
     // 4. CHECKINS — private audit log. One per runner per run: doc ID is `${runId}_${email}`.
@@ -825,7 +889,7 @@ service cloud.firestore {
       allow read: if isStaff() ||
                      (hasVerifiedEmail() && resource.data.userEmail == tokenEmail());
 
-      allow create: if isValidCheckIn(request.resource.data) && validRouteCredit(request.resource.data) && checkInMetadataMatches(request.resource.data) &&
+      allow create: if maintenanceAllowsWrites() && (isValidCheckIn(request.resource.data) && validRouteCredit(request.resource.data) && checkInMetadataMatches(request.resource.data) &&
                        checkinId == request.resource.data.runId + '_' + request.resource.data.userEmail &&
                        request.resource.data.id == checkinId &&
                        (
@@ -833,9 +897,9 @@ service cloud.firestore {
                           request.resource.data.get('source', 'pwa') == 'pwa' && checkInProfileCredit(request.resource.data, checkinId) &&
                           codeWordMatches(request.resource.data.runId, request.resource.data.date, request.resource.data.get('codeWord', '')) &&
                           isInsideCheckInWindow(request.resource.data.runId, request.resource.data.date)) || (isStaff() && participationAllowed(request.resource.data.runId, request.resource.data.userEmail))
-                       );
+                       ));
 
-      allow update: if isValidCheckIn(request.resource.data) && validRouteCredit(request.resource.data) &&
+      allow update: if maintenanceAllowsWrites() && (isValidCheckIn(request.resource.data) && validRouteCredit(request.resource.data) &&
                        !request.resource.data.diff(resource.data).affectedKeys()
                          .hasAny(['id', 'runId', 'date', 'userEmail', 'createdAt', 'eventTitle', 'eventSpecial']) &&
                        (
@@ -843,11 +907,11 @@ service cloud.firestore {
                           request.resource.data.get('source', 'pwa') == 'pwa' && checkInProfileCredit(request.resource.data, checkinId) &&
                           codeWordMatches(request.resource.data.runId, request.resource.data.date, request.resource.data.get('codeWord', '')) &&
                           isInsideCheckInWindow(request.resource.data.runId, request.resource.data.date)) || (isStaff() && participationAllowed(request.resource.data.runId, request.resource.data.userEmail))
-                       );
+                       ));
 
       // Admins only: removing a check-in goes with rolling back that runner's
       // totals, which only an admin can write.
-      allow delete: if isAdmin();
+      allow delete: if maintenanceAllowsWrites() && (isAdmin());
     }
 
     // 5. USERS — private profiles. Doc ID is the lowercase email.
@@ -857,7 +921,7 @@ service cloud.firestore {
       allow get: if isUserEmailOwner(email) || isStaff();
       allow list: if isStaff();
 
-      allow create: if isValidUserProfile(request.resource.data) &&
+      allow create: if maintenanceAllowsWrites() && (isValidUserProfile(request.resource.data) &&
                        request.resource.data.email == email &&
                        (
                          (isAdmin() && !isUserEmailOwner(email)) ||
@@ -865,31 +929,34 @@ service cloud.firestore {
                           isFreshProfile(request.resource.data) &&
                           (request.resource.data.role == 'member' ||
                            (request.resource.data.role == 'admin' && isBootstrapAdminEmail())))
-                       );
+                       ));
 
-      allow update: if
-        (isUserEmailOwner(email) && coreProfileFieldsUnchanged() &&
+      allow update: if maintenanceAllowsWrites() && (resource.data.role == 'admin' && isUserEmailOwner(email) ?
+        (!roleChanged() && isValidUserProfile(request.resource.data)) :
+        ((isUserEmailOwner(email) && coreProfileFieldsUnchanged() &&
           ((legacyFieldsUnchanged() && (
-            isBadgeRefreshOnly() ||
             (checkInStatsOnly() && isStatsChangeBackedByCheckIn(email)) ||
+            isBadgeRefreshOnly() ||
             (statsUnchanged() && isValidUserProfile(request.resource.data)))) ||
-           (isLegacyClaimBacked(email) && isValidUserProfile(request.resource.data)))) ||
-        (isAdmin() && (!isUserEmailOwner(email) || !roleChanged()) && isValidUserProfile(request.resource.data));
+           (isLegacyClaimBacked(email) && validClaimResult(request.resource.data)) ||
+           (resource.data.get('pendingLegacyClaim', '') != '' && isLegacyClaimCompletion(email)) ||
+           isClaimGearCompletion())) ||
+        (isAdmin() && (!isUserEmailOwner(email) || !roleChanged()) && isValidUserProfile(request.resource.data))));
 
-      allow delete: if isAdmin() && !isUserEmailOwner(email);
+      allow delete: if maintenanceAllowsWrites() && (isAdmin() && !isUserEmailOwner(email));
     }
 
     // 6. BADGES / 7. SPECIAL EVENTS — public catalog, admin-managed.
     match /badges/{badgeId} {
       allow read: if true;
       // An incremental badge needs a whole-number level size (>= 1), a known counter, and an optional display cap.
-      allow create, update: if isAdmin() &&
+      allow create, update: if maintenanceAllowsWrites() && (isAdmin() &&
         (request.resource.data.get('triggerConfig', {}).get('type', '') != 'incremental' ||
          (request.resource.data.triggerConfig.get('step', 0) is int && request.resource.data.triggerConfig.step >= 1 &&
           request.resource.data.triggerConfig.step <= 100000 &&
           request.resource.data.triggerConfig.get('counter', '') in ['walks', 'runs', 'pet', 'miles'] &&
-          (!('maxMultiplier' in request.resource.data) || (request.resource.data.maxMultiplier is int && request.resource.data.maxMultiplier >= 1))));
-      allow delete: if isAdmin();
+          (!('maxMultiplier' in request.resource.data) || (request.resource.data.maxMultiplier is int && request.resource.data.maxMultiplier >= 1)))));
+      allow delete: if maintenanceAllowsWrites() && (isAdmin());
     }
 
     // Milestones (gear tiers like the 5-run shirt) are admin-managed and public; they are not badges.
@@ -897,7 +964,7 @@ service cloud.firestore {
     match /milestones/{milestoneId} {
       allow read: if true;
       // Earned by total runs (id milestone-<runs>) or total miles (id milestone-miles-<miles>); one per target.
-      allow create, update: if isAdmin() &&
+      allow create, update: if maintenanceAllowsWrites() && (isAdmin() &&
                                request.resource.data.keys().hasOnly(['id', 'measure', 'runsRequired', 'milesRequired', 'name', 'reward', 'perks', 'icon', 'description', 'hasGear', 'isDefault', 'createdAt']) &&
                                request.resource.data.keys().hasAll(['id', 'name', 'reward', 'icon']) &&
                                request.resource.data.id == milestoneId &&
@@ -916,13 +983,13 @@ service cloud.firestore {
                                request.resource.data.icon is string && request.resource.data.icon.size() <= 16 &&
                                (!('perks' in request.resource.data) || (request.resource.data.perks is string && request.resource.data.perks.size() <= 200)) &&
                                (!('description' in request.resource.data) || (request.resource.data.description is string && request.resource.data.description.size() <= 500)) &&
-                               (!('hasGear' in request.resource.data) || request.resource.data.hasGear is bool);
-      allow delete: if isAdmin();
+                               (!('hasGear' in request.resource.data) || request.resource.data.hasGear is bool));
+      allow delete: if maintenanceAllowsWrites() && (isAdmin());
     }
 
     match /special_events/{eventId} {
       allow read: if true;
-      allow create, update, delete: if isAdmin();
+      allow create, update, delete: if maintenanceAllowsWrites() && (isAdmin());
     }
 
     // 8. MILESTONE ALERTS — private gear queue.
@@ -933,8 +1000,9 @@ service cloud.firestore {
       allow read: if isStaff() ||
                      (hasVerifiedEmail() && resource.data.userEmail == tokenEmail());
 
-      allow create: if isStaff() ||
+      allow create: if maintenanceAllowsWrites() && (isStaff() ||
                        (hasVerifiedEmail() &&
+                        get(userPath(tokenEmail())).data.get('pendingLegacyClaim', '') == '' &&
                         request.resource.data.keys().hasOnly([
                           'id', 'userEmail', 'runnerName', 'shirtSize', 'milestoneRuns',
                           'milestoneName', 'reward', 'perks', 'hasGear', 'milestoneMiles', 'date', 'time', 'fulfilled', 'runId'
@@ -967,16 +1035,16 @@ service cloud.firestore {
                            alertId == 'm' + string(request.resource.data.milestoneRuns) + '_' + tokenEmail() &&
                            get(userPath(tokenEmail())).data.get('linkedLegacyIds', []).size() >= 2 &&
                            get(userPath(tokenEmail())).data.totalRuns >= request.resource.data.milestoneRuns)
-                        ));
+                        )));
 
-      allow update, delete: if isStaff();
+      allow update, delete: if maintenanceAllowsWrites() && (isStaff());
     }
 
     // 9. MEETUP EVENTS — public check-in info for one run. Doc ID is the run ID.
     // The code word lives in meetup_secrets (staff) and meetup_codes (lookup key).
     match /meetup_events/{eventId} {
       allow read: if true;
-      allow create, update: if isStaff() && !('codeWord' in request.resource.data) &&
+      allow create, update: if maintenanceAllowsWrites() && (isStaff() && !('codeWord' in request.resource.data) &&
                                !runIsOver(eventId) &&
                                // A live run with check-in open can't be switched to "not live"
                                // (that would unlock its code word).
@@ -984,8 +1052,8 @@ service cloud.firestore {
                                 (request.resource.data.get('codeWordSet', true) != false &&
                                  request.resource.data.checkInOpensAt == resource.data.checkInOpensAt &&
                                  request.resource.data.checkInClosesAt == resource.data.checkInClosesAt &&
-                                 request.resource.data.date == resource.data.date));
-      allow delete: if isAdmin() || (isStaff() && !checkInHasOpened(eventId));
+                                 request.resource.data.date == resource.data.date)));
+      allow delete: if maintenanceAllowsWrites() && (isAdmin() || (isStaff() && !checkInHasOpened(eventId)));
     }
 
     // 9b. MEETUP SECRETS — the run's code word, staff only.
@@ -993,12 +1061,12 @@ service cloud.firestore {
     // then it's locked (re-saving the same word is fine).
     match /meetup_secrets/{eventId} {
       allow read: if isStaff();
-      allow create: if isStaff() && !checkInHasOpened(eventId);
-      allow update: if isStaff() &&
+      allow create: if maintenanceAllowsWrites() && (isStaff() && !checkInHasOpened(eventId));
+      allow update: if maintenanceAllowsWrites() && (isStaff() &&
                        (request.resource.data.codeWord == resource.data.codeWord ||
-                        !checkInHasOpened(eventId));
+                        !checkInHasOpened(eventId)));
       // Same as the event itself: staff until check-in opens, admins afterwards.
-      allow delete: if isAdmin() || (isStaff() && !checkInHasOpened(eventId));
+      allow delete: if maintenanceAllowsWrites() && (isAdmin() || (isStaff() && !checkInHasOpened(eventId)));
     }
 
     // 9c. MEETUP CODES — lookup key sha256("<date>:<CODEWORD>") -> { runId, date }.
@@ -1007,14 +1075,14 @@ service cloud.firestore {
     match /meetup_codes/{codeKey} {
       allow get: if hasVerifiedEmail();
       allow list: if false;
-      allow create: if isStaff() &&
+      allow create: if maintenanceAllowsWrites() && (isStaff() &&
                        request.resource.data.keys().hasOnly(['runId', 'date']) &&
                        request.resource.data.runId is string &&
                        request.resource.data.date is string &&
-                       !checkInHasOpened(request.resource.data.runId);
-      allow update: if false;
+                       !checkInHasOpened(request.resource.data.runId));
+      allow update: if maintenanceAllowsWrites() && (false);
       // Admins may also remove it later, e.g. when deleting a run that already happened.
-      allow delete: if isAdmin() || (isStaff() && !checkInHasOpened(resource.data.runId));
+      allow delete: if maintenanceAllowsWrites() && (isAdmin() || (isStaff() && !checkInHasOpened(resource.data.runId)));
     }
 
     // 10. CLUB SETTINGS — public read, admin write.
@@ -1022,9 +1090,10 @@ service cloud.firestore {
       allow read: if true;
       // The partner doc holds the club's home-base partner: a name, optional https links, an address and a thank-you line.
       // settings/catalog only records that the starter pack of milestones and badges has been saved.
-      allow create, update: if isAdmin() && (settingId != 'catalog' || (
+      allow create, update: if maintenanceAllowsWrites() && (isAdmin() && (settingId != 'catalog' || (
         request.resource.data.keys().hasOnly(['seeded', 'seededAt']) && request.resource.data.get('seeded', false) == true &&
         (!('seededAt' in request.resource.data) || (request.resource.data.seededAt is string && request.resource.data.seededAt.size() <= 40)))) &&
+        (settingId != 'maintenance' || (request.resource.data.keys().hasOnly(['active', 'updatedAt']) && request.resource.data.active is bool && (!('updatedAt' in request.resource.data) || request.resource.data.updatedAt is string))) &&
         (settingId != 'partner' || (
         request.resource.data.keys().hasOnly(['name', 'website', 'instagram', 'facebook', 'address', 'thanks']) &&
         request.resource.data.keys().hasAll(['name']) &&
@@ -1033,15 +1102,15 @@ service cloud.firestore {
         (!('instagram' in request.resource.data) || (request.resource.data.instagram is string && request.resource.data.instagram.size() <= 300 && request.resource.data.instagram.matches('^https://.*'))) &&
         (!('facebook' in request.resource.data) || (request.resource.data.facebook is string && request.resource.data.facebook.size() <= 300 && request.resource.data.facebook.matches('^https://.*'))) &&
         (!('address' in request.resource.data) || (request.resource.data.address is string && request.resource.data.address.size() <= 200)) &&
-        (!('thanks' in request.resource.data) || (request.resource.data.thanks is string && request.resource.data.thanks.size() <= 400))));
-      allow delete: if isAdmin();
+        (!('thanks' in request.resource.data) || (request.resource.data.thanks is string && request.resource.data.thanks.size() <= 400)))));
+      allow delete: if maintenanceAllowsWrites() && (isAdmin());
     }
 
     // 11. LEGACY (old app) DATA
     // legacy_index/pool: { entries: [{id, name, oldCount, newCount}] } — one read for name search.
     match /legacy_index/{docId} {
       allow read: if hasVerifiedEmail();
-      allow write: if isAdmin();
+      allow write: if maintenanceAllowsWrites() && (isAdmin());
     }
 
     // legacy_profiles/{id}: one per old sign-in name. claimedBy = claimer's memberKey.
@@ -1049,8 +1118,8 @@ service cloud.firestore {
     // profile update (isLegacyClaimBacked). Only admins unclaim or reassign.
     match /legacy_profiles/{id} {
       allow read: if hasVerifiedEmail();
-      allow create, delete: if isAdmin();
-      allow update: if isAdmin() || isOwnLegacyClaim(id);
+      allow create, delete: if maintenanceAllowsWrites() && (isAdmin());
+      allow update: if maintenanceAllowsWrites() && (isAdmin() || isOwnLegacyClaim(id));
     }
 
     // legacy_history/{id}: { events: [{d, t, c}] } — dated sign-ins since 2021.
@@ -1059,35 +1128,36 @@ service cloud.firestore {
       allow read: if isStaff() ||
                      (hasVerifiedEmail() &&
                       get(legacyPath(id)).data.get('claimedBy', null) == memberKeyFor(tokenEmail()));
-      allow write: if isAdmin();
+      allow write: if maintenanceAllowsWrites() && (isAdmin());
     }
 
     // Reward evidence is private, and every source is checked against attendance.
     match /reward_proofs/{proofId} {
       allow get: if hasVerifiedEmail() && !exists(/databases/$(database)/documents/reward_proofs/$(proofId));
       allow read: if (hasVerifiedEmail() && resource.data.userEmail == tokenEmail()) || isStaff();
-      allow create, update: if hasVerifiedEmail() && (request.resource.data.userEmail == tokenEmail() || isAdmin()) &&
-        !get(userPath(request.resource.data.userEmail)).data.get('deleting', false) && legacyClaimsOpen() &&
+      allow create, update: if maintenanceAllowsWrites() && (hasVerifiedEmail() && (request.resource.data.userEmail == tokenEmail() || isAdmin()) &&
+        !get(userPath(request.resource.data.userEmail)).data.get('deleting', false) && (legacyClaimsOpen() || isAdmin()) &&
+        get(userPath(request.resource.data.userEmail)).data.get('pendingLegacyClaim', '') == '' &&
         request.resource.data.epoch == get(userPath(request.resource.data.userEmail)).data.get('rewardEpoch', 0) &&
         validRewardSource(request.resource.data.source, request.resource.data.userEmail) &&
         (request.resource.data.kind == 'week' ? validWeekProof(request.resource.data, proofId) :
           request.resource.data.kind == 'special' ? validSpecialProof(request.resource.data, proofId) :
-          request.resource.data.kind == 'streakstep' && validStepProof(request.resource.data, proofId));
-      allow delete: if isAdmin();
+          request.resource.data.kind == 'streakstep' && validStepProof(request.resource.data, proofId)));
+      allow delete: if maintenanceAllowsWrites() && (isAdmin());
     }
 
     // 11b. ANNOUNCEMENTS — club announcement feed (the bell). Public read, admins post/delete.
     match /announcements/{id} {
       allow read: if true;
-      allow create: if isAdmin() &&
+      allow create: if maintenanceAllowsWrites() && (isAdmin() &&
                        request.resource.data.keys().hasOnly(['id', 'title', 'body', 'timestamp', 'sender']) &&
                        request.resource.data.id == id &&
                        request.resource.data.title is string && request.resource.data.title.size() >= 1 && request.resource.data.title.size() <= 120 &&
                        request.resource.data.body is string && request.resource.data.body.size() <= 2000 &&
                        request.resource.data.timestamp is string && request.resource.data.timestamp.size() <= 40 &&
-                       request.resource.data.sender is string && request.resource.data.sender.size() <= 100;
-      allow update: if false;
-      allow delete: if isAdmin();
+                       request.resource.data.sender is string && request.resource.data.sender.size() <= 100);
+      allow update: if maintenanceAllowsWrites() && (false);
+      allow delete: if maintenanceAllowsWrites() && (isAdmin());
     }
 
     // 12. PUSH DEVICES — phones/browsers signed up for club notifications.
@@ -1097,20 +1167,20 @@ service cloud.firestore {
       allow read: if isAdmin();
       // Writing requires the token itself (its hash is the doc ID), so a shared
       // phone can be taken over by whoever is signed in on it.
-      allow create, update: if hasVerifiedEmail() &&
+      allow create, update: if maintenanceAllowsWrites() && (hasVerifiedEmail() &&
                                request.resource.data.keys().hasOnly(['token', 'userEmail', 'memberKey', 'platform', 'updatedAt']) &&
                                request.resource.data.token is string &&
                                request.resource.data.token.size() <= 4096 &&
                                hashing.sha256(request.resource.data.token).toHexString().lower() == deviceId &&
                                request.resource.data.userEmail == tokenEmail() &&
                                request.resource.data.platform in ['ios', 'android', 'desktop'] &&
-                               request.resource.data.updatedAt == request.time;
-      allow delete: if isAdmin() || (hasVerifiedEmail() && resource.data.userEmail == tokenEmail());
+                               request.resource.data.updatedAt == request.time);
+      allow delete: if maintenanceAllowsWrites() && (isAdmin() || (hasVerifiedEmail() && resource.data.userEmail == tokenEmail()));
     }
 
     // 13. DEFAULT DENY
     match /{document=**} {
-      allow read, write: if false;
+      allow read, write: if maintenanceAllowsWrites() && (false);
     }
   }
 }

@@ -153,6 +153,8 @@ fontFamily: {
 
 ## 4. Logo Assets & Media Inventory
 
+Current installed identity is described below; the later implementation log contains historical asset generations. `index.html` uses `runclub-icon.png` for the browser tab, not the legacy `favicon.ico`. Files present in `public/` are not automatically active. Verify new installed artwork/mask cropping on actual phones; see [documentation status](docs/documentation-status.md).
+
 ### Installed app identity
 
 * **Home-screen icon:** `woodland_woodchucker_app_icon-teal.png` places the approved woodchuck-face artwork from `woodland_woodchucker_app_icon.png` on Blue Note Teal (`#1A607C`). This artwork supplies `pwa-192x192.png`, `pwa-512x512.png`, and `apple-touch-icon.png`, as well as notification icons. `pwa-maskable-512x512.png` uses the same full-size artwork for circular Android icons. The earlier bottle-cap extraction remains available as `woodchucker-bottlecap.png`.
@@ -171,7 +173,7 @@ Both logos are bundled directly in `/public` for instant offline PWA access and 
 | `public/pwa-512x512.png` | PNG | 512 × 512 px | No (Square) | Android splash screen & high-density home screen icon. |
 | `public/pwa-192x192.png` | PNG | 192 × 192 px | No (Square) | Mobile home screen shortcut icon. |
 | `public/apple-touch-icon.png` | PNG | 180 × 180 px | No (Square) | iOS Safari "Add to Home Screen" app icon. |
-| `public/favicon.ico` | ICO | 32 × 32 px | No (Square) | Desktop browser tab icon. |
+| `public/favicon.ico` | ICO | 32 × 32 px | No (Square) | Legacy compatibility asset; current HTML tab icon is `runclub-icon.png`. |
 
 ---
 

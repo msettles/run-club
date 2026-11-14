@@ -6,6 +6,10 @@ Who can see and do what in the app: **Guest**, **Runner**, **Organizer** and **A
 
 Related code: `src/utils/roles.ts` (client role checks), `firestore.rules` (helpers `isAdmin()`, `isStaff()`, `isUserEmailOwner()`), `tests/firestore.rules.test.mjs` (rule tests). Retention and deletion policy lives in [go-live-policy.md](go-live-policy.md).
 
+## Maintenance exception
+
+When `settings/maintenance.active` is true, member and organizer mutations are paused, including registration, profile edits, RSVP, check-in and run/route publishing. Sign-in and browsing remain available. Admins retain validated scheduling/import/recompute access and may resume club changes. The table below describes normal operation with maintenance off. The November 13 cutover is complete and maintenance was explicitly resumed for owner acceptance.
+
 ## The four roles
 
 | Role | Who they are | How the app knows |
@@ -23,7 +27,7 @@ Signed-in access always requires a **verified email**: the rules check `email_ve
 
 - **Owner account.** `woodlandwoodchuckers@gmail.com` is always an Admin and cannot be demoted. It is listed in **two places that must match**: `ADMIN_EMAILS` in `src/utils/roles.ts` and `isBootstrapAdminEmail()` in `firestore.rules`. (A new club changes both; see [new-club-setup.md](new-club-setup.md).)
 - **Everyone else** starts as a Runner. Sign-up can only create a `member` profile; the owner email is the one exception and may create itself as `admin`.
-- **Promotion and demotion** is done by an Admin from **Admin → Members**, which sets `role` to Runner, Organizer or Admin. Nobody can change **their own** role, and the owner row is locked in the UI.
+- **Promotion and demotion** is done by an Admin from **Admin → Runners & Claims**, which sets `role` to Runner, Organizer or Admin. Nobody can change **their own** role, and the owner row is locked in the UI.
 - Firebase custom claims (`admin`, `organizer`) are also honored by the rules, but the app doesn't set them today. The profile `role` is the working mechanism.
 
 ## Summary table
@@ -43,7 +47,7 @@ Signed-in access always requires a **verified email**: the rules check `email_ve
 | RSVP and un-RSVP (*own*) | ➖ | ✅ | ✅ | ✅ |
 | Check in with the code word during the window (*own*) | ➖ | ✅ | ✅ | ✅ |
 | Edit own check-in (route, loops, pet) during the window | ➖ | ✅ | ✅ | ✅ |
-| Claim old-app (legacy) names as own history | ➖ | ✅ | ✅ | ✅ |
+| Claim old-app (legacy) names during signup (later assignment by Admin) | ➖ | ✅ | ✅ | ✅ |
 | Edit own profile (name, shirt size, birthday, city, zip, pace, emergency contact) | ➖ | ✅ | ✅ | ✅ |
 | Turn phone notifications on/off for own device | ➖ | ✅ | ✅ | ✅ |
 | See own check-ins, own gear alerts, own profile | ➖ | ✅ | ✅ | ✅ |
@@ -84,7 +88,7 @@ Signed-in access always requires a **verified email**: the rules check `email_ve
 ### Runner
 
 - **Check-in rules** (enforced by the rules, not just the screen): the code word must match the run, and the check-in must fall inside the run's window: **2 hours before the start until the end of that day (club time)**. A runner has **one** check-in per run.
-- **Stats can't be edited by hand.** Run totals, miles, badges and streaks only change inside the same write as a valid check-in (or an approved legacy claim). Profile edits can't touch them.
+- **Stats can't be edited by hand.** Attendance totals and mileage require a valid check-in, approved claim or admin reconciliation. Badge/streak refreshes require attendance-backed reward evidence; they can run after sign-in or through admin recomputation. Ordinary profile edits cannot change these derived fields.
 - **Profile edits** cover name, shirt size, birthday, city, zip, preferred pace and the optional emergency contact. Role, email, totals and legacy links can't be changed.
 - **RSVP:** a runner can add or remove only their **own** entry on a run.
 - **Privacy:** only the runner (and staff) can read their profile and check-ins. The public leaderboard row (`members`) holds no email or personal details beyond display name, pace and stats.
@@ -111,7 +115,7 @@ Admins have full control: everything an Organizer has, plus:
 - **Content:** badges, special events, milestones and club settings. **Milestones** (tiers earned by total runs or total miles, such as the 5-run shirt, with optional gear) and **badges** (attendance, streak, walking and similar achievements) are separate: a milestone is never also a badge. Milestones are added, edited and deleted under **Admin → Milestones & Gear**, badges under **Admin → Badges**. Everything, including the starter milestones and badges the club began with, can be edited or deleted; "Add back starter" restores any that were deleted.
 - **Communication:** post and delete announcements and see how many devices are subscribed to phone notifications. Phone pushes themselves are sent from the Firebase console today (see [push-notifications-plan-b.md](push-notifications-plan-b.md)).
 - **Legacy data:** manage the old-app name index and unclaim names.
-- **Admin dashboard:** Check-In Events & Code Words, Check-In Log, Milestones & Gear, Badges, Members, Notifications, with CSV exports.
+- **Admin dashboard:** Check-In Events & Code Words, Check-In Log, Milestones & Gear, Badges & Special Events, Runners & Claims, Push Alerts, Partner, with CSV exports.
 
 ## Gaps between the rules and the screens
 

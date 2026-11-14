@@ -1,3 +1,4 @@
+import { friendlyRunError } from './utils/runSaveError';
 import { RouteSearch } from './components/RouteSearch';
 import { emptyRouteFilters, filterRoutes } from './utils/routeSearch';
 import { authReturnUrl } from './utils/authReturn';
@@ -10,6 +11,7 @@ import { useClubStore } from './services/storage';
 import { RunEvent, GPXRoute, UserProfile } from './types';
 import { deleteRunConfirmMessage, getRunChoices, resolveChoices } from './utils/runChoices';
 import { Navbar } from './components/Navbar';
+import { MaintenanceNotice } from './components/MaintenanceNotice';
 import { RunCard } from './components/RunCard';
 import { StandingsPage } from './components/StandingsPage';
 import { SubscribeMenu } from './components/SubscribeMenu';
@@ -444,14 +446,6 @@ export function App() {
   // Scheduling or editing a run also updates that night's check-in event,
   // so runners pick from the run's distance options when they check in.
   // Errors from these are shown inside the New Run / Edit Run form, which stays open.
-  const friendlyRunError = (err: any): Error =>
-    new Error(
-      err?.code === 'duplicate-code-word'
-        ? err.message
-        : err?.code === 'permission-denied'
-          ? "Not saved: the code word is locked once this run's check-in has opened."
-          : `Not saved${err?.code ? ` (${err.code})` : ''}. Please check your connection and try again.`
-    );
 
   const handleToggleRSVP = async (runId: string) => {
     try {
@@ -573,6 +567,7 @@ export function App() {
       />
 
       {/* Top Navigation */}
+      <MaintenanceNotice isAdmin={isAdmin} />
       <Navbar
         activeTab={activeTab}
         setActiveTab={setActiveTab}

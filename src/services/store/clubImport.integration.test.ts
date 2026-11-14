@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { collection, doc, getDoc, getDocs, setDoc, type Firestore } from 'firebase/firestore';
 import { createClubImportOps } from './clubImport';
 import { createLegacyOps } from './legacy';
+import { memberKeyFor } from '../../utils/memberKey';
 import type { StoreState } from './state';
 import type { UserProfile } from '../../types';
 import { INITIAL_BADGES } from '../../data/catalog';
@@ -50,6 +51,84 @@ const commit = (files: { profiles?: string; runs?: string; checkins?: string } =
   return buildImportCommit(planProfilesImport(files.profiles ?? profilesCsv, NOW), runs, planCheckinsImport(files.checkins ?? checkinsCsv, runs.runs, NOW), NOW);
 };
 
+it.skipIf(!enabled)('admin imports under maintenance and rebuilds reward evidence without reopening client writes', async () => {
+  const {ops,db}=setup();
+  await setDoc(doc(db(),'settings','maintenance'),{active:true});
+  const result=await ops.importClubData(commit());
+  expect(result.rewards).toMatchObject({updated:2,failed:0});
+  await setDoc(doc(db(),'settings','legacy_import'),{active:true});
+  expect(await ops.recomputeRewards()).toMatchObject({updated:3,failed:[]});
+  expect((await getDoc(doc(db(),'users','jane@example.test'))).data()).toMatchObject({totalRuns:9,longestStreakWeeks:4});
+  expect((await getDocs(collection(db(),'reward_proofs'))).size).toBeGreaterThan(0);
+  expect((await getDoc(doc(db(),'settings','maintenance'))).data()?.active).toBe(true);
+  expect((await getDoc(doc(db(),'settings','legacy_import'))).data()?.active).toBe(true);
+  const member=env.authenticatedContext('jane',{email:'jane@example.test',email_verified:true}).firestore() as unknown as Firestore;
+  await expect(setDoc(doc(member,'users','new@example.test'),{email:'new@example.test'})).rejects.toHaveProperty('code','permission-denied');
+});
+
+it.skipIf(!enabled)('reconciles already-claimed aliases, keeps undated credits and fulfilled gear, and is repeatable', async () => {
+  const {ops,db}=setup();
+  const email='existing@example.test', key=await memberKeyFor(email);
+  await env.withSecurityRulesDisabled(async c => {
+    const store=c.firestore() as unknown as Firestore;
+    const base=(await getDoc(doc(store,'users',admin))).data()!;
+    await setDoc(doc(store,'users',email),{...base,email,role:'member',pre2021Runs:12,legacyEventRuns:4,totalRuns:16,linkedLegacyIds:['matt','matt-l'],linkedLegacyNames:['MATT','MATT L']});
+    for (const id of ['matt','matt-l']) {
+      await setDoc(doc(store,'legacy_profiles',id),{id,name:id,oldCount:5,newCount:2,totalRuns:7,claimedBy:key,claimedAt:'2026-01-01'});
+      await setDoc(doc(store,'legacy_history',id),{events:[{d:'2026-10-07',t:'18:00:00',c:'SAME'},{d:'2026-10-07',t:'19:00:00',c:'OTHER'}]});
+    }
+    await setDoc(doc(store,'milestone_alerts','fulfilled'),{userEmail:email,fulfilled:true,reward:'Existing shirt'});
+  });
+  expect(await ops.recomputeRewards([email])).toMatchObject({updated:1,failed:[]});
+  const before=(await getDoc(doc(db(),'users',email))).data()!;
+  expect(before).toMatchObject({pre2021Runs:12,legacyEventRuns:1,totalRuns:13});
+  expect((await getDoc(doc(db(),'members',key))).data()?.totalRuns).toBe(13);
+  expect((await getDoc(doc(db(),'legacy_profiles','matt'))).data()?.attendanceKeys).toBeUndefined();
+  expect((await getDoc(doc(db(),'legacy_history','matt'))).data()?.attendanceKeys).toHaveLength(1);
+  expect((await getDoc(doc(db(),'legacy_history','matt'))).data()?.events).toHaveLength(2);
+  expect((await getDoc(doc(db(),'milestone_alerts','fulfilled'))).data()).toMatchObject({fulfilled:true,reward:'Existing shirt'});
+  expect(await ops.recomputeRewards([email])).toMatchObject({updated:1,failed:[]});
+  expect((await getDoc(doc(db(),'users',email))).data()).toEqual(before);
+});
+
+it.skipIf(!enabled)('admin assignment, unclaim and re-import preserve the union with app attendance', async () => {
+  const {ops,context,db}=setup();
+  const files={ profiles:'Email,Name,No Check-In Runs\njane@example.test,Jane,4\n,MATT,2\n,MATT L,3\n', runs:runsCsv,
+    checkins:'Email,Name,Date\njane@example.test,,2026-10-07\n,MATT,2026-10-07\n,MATT L,2026-10-07\n,MATT L,2026-10-14\n' };
+  await ops.importClubData(commit(files));
+  context.users=[(await getDoc(doc(db(),'users','jane@example.test'))).data() as UserProfile];
+  context.legacyMembers=(await getDocs(collection(db(),'legacy_profiles'))).docs.map(d=>d.data()) as StoreState['legacyMembers'];
+  context.milestones=[];
+  const legacy=createLegacyOps(context);
+  await legacy.adminSetLegacyClaim('matt','jane@example.test');
+  await legacy.adminSetLegacyClaim('matt-l','jane@example.test');
+  expect((await getDoc(doc(db(),'users','jane@example.test'))).data()).toMatchObject({pre2021Runs:9,loggedRuns:1,legacyEventRuns:1,totalRuns:11});
+  // Replacing one alias's history removes only that alias's contribution, not a shared run.
+  await ops.importClubData(commit({...files,checkins:files.checkins.replace(',MATT L,2026-10-14\n','')}));
+  expect((await getDoc(doc(db(),'users','jane@example.test'))).data()).toMatchObject({pre2021Runs:9,legacyEventRuns:0,totalRuns:10});
+  await legacy.adminSetLegacyClaim('matt',null);
+  expect((await getDoc(doc(db(),'users','jane@example.test'))).data()).toMatchObject({pre2021Runs:7,legacyEventRuns:0,totalRuns:8});
+});
+
+it.skipIf(!enabled)('a partial import upgrades older identities before a later claim can double-count them', async () => {
+  const {ops,db,context}=setup();
+  const email='existing@example.test',key=await memberKeyFor(email);
+  await env.withSecurityRulesDisabled(async c=>{
+    const store=c.firestore() as unknown as Firestore,base=(await getDoc(doc(store,'users',admin))).data()!;
+    await setDoc(doc(store,'users',email),{...base,email,role:'member',linkedLegacyIds:['old'],linkedLegacyNames:['OLD'],legacyEventRuns:1,totalRuns:1});
+    await setDoc(doc(store,'legacy_profiles','old'),{id:'old',name:'OLD',oldCount:0,newCount:1,totalRuns:1,claimedBy:key,claimedAt:'2026-01-01'});
+    await setDoc(doc(store,'legacy_history','old'),{events:[{d:'2026-10-07',t:'18:00:00',c:'APPLE'}]});
+  });
+  await ops.recomputeRewards([email]);
+  expect((await getDoc(doc(db(),'users',email))).data()?.legacyRunKeys).toEqual(['date:2026-10-07']);
+  await ops.importClubData(commit({profiles:'Name\nNEW NAME\n',checkins:'Name,Date\nNEW NAME,2026-10-07\n'}));
+  const user=(await getDoc(doc(db(),'users',email))).data() as UserProfile;
+  expect(user.legacyRunKeys).toEqual(['run:run-2026-10-07']);
+  backend.current=env.authenticatedContext('existing',{email,email_verified:true}).firestore() as unknown as Firestore;
+  const claimed=await createLegacyOps({...context,currentUserEmail:email}).claimLegacyProfile(user,'new-name');
+  expect(claimed).toMatchObject({legacyEventRuns:1,totalRuns:1});
+});
+
 it.skipIf(!enabled)('imports members, runs, check-ins and held names, then derives totals, badges and proofs from the check-ins', async () => {
   const { ops, db } = setup();
   const result = await ops.importClubData(commit());
@@ -71,7 +150,7 @@ it.skipIf(!enabled)('imports members, runs, check-ins and held names, then deriv
   // The alias is held, unclaimed, with its dated sign-in, and gets no profile or check-in.
   expect((await getDoc(doc(db(), 'users', 'pat-example'))).exists()).toBe(false);
   expect((await getDoc(doc(db(), 'legacy_profiles', 'pat-example'))).data()).toMatchObject({ name: 'PAT EXAMPLE', oldCount: 12, newCount: 1, claimedBy: null });
-  expect((await getDoc(doc(db(), 'legacy_history', 'pat-example'))).data()?.events).toEqual([{ d: '2026-10-28', t: '18:30:00', c: 'SPOOKY', s: 'halloween' }]);
+  expect((await getDoc(doc(db(), 'legacy_history', 'pat-example'))).data()?.events).toEqual([{ r: 'run-2026-10-28', d: '2026-10-28', t: '18:30:00', c: 'SPOOKY', s: 'halloween' }]);
   expect(((await getDoc(doc(db(), 'legacy_index', 'pool'))).data()?.entries as { id: string }[]).map((e) => e.id)).toEqual(['pat-example']);
 
   // The code word is saved for the run, and the run is a closed past run.
@@ -113,7 +192,19 @@ it.skipIf(!enabled)('claiming a held name counts its tagged sign-ins toward spec
   // PAT's held sign-in is on the Halloween run, whose code word is SPOOKY; retag that run's code word to something plain.
   await ops.importClubData(commit({ runs: runsCsv.replace('SPOOKY', 'BLUE') }));
   const held = (await getDoc(doc(db(), 'legacy_history', 'pat-example'))).data()?.events;
-  expect(held).toEqual([{ d: '2026-10-28', t: '18:30:00', c: 'BLUE', s: 'halloween' }]);
+  expect(held).toEqual([{ r: 'run-2026-10-28', d: '2026-10-28', t: '18:30:00', c: 'BLUE', s: 'halloween' }]);
+});
+
+it.skipIf(!enabled)('an untagged historical run earns no special credit even with a suggestive code word', async () => {
+  const { ops, db } = setup();
+  await ops.importClubData(commit({ runs: runsCsv.replace('SPOOKY,Halloween', 'TURKEY,') }));
+  const held = (await getDoc(doc(db(), 'legacy_history', 'pat-example'))).data()?.events;
+  expect(held).toEqual([{ r: 'run-2026-10-28', d: '2026-10-28', t: '18:30:00', c: 'TURKEY', s: 'none' }]);
+  const jane = (await getDoc(doc(db(), 'users', 'jane@example.test'))).data() as UserProfile;
+  expect(jane.totalRuns).toBe(9);
+  expect(jane.unlockedBadgeIds).not.toContain('turkey-trot');
+  const proofs = await getDocs(collection(db(), 'reward_proofs'));
+  expect(proofs.docs.some(p => p.data().kind === 'special')).toBe(false);
 });
 
 it.skipIf(!enabled)('recomputing picks up a badge added after the import, without importing anything again', async () => {

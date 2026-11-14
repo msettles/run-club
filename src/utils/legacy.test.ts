@@ -36,7 +36,9 @@ describe('legacy parsing and attendance history', () => {
     expect(specialEventIdsFor('turkey_trot')).toEqual(['turkey_trot']);
     expect(specialEventIdsFor('none')).toEqual([]);
     expect(specialEventIdsFor(undefined)).toEqual([]); // a run titled Turkey Trot without the tag no longer counts
-    expect(legacySpecialEventIds('SPOOKY')).toEqual(['halloween']); // old-app sign-ins still match by code word for now
+    expect(legacySpecialEventIds(undefined)).toEqual([]);
+    expect(legacySpecialEventIds('none')).toEqual([]);
+    expect(legacySpecialEventIds('halloween')).toEqual(['halloween']);
   });
 });
 

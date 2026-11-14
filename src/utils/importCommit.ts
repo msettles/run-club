@@ -129,7 +129,7 @@ export function buildImportCommit(profiles: ProfilesPlan | undefined, runs: Runs
   const heldEvents = new Map<string, LegacyEvent[]>();
   const held = (c: ImportedCheckIn) => {
     const record = byId.get(c.runId)!;
-    heldEvents.set(c.personKey, [...(heldEvents.get(c.personKey) || []), { d: c.date, t: c.time, c: record.codeWord || record.run.title.toUpperCase(), ...(record.run.specialEvent ? { s: record.run.specialEvent } : {}) }]);
+    heldEvents.set(c.personKey, [...(heldEvents.get(c.personKey) || []), { r: c.runId, d: c.date, t: c.time, c: record.codeWord || '', s: record.run.specialEvent || 'none' }]);
   };
   for (const c of rows) {
     if (!c.person.email) { held(c); continue; }

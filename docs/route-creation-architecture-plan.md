@@ -5,7 +5,7 @@
 > **Document Version:** 1.0  
 > **Status (Nov 10, 2026):** Phases 1–4 are implemented (engine, Route Studio, run-card/check-in integration, route library with edit versions and delete). Not built: print view, "report a problem", mile markers, first/last-200 m privacy trim. Section 9 questions are historical.  
 > **Created:** November 7, 2026  
-> **Context:** Integrates the proven GPX routing algorithms in `scripts/gpx_route/` and external chatbot notes in `docs/route-resources-plan.md` into the live Woodland Woodchuckers PWA (`woodland-woodchuckers.web.app`).
+> **Original context (historical):** this plan ported the former Python prototype and route-resource notes into the app. `scripts/gpx_route/` is no longer present; use `src/utils/routeEngine/` as the current implementation. Original proposed tiers/surfaces in the design below are not scheduling validation rules: current runs use measured saved route choices and the supported source types.
 
 ---
 
@@ -29,6 +29,18 @@ The goal is to enable **Run Organizers and Admins** to easily create and manage 
 5. **Fast, Lightweight Member Experience:** Check-in reads precomputed GeoJSON and directions in milliseconds with zero Overpass API dependencies on run nights.
 
 ---
+
+## Current implementation versus the original design
+
+The remaining model diagrams, type examples and UX proposals are the original architecture sketch, not a schema to copy into production. The current types are in `src/types/index.ts`; implementation is `src/utils/routeEngine/`, `RouteStudioModal.tsx`, `src/utils/runChoices.ts` and the Firestore serialization helpers. In particular:
+
+- Run choices reference saved route IDs and measured mileage with optional run-specific loop limits; fixed 1/3/5 tiers are not required.
+- Do not embed full direction arrays or GeoJSON inside each meetup choice. Full route geometry is loaded on demand; stored nested structures are serialized as required by Firestore.
+- Raw GPX is not retained as the source of truth; downloads are rebuilt from saved points. Original optional `slug`, draft/archive and creator fields below are proposals, not guaranteed persisted fields.
+- Route processing is isolated in workers with cancellation/timeouts and session OSM caching; network time is not guaranteed to be 2–4 seconds.
+- The browser engine does not require a Python backend. This does not mean every other app feature is Spark-only or cost-free: the calendar uses a Cloud Function.
+
+See [route-import.md](route-import.md), [performance-loading.md](performance-loading.md), [osm-caching.md](osm-caching.md) and [documentation-status.md](documentation-status.md) for implemented behavior and remaining checks.
 
 ## 2. Integration with Existing Architecture
 
@@ -263,7 +275,7 @@ To preserve the club's 100% free operation on the Firebase Spark tier:
 
 ---
 
-## 9. Next Discussion & Decisions
+## 9. Original discussion questions — historical
 
 1. **Default Meeting Landmark:** Should all routes default to landmarking `"Dead Cat Alley by Blue Note Brewing"` for the start/finish? (Already configured in `gpx_directions.py` defaults).
 2. **Distance Tiers:** Are `1`, `3`, and `5` miles the sole standard tiers, or should custom tiers (e.g. `10K`, `Half`) be supported in the dropdown?

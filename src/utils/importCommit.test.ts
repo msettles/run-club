@@ -47,7 +47,7 @@ describe('buildImportCommit', () => {
     expect(checkins.some((c) => /pat/i.test(c.userEmail))).toBe(false);
     expect(aliases).toHaveLength(1);
     expect(aliases[0]).toMatchObject({ id: 'pat-example', name: 'PAT EXAMPLE', oldCount: 12 });
-    expect(aliases[0].events).toEqual([{ d: '2026-10-28', t: '18:30:00', c: 'SPOOKY', s: 'halloween' }]);
+    expect(aliases[0].events).toEqual([{ r: 'run-2026-10-28', d: '2026-10-28', t: '18:30:00', c: 'SPOOKY', s: 'halloween' }]);
     expect(stats.heldSignIns).toBe(1);
   });
 

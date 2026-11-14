@@ -113,7 +113,7 @@ const ImportRunner: React.FC<PanelProps> = ({ specialEvents, onImportClubData, o
       )}
       <div className="border-t border-stone-200 pt-2 space-y-1">
         <p className="font-semibold text-stone-900">Recompute rewards</p>
-        <p className="text-stone-600">Rebuilds every member&apos;s totals, badges, streaks and reward proofs from their check-ins. Use it after changing the badge catalog. It does not create gear alerts.</p>
+        <p className="text-stone-600">Rebuilds every member&apos;s totals, badges, streaks and reward proofs. Also retries merchandise still pending from a saved historical claim. Ordinary imported history does not issue old gear.</p>
         <button type="button" onClick={() => { void doRecompute(); }} disabled={busy || !onRecomputeRewards} className="px-3 py-1.5 bg-white border border-stone-300 text-stone-800 font-bold rounded-lg hover:bg-stone-100 disabled:opacity-40 cursor-pointer">Recompute rewards for everyone</button>
       </div>
       {progress && <p role="status">{progress}</p>}

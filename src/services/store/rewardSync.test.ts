@@ -5,7 +5,7 @@ import { attendanceWeek } from './rewardProofs';
 import { rememberRewardSync, rewardsAreCurrent, streakLapsed } from './rewardSync';
 
 vi.mock('../firebase', () => ({ isFirebaseConfigured: false, db: null }));
-const user: UserProfile = { ...GUEST_USER, email: 'runner@example.test', role: 'member', totalRuns: 12, loggedRuns: 12, runCount: 12,
+const user: UserProfile = { ...GUEST_USER, attendancePolicyVersion: 2, email: 'runner@example.test', role: 'member', totalRuns: 12, loggedRuns: 12, runCount: 12,
   badgeCounts: { 'first-chuck': 1 }, unlockedBadgeIds: ['first-chuck'], lastCheckInUpdatedAt: '2026-11-04T02:00:00.000Z' };
 
 beforeEach(() => {
@@ -35,4 +35,12 @@ it('refreshes when the device has no storage', async () => {
   vi.stubGlobal('localStorage', undefined);
   await rememberRewardSync(user, INITIAL_BADGES);
   expect(await rewardsAreCurrent(user, INITIAL_BADGES)).toBe(false);
+});
+
+it('never caches an unfinished claim or merchandise delivery as current', async () => {
+  for (const pending of [{pendingLegacyClaim:'old-name'},{claimGearPending:true}]) {
+    const current={...user,...pending};
+    await rememberRewardSync(current,INITIAL_BADGES);
+    expect(await rewardsAreCurrent(current,INITIAL_BADGES)).toBe(false);
+  }
 });

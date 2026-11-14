@@ -23,6 +23,24 @@ const date = clubYmd();
 const events: MeetupEvent[] = ['first', 'second'].map((id) => ({ id, runId: id, date, title: id, time: '18:00', codeWord: id.toUpperCase(), codeWordSet: true, specialEvent: id === 'first' ? 'turkey_trot' : 'none',
   routes: { route: { name: 'Route', actualMiles: 3.1, baseMiles: 3.1, isLoop: false } }, activeDistances: ['route'] }));
 
+it.skipIf(!enabled)('an app check-in to a claimed historical run replaces its run credit instead of adding another', async () => {
+  const key=await memberKeyFor(email);
+  await env.withSecurityRulesDisabled(async context => {
+    const store=context.firestore() as unknown as Firestore;
+    await setDoc(doc(store,'users',email),{...user,pre2021Runs:5,legacyEventRuns:1,totalRuns:6,legacyRunKeys:['run:first'],appRunKeys:[],linkedLegacyIds:['old'],linkedLegacyNames:['OLD']});
+    await setDoc(doc(store,'legacy_profiles','old'),{id:'old',name:'OLD',oldCount:5,newCount:1,totalRuns:6,attendanceKeys:['run:first'],claimedBy:key,claimedAt:date});
+    await setDoc(doc(store,'legacy_history','old'),{events:[{r:'first',d:date,t:'18:00:00',c:'FIRST',s:'turkey_trot'}]});
+  });
+  const go=(activity: 'running' | 'walking')=>operations().checkInRunner({eventId:'first',userEmail:email,codeWordEntered:'FIRST',activity,distanceChoice:'route'});
+  const result=await go('running');
+  expect(result.success).toBe(true);
+  await result.rewardsReady;
+  expect((await getDoc(doc(backend.current!,'users',email))).data()).toMatchObject({pre2021Runs:5,legacyEventRuns:0,loggedRuns:1,totalRuns:6});
+  const edit=await go('walking');
+  expect(edit.success).toBe(true);
+  expect((await getDoc(doc(backend.current!,'users',email))).data()).toMatchObject({legacyEventRuns:0,loggedRuns:1,totalRuns:6});
+});
+
 beforeAll(async () => {
   if (!enabled) return;
   env = await initializeTestEnvironment({ projectId: 'demo-woodchuckers-store', firestore: { rules: readFileSync('firestore.rules', 'utf8') } });
@@ -370,4 +388,25 @@ it.skipIf(!enabled)('once the starter pack is saved there are no built-in badges
   const edited = { ...powerWalker, triggerConfig: { ...powerWalker.triggerConfig, step: 5 } };
   const refreshed = await createLegacyOps({ ...ctx, badges: [edited] } as unknown as Parameters<typeof createLegacyOps>[0]).refreshDerivedStats(await current());
   expect(refreshed.badgeCounts).toMatchObject({ 'power-walker': 5 }); // 25 walks, a level every 5 (was every 10)
+});
+
+it.skipIf(!enabled)('maintenance explains organizer publish refusal while an admin can publish the complete run atomically', async () => {
+  const route: GPXRoute = { id: 'publish-route', name: 'Publish route', description: '', distanceMiles: 3.1, elevationGainFt: 0, surface: 'Pavement', difficulty: 'Easy', points: [{ lat: 38.67, lon: -121.77 }], createdAt: '2026-11-13T00:00:00Z' };
+  const organizer = { ...user, role: 'organizer' as const };
+  await env.withSecurityRulesDisabled(async c => {
+    const store = c.firestore() as unknown as Firestore;
+    await setDoc(doc(store, 'users', email), organizer);
+    await setDoc(doc(store, 'settings', 'maintenance'), { active: true });
+    await setDoc(doc(store, 'routes', route.id), route);
+  });
+  const ctx = { currentUser: organizer, currentUserEmail: email, routes: [route], meetupEvents: [], setRuns: vi.fn(), setMeetupEvents: vi.fn() } as unknown as Parameters<typeof createRunOps>[0];
+  const details = { title: 'Next club run', date: '2099-11-18', time: '06:30 PM', locationName: 'Club', address: '', distanceMiles: 3.1, elevationGainFt: 0, surface: 'Pavement' as const, description: '', routeId: route.id, routeChoices: [{ routeId: route.id }], paceGroups: [], organizerName: 'Host' };
+  await expect(createRunOps(ctx).createRunWithCheckIn(details, 'FUTURE')).rejects.toMatchObject({ code: 'club-maintenance' });
+  expect((await getDocs(collection(backend.current!, 'runs'))).size).toBe(2);
+  await env.withSecurityRulesDisabled(c => updateDoc(doc(c.firestore() as unknown as Firestore, 'users', email), { role: 'admin' }));
+  ctx.currentUser = { ...organizer, role: 'admin' };
+  const created = await createRunOps(ctx).createRunWithCheckIn(details, 'FUTURE');
+  for (const collectionName of ['runs', 'meetup_events', 'meetup_secrets']) expect((await getDoc(doc(backend.current!, collectionName, created.id))).exists()).toBe(true);
+  expect((await getDoc(doc(backend.current!, 'meetup_codes', await codeKeyFor(details.date, 'FUTURE')))).data()?.runId).toBe(created.id);
+  expect((await getDoc(doc(backend.current!, 'routes', route.id))).data()?.referenced).toBe(true);
 });

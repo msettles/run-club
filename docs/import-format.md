@@ -29,9 +29,9 @@ Shirt size, city, zip and emergency contact aren't imported: members add them th
 | `Code Word` (also `Code Name`) | No | Empty |
 | `Special Event` | No | Not a special event |
 | `Location`, `Address`, `Route`, `Distance`, `Surface`, `Notes` | No | Club's usual location / empty / unknown / Pavement |
-| `Run ID` | No | Made from the date (and code word). Only for restoring this app's own export |
+| `Run ID` | No | Made from the date; explicit IDs are needed for separate runs on one date |
 
-The code word lives here, not in the check-ins. It names the run and tells two runs on one day apart.
+Code words validate check-in only. They never identify, merge or classify attendance. The approved historical input already has one run per date; the importer does not repeat its earlier consolidation.
 
 ## 3. Check-ins (`woodchuckers-import-checkins-example.csv`)
 
@@ -50,7 +50,7 @@ The code word lives here, not in the check-ins. It names the run and tells two r
 
 A check-in finds its run by `Run ID`, else by `Date`. A date with no run gets a placeholder run. A repeat of the same person at the same run is dropped.
 
-## Importing (Admin > Members > Import formats)
+## Importing (Admin > Runners & Claims > Import formats)
 
 Choose any of the three files, press **Review import**, tick the confirmation and press **Import**.
 
@@ -60,25 +60,37 @@ Choose any of the three files, press **Review import**, tick the confirmation an
 |---|---|---|
 | A person **with an email** | A member profile, their check-ins, and totals, badges, streaks and reward proofs worked out from those check-ins | Name, birthday and no-check-in runs are updated when the file gives a different value. A blank cell never erases anything, and a name made from an email never replaces a real one |
 | A person **without an email** | Held as an unclaimed past name with their dated sign-ins. **No profile is made** | Updated if it changed. If someone has already claimed the name, their totals follow |
-| A run | A run and its check-in event, which nobody can check in to. The first run on a date is `run-<date>`; a second run that day also uses its code word | Title, time, place, special event and code word are updated. Runs made in the app are left alone |
+| A run | A run and its check-in event, which nobody can check in to. The ID defaults to `run-<date>`; separate runs on one date require explicit Run IDs | Title, time, place, special event and code word are updated. Runs made in the app are left alone |
 | A check-in | A record at that run | Changed rows are updated; a check-in whose run's title or special event changed is replaced. The app's own check-ins are never replaced |
 
-Totals, badges, milestones and streaks are **never** read from a file and **never** written by the import. They are computed from the check-ins, at the end of an import and again on every check-in.
+Totals, badges, milestones and streaks are **never read as authoritative totals from a file**. The import updates attendance and affected claimed-name contributions, then recomputes the affected members’ derived totals and rewards. Subsequent check-ins update them from attendance as well.
 
 ### Special events on past names
 
-A run's **Special Event** tag and **Code Word** import with the run. When a held name is claimed, each of its sign-ins on a tagged run counts toward that special event (its badge goes up). Sign-ins on runs with no tag still match the old code-word keywords (Turkey, Halloween, Spooky, Anniversary).
+A run's **Special Event** tag and **Code Word** import with the run. When a held name is claimed, each of its sign-ins on a tagged run counts toward that special event (its badge goes up). A blank tag earns no special-event credit. Code words, titles and calendar dates do not supply a classification.
 
 ### Gear
 
-Importing and recomputing **never** create gear alerts (so history never sends members a pile of old shirts to hand out). There is one exception, **claiming past names**:
+Imports and ordinary recomputes do not issue historical gear. **Claiming past names** can create owed gear alerts, including delivery retried after an interrupted claim:
 
 1. Claiming a single name owes nothing: the old app already handed out its gear.
 2. When a runner has claimed two or more names, the one with the most runs is treated as their main name, with everything up to its count already given.
-3. The other names are added to it, biggest first. A run on a day an earlier name already signed in is not counted again (they signed in twice to one run). Runs with no sign-in date are counted.
+3. The other names are added to it, biggest first. The same run under multiple names counts once. Separate runs on the same date remain separate. Runs with no sign-in date are counted.
 4. Every run-count milestone the count crosses while adding them is owed, as an **unfulfilled** gear alert. An alert is never made twice.
 
-Only run-count milestones apply (old sign-ins have no mileage). The runner's run total itself still adds up every claimed name's runs; the day check only decides gear.
+Only run-count milestones apply (old sign-ins have no mileage). Runner totals also count shared runs once across all claimed names and app check-ins. Undated credits remain additive because overlap cannot be established.
+
+Claims save a private `claimGearPending` flag with the history reservation. It is cleared only after every owed alert has been saved or found to exist. Reloading/reward refresh, retrying the claim, or the admin recompute retries pending delivery. Each alert is created transactionally; a retry never overwrites an existing fulfilled handout. Ordinary imported history without pending claim work does not generate a gear backlog.
+
+### Claiming multiple names: shared attendance
+
+Claiming Pat Runner and Pat L Runner credits one run when both names attended the same run. New imports retain the canonical run ID in held attendance. Older records without an ID use the date, resolving to the unique known run on that date. Ambiguous dates require an explicit Run ID; separate explicit IDs are preserved. Claiming does not merge entire weeks: approved date consolidation belongs in the historical source files.
+
+Claims reserve the name before reading its private attendance, then finish the deduplicated credit and publish standings. If interrupted, retrying the claim or the next reward refresh resumes it without adding credits again. Check-in and additional claims wait until a pending claim finishes. Attendance matching keys stay in private history and profiles, not the public name pool or standings.
+
+**For a new deployment or separately approved historical replacement:** deploy the app and Firestore rules together, import the approved complete historical files, then run **Recompute rewards for everyone** as an admin. This prepares private matching data and reconciles already-claimed names, public standings, badges and reward proofs. It is safe to repeat. Check that every member finishes successfully before launch; names lacking prepared history cannot be newly claimed. Original attendance, undated credits and fulfilled gear records are retained. This operation does not perform the go-live reset or delete old run documents.
+
+**Woodland status, November 13:** this migration/import/recompute has already completed, with five successful account reconciliations and owner acceptance. Do not delete/re-import the launch database just to follow these general instructions. See [go-live-readiness-review.md](go-live-readiness-review.md).
 
 ### First Run Date
 
@@ -93,8 +105,10 @@ It is worked out when an import or **Recompute rewards** runs, so a claim made l
 
 **Recompute rewards for everyone** rebuilds every member's totals, badges, streaks and reward proofs from their check-ins. Use it after you add, change or delete a badge or special event, so members are current without waiting for them to sign in. It is safe to repeat.
 
+It also retries saved, unfinished claim-merchandise delivery. Admins can run this while Club maintenance is paused. During a historical replacement, keep the pause enabled until there are zero failed members and all count/route/access checks pass.
+
 ### Known limits
 
 - Check-ins are credited by miles only (one loop). Loops in a file are not kept.
 - Imported runs carry no RSVP list.
-- A second run on one date is told apart by its code word, so keep each run's code word the same between imports.
+- Separate runs on one date require explicit Run IDs in both run and check-in files. Code-word changes do not affect attendance identity.

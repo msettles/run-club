@@ -1,3 +1,4 @@
+import { appAttendanceKeys, legacyAttendanceCredit } from '../../utils/attendanceIdentity';
 import type { ActivityType, DistanceChoice, UserProfile, MeetupEvent, CheckInRecord, RouteOption, Badge, MilestoneAlert, MilestoneReward } from '../../types';
 import { milestoneMeasure, milestoneTarget } from '../../utils/milestones';
 import { adjustDistanceCounts, recomputeBadges, datedEventsFrom, type LegacyEvent } from '../../utils/legacy';
@@ -72,9 +73,12 @@ export function calculateCheckIn(params: CheckInParams, u: UserProfile, event: M
     if (withPet) petRunCount++;
     distanceCounts = adjustDistanceCounts(distanceCounts, computedActualMiles, 1);
 
+    const appRunKeys = [...new Set([...(u.appRunKeys || []), ...appAttendanceKeys([newCheckIn])])].sort();
+    const legacyEventRuns = u.legacyRunKeys ? legacyAttendanceCredit(u.legacyRunKeys, appRunKeys) : (u.legacyEventRuns || 0);
     const withTotals: UserProfile = {
       ...u,
-      totalRuns: isUpdate ? u.totalRuns : u.totalRuns + 1,
+      appRunKeys, legacyEventRuns,
+      totalRuns: u.totalRuns + (isUpdate ? 0 : 1) + legacyEventRuns - (u.legacyEventRuns || 0),
       loggedRuns: isUpdate ? u.loggedRuns : u.loggedRuns + 1,
       totalMiles: Math.round((u.totalMiles - oldMiles + computedActualMiles) * 100) / 100,
       runCount,

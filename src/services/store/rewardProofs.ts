@@ -2,11 +2,12 @@
 import { collection, doc, getDocs, query, runTransaction, where, type Firestore } from 'firebase/firestore';
 import type { CheckInRecord, MeetupEvent, UserProfile } from '../../types';
 import { legacySpecialEventIds, specialEventIdsFor, type LegacyEvent } from '../../utils/legacy';
+import { historicalRunKey, uniqueHistoricalAttendance } from '../../utils/attendanceIdentity';
 
 export const attendanceWeek = (date: string): number => Math.floor(Date.parse(`${date}T00:00:00Z`) / 604800000 + 3 / 7);
 /** How many separate streaks are written at once on a first sync. */
 const STREAK_WRITERS = 6;
-export interface RewardSource { checkinId?: string; legacyId?: string; event?: { d: string; t: string; c: string; s?: string } }
+export interface RewardSource { checkinId?: string; legacyId?: string; event?: { d: string; t: string; c: string; s?: string; r?: string } }
 interface Attendance { date: string; source: RewardSource; id: string; specialIds: string[] }
 export function rewardProofId(email: string, epoch: number, kind: string, key: string | number): string { return `${email}_${epoch}_${kind}_${key}`; }
 
@@ -17,12 +18,12 @@ export async function prepareRewardProofs(db: Firestore, user: UserProfile, chec
   const attendance: Attendance[] = [
     ...checkins.map((c) => {
       const event = byId.get(c.runId || '');
-      return { date: c.date, source: { checkinId: c.id }, id: `checkin:${c.id}`,
+      return { date: c.date, source: { checkinId: c.id }, id: historicalRunKey({d:c.date,r:c.runId}),
         specialIds: specialEventIdsFor(c.eventSpecial ?? event?.specialEvent) };
     }),
-    ...legacy.filter((e) => e.legacyId).map((e) => ({ date: e.d,
-      source: { legacyId: e.legacyId!, event: { d: e.d, t: e.t, c: e.c, ...(e.s ? { s: e.s } : {}) } },
-      id: `legacy:${e.legacyId}:${e.d}:${e.t}:${e.c}`, specialIds: legacySpecialEventIds(e.c, e.s) })),
+    ...uniqueHistoricalAttendance(legacy, checkins).filter((e) => e.legacyId).map((e) => ({ date: e.d,
+      source: { legacyId: e.legacyId!, event: { d: e.d, t: e.t, c: e.c, ...(e.s ? { s: e.s } : {}), ...(e.r ? { r: e.r } : {}) } },
+      id: historicalRunKey(e), specialIds: legacySpecialEventIds(e.s) })),
   ];
   const weeks = new Map<number, Attendance>();
   attendance.forEach((a) => { const week = attendanceWeek(a.date); if (Number.isFinite(week)) weeks.set(week, a); });

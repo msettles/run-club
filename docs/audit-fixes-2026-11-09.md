@@ -1,5 +1,7 @@
 # Independent review implementation — November 9, 2026
 
+> Historical release evidence: version-specific findings, test totals and dependency advisories below are retained as recorded. They are not the current launch checklist. See [documentation status](documentation-status.md) and the [November 13 readiness review](go-live-readiness-review.md).
+
 This implements the numbered findings in [the independent review](independent-code-review-2026-11-09.md), following its five repair groups. These changes are included in v1.2.0, following v1.1.5. Hosting and Firestore rules must be deployed together; the version/merge does not itself deploy the application.
 
 ## Implemented findings

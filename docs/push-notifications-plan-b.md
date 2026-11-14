@@ -1,6 +1,6 @@
 # Push notifications — Plan B (send from the app)
 
-**Status:** proposal · **Today:** Plan A is live (v1.0.87) · **Expected cost:** $0/month at club scale, but a credit card must be on file
+**Status, November 13:** push sending from the app remains a proposal. Plan A (device registration plus Firebase Console sending) is implemented. `functions/` already exists for the deployed calendar feed; there is no announcement push trigger or automatic run-reminder scheduler. Confirm current billing and quotas rather than promising zero cost.
 
 ## Goal
 
@@ -16,12 +16,12 @@ Let an admin press **Post Announcement** in the app and have it reach phones as 
 | In-app announcements | ✅ `announcements` collection → bell (live) |
 | Pushes in the bell | ⚠️ Only on the phone that received them (saved by the push worker) |
 
-**What's missing:** sending a push needs the project's **server credentials**, which must never be in the app. That means server-side code, which the free **Spark** plan doesn't allow. Firebase **Cloud Functions** need the **Blaze** (pay-as-you-go) plan.
+**What's missing:** automatic sending from this app needs the project's **server credentials**, which must never be in the app. That means server-side code, which the free **Spark** plan doesn't allow. Firebase **Cloud Functions** need the **Blaze** (pay-as-you-go) plan.
 
 ## What Blaze changes
 
 - **Billing:** a Google Cloud billing account (credit card) is linked to the project.
-- **Quotas:** everything that's free on Spark stays free on Blaze, with the same no-cost quotas. You only pay for usage above them.
+- **Quotas and charges:** inspect the services actually enabled, their current quotas and official pricing. Do not infer a zero bill from this proposal or from FCM delivery volume alone.
 - **Unlocks:** Cloud Functions, which this plan needs.
 - **Going back:** you can return to Spark later, after deleting the functions.
 
@@ -59,8 +59,8 @@ FCM ──► every device subscribed to topic "club" ──► public/push-sw.j
 
 ### Phase 0 — Account setup (you, ~15 min)
 
-1. Firebase console → **Upgrade** → **Blaze**, then link or create a billing account.
-2. Google Cloud console → **Billing → Budgets & alerts**: create a **$1/month** budget with email alerts at 50% / 90% / 100%. Optionally cap it with a budget-triggered function, though that's usually not worth it at this scale.
+1. Inspect the existing project and billing setup first: the calendar function is already deployed. Only provision or change billing if the owner approves the specific change.
+2. Agree an appropriate budget and configure **Billing → Budgets & alerts** if approved. Alerts notify; they are not a spending cap. Any automated billing shutdown needs its own reviewed design and authorization because it could interrupt the live club app.
 3. Confirm these APIs are enabled; the first `firebase deploy --only functions` prompts for them:
    - Cloud Functions
    - Cloud Build
@@ -72,7 +72,7 @@ FCM ──► every device subscribed to topic "club" ──► public/push-sw.j
 
 ### Phase 1 — Functions (code)
 
-- **New `functions/` package:** TypeScript, Node 22, `firebase-functions` v6, `firebase-admin`. Register it in `firebase.json` under `functions`, with a `predeploy` build step.
+- **Extend the existing `functions/` package:** preserve the deployed `calendar` function and the build configured in `firebase.json`; add push functions and their tests. Reassess runtime/package versions when implementing.
 - **Region:** `us-central1`. Firestore is in **`nam5`**, and Firestore triggers must run in a compatible region.
 - **`onAnnouncementCreated`** (`onDocumentCreated('announcements/{id}')`):
   - Skips unless `push === true`.
@@ -105,35 +105,24 @@ FCM ──► every device subscribed to topic "club" ──► public/push-sw.j
 
 - **Rules:** `announcements` accepts `push: true/false` and nothing else new.
 - **Functions:** emulator suite with `firebase emulators:exec --only functions,firestore`. Check that creating an announcement with `push: true` calls `messaging().send` with the right topic and payload, using a mocked Admin SDK, and that `push: false` doesn't.
-- **Manual:** two Android phones (one signed in, one signed out) plus an iPhone using the Home Screen app. A post with "Also send to phones" should reach all three within about a minute, and show **once** in each bell.
+- **Manual:** two Android phones (one signed in, one signed out) plus an iPhone using the Home Screen app. Record observed delivery latency and notification state on all three devices; do not guarantee delivery within a minute. Each received announcement should show **once** in its bell.
 
 ### Phase 4 — Rollout
 
 1. Deploy functions (`firebase deploy --only functions`), then rules and hosting.
 2. Run the token backfill once.
 3. Post a test announcement. Check the function logs and all three test phones.
-4. After a week, check **Billing → Reports**. Expect **$0.00**.
+4. After the agreed observation period, check usage and **Billing → Reports** against the approved budget; record actual costs.
 
 **Rollback:**
 - **Quick:** untick "Also send to phones", or delete the functions with `firebase functions:delete onAnnouncementCreated`. The app falls back to Plan A behaviour.
-- **To return to Spark:** delete all functions, then downgrade.
+- **Calendar preservation:** do not delete all functions or downgrade billing as a push rollback. The existing `calendar` function supports the live subscription feed; removing it would change an unrelated feature. Any such change needs a separate owner-approved plan.
 
 **Estimate:** about 1–1.5 days of build and test once Blaze is on, plus your Phase 0 setup.
 
-## Cost check (why ~$0)
+## Cost and capacity review — required before implementation
 
-Assumptions: ~150 runners, ~100 phones with notifications on, ~3 announcements a week.
-
-| Service | Expected use per month | No-cost tier (check current pricing) |
-|---|---|---|
-| FCM (sending pushes) | ~1,300 deliveries | **Always free**, no limit |
-| Cloud Functions invocations | ~15 announcements + ~200 device writes | 2,000,000 / month |
-| Functions compute | Well under 1 GB-second per run | Hundreds of thousands of GB-seconds / month |
-| Cloud Build (deploys) | A few minutes per deploy | Free build-minutes allowance |
-| Artifact Registry (function images) | ~0.1–0.3 GB with the cleanup policy | 0.5 GB |
-| Firestore | Unchanged from today | Same free daily quotas as Spark |
-
-The realistic way to get billed is **Artifact Registry storage**, if old function images pile up without a cleanup policy (cents per month), or a runaway loop in a function. The $1 budget alert catches either early.
+The original cost estimate and quota table were planning assumptions, not verified current pricing. Recalculate for actual subscribers, sends, device writes, function runtime, builds, image storage and existing calendar usage. Use the current official service pricing and record the date/region. Include budget alerts and cleanup of obsolete build artifacts in the implementation plan; no service is enabled by this document.
 
 ## Risks and notes
 
@@ -144,6 +133,6 @@ The realistic way to get billed is **Artifact Registry storage**, if old functio
 
 ## Decisions for you
 
-1. **Okay to put a card on the project** and set a $1 budget alert?
+1. Confirm the existing billing account, approved usage budget and who monitors alerts; do not assume this project has no billing relationship.
 2. **Signed-out phones:** should they get pushes too? If yes, that needs the callable function and App Check. If no, push goes to signed-in runners only, which is simpler and needs no App Check.
 3. **"Also send to phones":** on by default, or off by default?

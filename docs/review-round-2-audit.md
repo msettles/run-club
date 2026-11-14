@@ -1,5 +1,7 @@
 # Second-round review audit — v1.1.3
 
+> Historical release evidence: version-specific findings, test totals and dependency advisories below are retained as recorded. They are not the current launch checklist. See [documentation status](documentation-status.md) and the [November 13 readiness review](go-live-readiness-review.md).
+
 Audited November 9, 2026 against the supplied second-round review, including the earlier v1.1.1 and v1.1.2 fixes. This is a repository and release audit, not an independent penetration test.
 
 ## Original findings

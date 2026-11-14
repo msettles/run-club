@@ -25,6 +25,8 @@ Roster and history queries use document-snapshot cursors, ordered by document ID
 
 ## Validation
 
+The counts below are the checks recorded when this feature shipped, not the current total test suite. Current launch evidence is in [go-live-readiness-review.md](go-live-readiness-review.md).
+
 - 110 unit tests, including no full-roster subscription at sign-in and the handout/listener race.
 - 15 emulator integration tests, including staff paging with 125 synthetic runners and 123 fulfilled awards, exact lookup, global name/partial-email search beyond the first page, complete export, pending-row preservation, cache expiry/shared scans, session cleanup and permission-error retry.
 - 20 browser checks across Chromium and WebKit, including staff lookup/export and pending-to-fulfilled handouts.
