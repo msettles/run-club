@@ -250,15 +250,6 @@ export const MapViewer: React.FC<MapViewerProps> = ({
               <span>+{route.elevationGainFt} ft</span>
             </div>
 
-            {canEdit && onEditRoute && (
-              <button
-                onClick={() => onEditRoute(route)}
-                className="flex items-center gap-1 px-3 py-1.5 bg-stone-900 hover:bg-stone-800 text-white rounded-xl text-xs font-bold transition shadow-xs"
-              >
-                <Edit3 className="w-3.5 h-3.5 text-amber-300" />
-                <span>Edit Route</span>
-              </button>
-            )}
           </div>
         </div>
       )}
@@ -325,6 +316,19 @@ export const MapViewer: React.FC<MapViewerProps> = ({
           >
             <Locate className={`w-3.5 h-3.5 ${isTrackingLocation ? 'animate-spin' : ''}`} />
             <span>{isTrackingLocation ? 'Tracking Location' : 'Show My Location'}</span>
+          </button>
+        </div>
+      )}
+
+      {!hideHeader && canEdit && onEditRoute && (
+        <div role="group" aria-label={`Organizer tools for route ${route.name}`} className="border-t border-stone-200 bg-woodland-50/50 px-4 py-3">
+          <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-woodland-700">Organizer tools</p>
+          <button
+            onClick={() => onEditRoute(route)}
+            className="flex items-center gap-1 px-3 py-1.5 bg-stone-900 hover:bg-stone-800 text-white rounded-xl text-xs font-bold transition shadow-xs"
+          >
+            <Edit3 className="w-3.5 h-3.5 text-amber-300" />
+            <span>Edit Route</span>
           </button>
         </div>
       )}

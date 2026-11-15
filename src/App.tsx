@@ -903,19 +903,6 @@ export function App() {
                       <Mountain className="w-3 h-3 text-amber-600" /> +{r.elevationGainFt} ft
                     </span>
                     <div className="flex items-center gap-1">
-                      {isOrganizerOrAdmin && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            void handleRouteAction(r, 'edit');
-                          }}
-                          className="text-stone-400 hover:text-woodland-800 p-1"
-                          disabled={Boolean(routeActionId)}
-                          title="Edit Route Details & Directions"
-                        >
-                          <Edit3 className="w-3.5 h-3.5" />
-                        </button>
-                      )}
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -929,6 +916,20 @@ export function App() {
                       </button>
                     </div>
                   </div>
+                  {isOrganizerOrAdmin && <div role="group" aria-label={`Organizer tools for library route ${r.name}`} className="mt-3 border-t border-stone-200 pt-3">
+                    <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-woodland-700">Organizer tools</p>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void handleRouteAction(r, 'edit');
+                      }}
+                      className="flex items-center gap-1.5 rounded-lg border border-woodland-300 bg-white px-3 py-1.5 text-xs font-semibold text-woodland-800 hover:bg-woodland-50"
+                      disabled={Boolean(routeActionId)}
+                      title="Edit Route Details & Directions"
+                    >
+                      <Edit3 className="w-3.5 h-3.5" /><span>Edit route</span>
+                    </button>
+                  </div>}
                 </div>
               ))}
             </div>

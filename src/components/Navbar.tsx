@@ -265,19 +265,6 @@ export const Navbar: React.FC<NavbarProps> = ({
                     </div>
 
                     <div className="border-t border-stone-100 pt-2 space-y-1">
-                      {isAdmin && (
-                        <button
-                          onClick={() => {
-                            setShowProfileMenu(false);
-                            setActiveTab('admin');
-                          }}
-                          className="w-full text-left px-2.5 py-1.5 text-xs font-semibold text-stone-700 hover:bg-stone-100 rounded-lg flex items-center gap-2 cursor-pointer"
-                        >
-                          <Shield className="w-3.5 h-3.5 text-woodland-600" />
-                          <span>Admin Portal</span>
-                        </button>
-                      )}
-                      {isOrganizerOrAdmin && <button type="button" onClick={() => { setShowProfileMenu(false); setActiveTab('organizer'); }} className="w-full text-left px-2.5 py-2 text-xs font-bold text-woodland-800 rounded-lg hover:bg-stone-100">Run Night / Table Mode</button>}
                       <button type="button" onClick={() => { setShowProfileMenu(false); setActiveTab('history'); }} className="w-full text-left px-2.5 py-2 text-xs font-bold text-woodland-800 rounded-lg hover:bg-stone-100">My Runs</button>
                       {onClaimHistory && <button type="button" onClick={() => { setShowProfileMenu(false); onClaimHistory(); }} className="w-full text-left px-2.5 py-2 text-xs font-bold text-woodland-800 rounded-lg hover:bg-stone-100">Claim historical runs</button>}
                       {isOrganizerOrAdmin && <button type="button" onClick={() => { setShowProfileMenu(false); setActiveTab('leaderboard'); }} className="w-full text-left px-2.5 py-2 text-xs font-semibold rounded-lg hover:bg-stone-100">Standings</button>}
@@ -293,6 +280,22 @@ export const Navbar: React.FC<NavbarProps> = ({
                           <span>Edit profile</span>
                         </button>
                       )}
+                      {isOrganizerOrAdmin && <div role="group" aria-label="Profile organizer tools" className="border-y border-stone-200 py-2">
+                        <p className="px-2.5 pb-1 text-[10px] font-bold uppercase tracking-wider text-woodland-700">Organizer tools</p>
+                        {isAdmin && (
+                          <button
+                            onClick={() => {
+                              setShowProfileMenu(false);
+                              setActiveTab('admin');
+                            }}
+                            className="w-full text-left px-2.5 py-1.5 text-xs font-semibold text-stone-700 hover:bg-stone-100 rounded-lg flex items-center gap-2 cursor-pointer"
+                          >
+                            <Shield className="w-3.5 h-3.5 text-woodland-600" />
+                            <span>Admin Portal</span>
+                          </button>
+                        )}
+                        <button type="button" onClick={() => { setShowProfileMenu(false); setActiveTab('organizer'); }} className="w-full text-left px-2.5 py-2 text-xs font-bold text-woodland-800 rounded-lg hover:bg-stone-100">Run Night / Table Mode</button>
+                      </div>}
                       <NotificationsToggle email={currentUser.email} />
                       <button
                         onClick={() => {

@@ -8,22 +8,23 @@ export const route: GPXRoute = { id: 'browser-route', name: 'Browser Test Route'
 export const run: RunEvent = { id: 'browser-run', title: 'Browser Test Run', date: '2026-11-11', time: '06:00 PM', locationName: 'Test Patio', address: 'Test address', distanceMiles: 3, surface: 'Pavement', elevationGainFt: 0, description: 'Synthetic browser event', routeId: route.id, routeChoices: [{ routeId: route.id }], paceGroups: [], attendees: [], organizerName: 'Test Organizer' };
 export const event: MeetupEvent = { id: run.id, runId: run.id, title: run.title, date: run.date, time: run.time, codeWord: 'ACORN', codeWordSet: true, activeDistances: [route.id], routes: { [route.id]: { routeId: route.id, name: route.name, actualMiles: 3, isLoop: false } } };
 
-export const test = base.extend<{ staff: boolean; seededAlerts: MilestoneAlert[] }>({
+export const test = base.extend<{ staff: boolean; viewerRole: 'guest' | 'member' | 'organizer' | 'admin'; seededAlerts: MilestoneAlert[] }>({
   staff: [false, { option: true }],
+  viewerRole: ['member', { option: true }],
   seededAlerts: [[], { option: true }],
-  page: async ({ page, staff, seededAlerts }, use) => {
+  page: async ({ page, staff, viewerRole, seededAlerts }, use) => {
     // Freeze wall time, keeping browser timers active for React and network handling.
     await page.clock.setFixedTime(new Date('2026-11-12T02:30:00Z'));
     await page.route('**/*', (request) => {
       const url = new URL(request.request().url());
       return url.hostname === '127.0.0.1' ? request.continue() : request.abort();
     });
-    await page.addInitScript(({ keys, profile, run, event, route, alerts }) => {
+    await page.addInitScript(({ keys, profile, run, event, route, alerts, guest }) => {
       if (localStorage.getItem('browser-fixture-ready')) return;
       localStorage.clear();
-      for (const [key, value] of Object.entries({ [keys.USERS]: [profile], [keys.RUNS]: [run], [keys.MEETUP_EVENTS]: [event], [keys.ROUTES]: [route], [keys.CURRENT_USER_EMAIL]: profile.email, [keys.CHECKINS]: [], [keys.MILESTONE_ALERTS]: alerts })) localStorage.setItem(key, JSON.stringify(value));
+      for (const [key, value] of Object.entries({ [keys.USERS]: [profile], [keys.RUNS]: [run], [keys.MEETUP_EVENTS]: [event], [keys.ROUTES]: [route], [keys.CURRENT_USER_EMAIL]: guest ? '' : profile.email, [keys.CHECKINS]: [], [keys.MILESTONE_ALERTS]: alerts })) localStorage.setItem(key, JSON.stringify(value));
       localStorage.setItem('browser-fixture-ready', 'true');
-    }, { keys: STORAGE_KEYS, profile: { ...runner, role: staff ? 'admin' : 'member' }, run, event, route, alerts: seededAlerts });
+    }, { keys: STORAGE_KEYS, profile: { ...runner, role: staff ? 'admin' : viewerRole === 'guest' ? 'member' : viewerRole }, run, event, route, alerts: seededAlerts, guest: viewerRole === 'guest' });
     await use(page);
   },
 });

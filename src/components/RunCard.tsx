@@ -176,8 +176,6 @@ export const RunCard: React.FC<RunCardProps> = ({
         </div>
       </div>
 
-      {onSocialPost && <div className="px-5 pb-2"><button type="button" onClick={() => onSocialPost(run)} className="text-xs font-bold text-woodland-800 underline underline-offset-2">Create Instagram / Facebook post</button></div>}
-
       {/* Description */}
       <div className="px-5 py-2">
         <p className="text-xs text-stone-600 line-clamp-2 leading-relaxed">
@@ -349,67 +347,26 @@ export const RunCard: React.FC<RunCardProps> = ({
           <span>Meet on patio @ Blue Note Brewing • All paces &amp; jog/walkers welcome!</span>
         </div>
 
-        <div className="flex w-full min-w-0 flex-wrap items-center gap-2 sm:w-auto [&>button]:shrink-0 [&>button]:whitespace-nowrap">
+        <div role="group" aria-label={`Runner actions for ${run.title}`} className="flex w-full min-w-0 flex-wrap items-center gap-2 sm:w-auto [&>button]:shrink-0 [&>button]:whitespace-nowrap">
           <button type="button" onClick={() => { void shareRun(); }} className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-white border border-stone-300" aria-label={`Share ${run.title}`}>Share run</button>
-          {isSignedIn && (
-            <>
           {/* RSVP Toggle */}
-          <button
-            onClick={() => onToggleRSVP(run.id)}
-            className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition flex items-center gap-1.5 cursor-pointer ${
-              isAttending
-                ? 'bg-stone-200 text-stone-800 hover:bg-stone-300'
-                : 'bg-white border border-stone-300 text-stone-700 hover:bg-stone-100 shadow-xs'
-            }`}
-          >
-            {isAttending ? (
-              <>
-                <Check className="w-3.5 h-3.5 text-woodland-600" />
-                <span>Going</span>
-              </>
-            ) : (
-              <span>RSVP</span>
-            )}
-          </button>
-
-            </>
-          )}
-
-          {onOpenRoster && (
+          {isSignedIn && (
             <button
-              type="button"
-              onClick={() => onOpenRoster(run)}
-              aria-label={`Check-ins for ${run.title}`}
-              className="px-3 py-1.5 text-xs font-semibold rounded-lg transition flex items-center gap-1.5 cursor-pointer bg-white border border-woodland-300 text-woodland-800 hover:bg-woodland-50"
+              onClick={() => onToggleRSVP(run.id)}
+              className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition flex items-center gap-1.5 cursor-pointer ${
+                isAttending
+                  ? 'bg-stone-200 text-stone-800 hover:bg-stone-300'
+                  : 'bg-white border border-stone-300 text-stone-700 hover:bg-stone-100 shadow-xs'
+              }`}
             >
-              <Users className="w-3.5 h-3.5" />
-              <span>Check-ins{checkedInCount > 0 ? ` (${checkedInCount})` : ''}</span>
-              {milestoneAlertCount > 0 && (
-                <span title="Milestones reached at this run" className="rounded-full bg-amber-400 px-1.5 text-[10px] font-black text-stone-950">🎉 {milestoneAlertCount}</span>
+              {isAttending ? (
+                <>
+                  <Check className="w-3.5 h-3.5 text-woodland-600" />
+                  <span>Going</span>
+                </>
+              ) : (
+                <span>RSVP</span>
               )}
-            </button>
-          )}
-
-          {onEdit && (
-            <button
-              type="button"
-              onClick={() => onEdit(run)}
-              aria-label={`Edit ${run.title}`}
-              className="px-3 py-1.5 text-xs font-semibold rounded-lg transition flex items-center gap-1.5 cursor-pointer bg-white border border-stone-300 text-stone-700 hover:bg-stone-100"
-            >
-              <Pencil className="w-3.5 h-3.5" />
-              <span>Edit</span>
-            </button>
-          )}
-
-          {onDelete && (
-            <button
-              type="button"
-              onClick={() => onDelete(run)}
-              aria-label={`Delete ${run.title}`}
-              className="px-3 py-1.5 text-xs font-semibold rounded-lg transition cursor-pointer bg-white border border-red-200 text-red-700 hover:bg-red-50"
-            >
-              Delete
             </button>
           )}
 
@@ -439,6 +396,52 @@ export const RunCard: React.FC<RunCardProps> = ({
           )}
         </div>
       </div>
+      {(onOpenRoster || onEdit || onDelete || onSocialPost) && (
+        <div role="group" aria-label={`Organizer tools for ${run.title}`} className="border-t border-stone-200 bg-woodland-50/50 px-4 py-3">
+          <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-woodland-700">Organizer tools</p>
+          <div className="flex flex-wrap items-center gap-2 [&>button]:shrink-0 [&>button]:whitespace-nowrap">
+            {onOpenRoster && (
+              <button
+                type="button"
+                onClick={() => onOpenRoster(run)}
+                aria-label={`Check-ins for ${run.title}`}
+                className="px-3 py-1.5 text-xs font-semibold rounded-lg transition flex items-center gap-1.5 cursor-pointer bg-white border border-woodland-300 text-woodland-800 hover:bg-woodland-50"
+              >
+                <Users className="w-3.5 h-3.5" />
+                <span>Check-ins{checkedInCount > 0 ? ` (${checkedInCount})` : ''}</span>
+                {milestoneAlertCount > 0 && (
+                  <span title="Milestones reached at this run" className="rounded-full bg-amber-400 px-1.5 text-[10px] font-black text-stone-950">🎉 {milestoneAlertCount}</span>
+                )}
+              </button>
+            )}
+
+            {onEdit && (
+              <button
+                type="button"
+                onClick={() => onEdit(run)}
+                aria-label={`Edit ${run.title}`}
+                className="px-3 py-1.5 text-xs font-semibold rounded-lg transition flex items-center gap-1.5 cursor-pointer bg-white border border-stone-300 text-stone-700 hover:bg-stone-100"
+              >
+                <Pencil className="w-3.5 h-3.5" />
+                <span>Edit</span>
+              </button>
+            )}
+
+            {onDelete && (
+              <button
+                type="button"
+                onClick={() => onDelete(run)}
+                aria-label={`Delete ${run.title}`}
+                className="px-3 py-1.5 text-xs font-semibold rounded-lg transition cursor-pointer bg-white border border-red-200 text-red-700 hover:bg-red-50"
+              >
+                Delete
+              </button>
+            )}
+
+            {onSocialPost && <button type="button" onClick={() => onSocialPost(run)} className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-white border border-woodland-300 text-woodland-800">Create Instagram / Facebook post</button>}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
