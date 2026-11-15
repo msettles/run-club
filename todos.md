@@ -1,9 +1,9 @@
 # Woodland Woodchuckers Run Club — Product Roadmap & TODOs
 
 > **Application Status:** Deployed PWA; launch readiness and owner acceptance complete November 13, 2026. Public site: [https://woodland-woodchuckers.web.app](https://woodland-woodchuckers.web.app)\
-> **Infrastructure:** Firebase Hosting + Firestore/Auth/FCM, plus the calendar Cloud Function. Confirm billing/quotas; do not assume all features run on Spark or guarantee zero cost\
+> **Infrastructure:** Firebase Hosting + Firestore/Auth/FCM, plus calendar and assisted-check-in Cloud Functions. Confirm billing/quotas; do not assume all features run on Spark or guarantee zero cost\
 > **Design Philosophy:** Mobile-First for runners & organizers; responsive desktop/tablet tools for admins.\
-> **Last Updated:** November 14, 2026 (local Run Night/self-service implementation added; [remaining documentation checks](docs/documentation-status.md))
+> **Last Updated:** November 15, 2026 (1.6.4 deployed; help guides added; [remaining documentation checks](docs/documentation-status.md))
 
 ---
 
@@ -37,7 +37,7 @@
 The Run Organizer runs the Wednesday night table on the patio at Blue Note Brewing Co. They need lightweight, high-speed mobile tools to oversee the event without requiring full administrative access to site settings.
 
 ### ✅ Completed & Implemented
-- [x] **Run Night / Table Mode, headcounts and assisted check-in:** local implementation adds the dedicated staff screen, live attendance/route/activity/pet counts, existing gear fulfillment, code-word card and confirmed server-authorized assistance inside the normal window. Deployment required; see [feature behavior and activation](docs/run-night-and-self-service.md).
+- [x] **Run Night / Table Mode, headcounts and assisted check-in:** deployed in 1.6.3: the dedicated staff screen, live attendance/route/activity/pet counts, existing gear fulfillment, code-word card and confirmed server-authorized assistance inside the normal window. See [feature behavior and activation](docs/run-night-and-self-service.md).
 - [x] **Data Model Role:** `role: 'organizer'` defined in user profiles and legacy models.
 - [x] **Milestone Runner Alert Dispatch:** When a runner checks in for their 5th, 50th, 100th, or 200th run, an alert record is created with the runner's shirt size and reward perks.
 
@@ -58,7 +58,7 @@ Runners are the core members of the club. They check in on mobile at Blue Note, 
 
 ### ✅ Completed & Implemented
 - [x] **My Runs:** private read-only paginated attendance, deduplicated claimed history, undated-credit summary and recorded run/route links.
-- [x] **Post-registration historical claiming:** profile-menu search, confirmation, existing transactional reconciliation and interrupted-claim recovery. Both features are implemented locally; see [feature behavior and activation](docs/run-night-and-self-service.md).
+- [x] **Post-registration historical claiming:** profile-menu search, confirmation, existing transactional reconciliation and interrupted-claim recovery. Both features shipped in 1.6.3; see [feature behavior and activation](docs/run-night-and-self-service.md).
 - [x] **Self-service profile editing:** profile menu → Edit Profile; name, shirt size (Youth/XS–2XL), birthday, city/ZIP, preferred pace and emergency contact.
 - [x] **Authentication:** Passwordless Email Magic Link + Google Sign-In with automatic session persistence.
 - [x] **Check-In Flow:**
@@ -111,7 +111,7 @@ Guests are prospective runners, visitors, or first-time runners browsing the app
   - Tapping "RSVP / I'm Going" as an unauthenticated guest should prompt:
     - *"Enter your name & email to RSVP and get a Wednesday calendar invite"*.
     - Automatically links to their account when they complete sign-in.
-- [ ] **Club Welcome & "How It Works" FAQ Card**
+- [ ] **In-app Club Welcome & "How It Works" FAQ Card**
   - Mobile-friendly welcome banner for first-time visitors:
     - **When & Where:** Blue Note Brewing Co. patio, Wednesdays at 6:30 PM.
     - **Cost:** 100% free, no membership fees ever.
@@ -172,20 +172,34 @@ Admins oversee the entire club system, scheduling, route library, member rosters
 
 ## 5. Current owner priority — November 14, 2026
 
-The owner subsequently requested all four self-service/table deliverables. Run Night, My Runs, profile historical claiming and assisted check-in are implemented locally and validated; updated hosting and the new assisted-check-in function still require deployment. See [activation and behavior](docs/run-night-and-self-service.md). Social publishing awaits Meta account configuration.
+The owner subsequently requested all four self-service/table deliverables. Run Night, My Runs, profile historical claiming and assisted check-in shipped in 1.6.3. Release 1.6.4 separates Organizer tools from runner actions and verifies role-based visibility. See [activation and behavior](docs/run-night-and-self-service.md). Social publishing awaits Meta account configuration.
 
 1. **Social publishing:** after saving a run, generate and review a post, then publish to the selected club Instagram/Facebook accounts. Local preview/publishing implementation is added; club account setup, deployment and live acceptance remain. Track activation prerequisites in [social-publishing.md](docs/social-publishing.md). Link-preview metadata remains a separate enhancement.
-2. **Push automation verification:** November 14 source review and read-only deployed-functions listing confirm that app-sent phone pushes and automatic reminders do not exist yet; only `calendar` is deployed. See [Plan B](docs/push-notifications-plan-b.md). Social publishing awaits account setup; the owner-selected table/self-service implementation is recorded above.
+2. **Push automation verification:** November 14 source review and read-only deployed-functions listing confirm that app-sent phone pushes and automatic reminders do not exist yet; that dated review listed only `calendar`. The subsequent 1.6.3 deployment added `assistedCheckIn`, which does not send pushes. See [Plan B](docs/push-notifications-plan-b.md). Social publishing awaits account setup; the owner-selected table/self-service implementation is recorded above.
 
 ## 6. Suggested Sprint Roadmap (earlier proposal)
 
 | Sprint | Focus Area | Deliverables |
 | :--- | :--- | :--- |
-| **Sprint 1 — implemented locally** | **Run Night Organizer Experience** | • Dedicated Mobile Organizer View (`/organizer` or Table Mode)<br>• Live tonight's check-in stream & headcount<br>• Table milestone gear fulfillment queue with shirt sizes<br>• Assisted manual runner check-in |
-| **Sprint 2 — implemented locally** | **Runner Self-Service & History** | • Extend existing profile settings if needed<br>• "My Past Runs" personal log view<br>• Post-registration legacy run claim button |
+| **Sprint 1 — shipped in 1.6.3** | **Run Night Organizer Experience** | • Dedicated Mobile Organizer View (`/organizer` or Table Mode)<br>• Live tonight's check-in stream & headcount<br>• Table milestone gear fulfillment queue with shirt sizes<br>• Assisted manual runner check-in |
+| **Sprint 2 — shipped in 1.6.3** | **Runner Self-Service & History** | • Extend existing profile settings if needed<br>• "My Past Runs" personal log view<br>• Post-registration legacy run claim button |
 | **Sprint 3** | **Admin Role & Asset Management** | • Milestone gear photo uploads / URL manager<br>• Additional admin tools as needed (role management and route edit/delete already implemented) |
 | **Sprint 4** | **Guest Experience & Welcome** | • Guest RSVP with email collection<br>• "How Woodchuckers Works" welcome & FAQ guide<br>• Full JSON database backup / restore |
 
 ## Deployment authorization — November 14, 2026
 
 The owner authorized commit, push and deployment of the completed table/self-service work using app version 1.6.3. Earlier local-only notes describe validation before that authorization. See [release scope and verification](docs/releases/1.6.3.md); live verification is recorded separately. The original 1.6.2 artwork tag stays fixed. Meta publishing remains pending account configuration.
+
+
+## Documentation and staff-action layout — November 15, 2026
+
+- [x] Release 1.6.4 pushed, tagged and deployed; both CI jobs passed and both hosting domains matched the release build. Staff actions have separate Organizer tools groups on run cards, route cards/maps and the profile menu; guest/member absence is covered on desktop and mobile.
+- [x] Written [runner help](docs/help/runner-guide.md), [organizer/admin help](docs/help/organizer-guide.md), [troubleshooting](docs/help/troubleshooting.md) and a [documentation index](docs/README.md). These repository guides do not implement the separate proposed in-app welcome/FAQ card.
+
+## Platform website and gradual generalization — November 15, 2026
+
+- [ ] **Ko-fi maintainer support:** create the account/page, connect the payout account, choose the public name, then add the verified support link to GitHub and the project website. Keep software support separate from Woodland club funds; no payment integration or supporter benefits are promised.
+- [x] **GitHub Pages project website:** static site and automatic publishing workflow added; publish a platform overview, features, runner/organizer help, setup and gradual roadmap. Use static, indexable pages; keep the live Firebase app separate.
+- [ ] **Incremental club configuration:** split the extraction plan into small changes, preserving Woodland behavior, identifiers and data throughout.
+- [ ] **Dedicated Woodland Woodchuckers fork:** establish the configuration and update process before separating the club from the platform repository.
+- [ ] **Fictional demo club:** independent test project, generic branding, synthetic data and a documented visitor trial; no Woodland accounts or records.

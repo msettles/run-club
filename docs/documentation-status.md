@@ -1,6 +1,6 @@
 # Documentation status and roadmap
 
-Reviewed November 13, 2026 against the current source, the completed launch review and the read-only production checks recorded that day. This document changes no live settings, sends no notifications, schedules no backups and authorizes no reset. See [go-live-readiness-review.md](go-live-readiness-review.md) for the dated operational result.
+Updated November 15, 2026 for deployed app 1.6.4. The November 13 launch counts below are a dated baseline, not a fresh production inventory. Release 1.6.3 added the deployed `assistedCheckIn` function and self-service/table screens; 1.6.4 separated staff action groups. Both 1.6.4 CI jobs passed and both live hosts matched its built assets. This document changes no live settings, sends no notifications, schedules no backups and authorizes no reset. See [go-live-readiness-review.md](go-live-readiness-review.md) for the dated operational result.
 
 ## Known current state
 
@@ -15,7 +15,7 @@ Reviewed November 13, 2026 against the current source, the completed launch revi
 | Calendar | Server `/calendar.ics` returned HTTP 200, `text/calendar` and valid calendar content containing the November 18 run during this review. Owner also verified calendar subscriptions from the installed app. Source: `functions/src/index.ts`. |
 | Notifications | Device registration and in-app announcements implemented; actual pushes sent through Firebase Console. No app-side push trigger or automatic reminder scheduler in current functions source. |
 | Backups | One-time 4,988-document paused cutover backup restored and compared in isolation. Owner deliberately declined paid recurring backups because of cost; retain the existing one-time cutover copy. Do not enable scheduled backups or PITR without a new owner decision. |
-| Profile settings | Edit Profile, signup claiming and admin assignment implemented. Profile-based historical claiming and My Runs are now implemented locally; deployment remains required. See [self-service features](run-night-and-self-service.md). |
+| Profile settings | Edit Profile, signup claiming and admin assignment implemented. Profile-based historical claiming and My Runs shipped in 1.6.3. See [self-service features](run-night-and-self-service.md). |
 
 A public invitation or launch announcement is an owner action; documentation records readiness, not an announcement sent on the owner's behalf. Counts here are a dated baseline and will change with legitimate registrations and attendance.
 
@@ -33,7 +33,7 @@ These items are closed, accepted or explicitly declined; none is an outstanding 
 
 ## Roadmap items that remain proposals
 
-- A check-in-window bypass remains deferred. Run Night, assisted check-in inside the normal window, My Runs and profile historical claiming are implemented locally; see [activation status](run-night-and-self-service.md).
+- A check-in-window bypass remains deferred. Run Night, assisted check-in inside the normal window, My Runs and profile historical claiming shipped in 1.6.3; see [feature behavior](run-night-and-self-service.md).
 - In-app push sending and automatic run reminders; [Plan B](push-notifications-plan-b.md) is a design, not a deployed sender.
 - One-click full backup/restore and gear image management.
 - [Social preview metadata](social-sharing-enhancement.md), centralized [club configuration](club-extraction-plan.md), route print/report/mile-marker/privacy-trim extras.
@@ -44,7 +44,7 @@ A pending enhancement is not automatically a launch requirement. Do not enable s
 
 | Documents | How to read/update them |
 | --- | --- |
-| `README.md`, `setup.md`, `new-club-setup.md` | Current setup and deployment instructions. Rules/site deploy together; calendar server provisioning is separate. |
+| `docs/README.md`, `docs/help/`, `README.md`, `setup.md`, `new-club-setup.md` | Documentation index, user help and setup/deployment instructions. Rules/site deploy together; calendar and assisted-check-in server provisioning is selective. |
 | `go-live-policy.md`, `go-live-readiness-review.md`, `todos.md` | Completed retained-staff launch scope, dated evidence and actual remaining roadmap. Do not treat original reset instructions as a new authorization. |
 | `roles-and-permissions.md`, `import-format.md`, `backup-and-restore.md` | Current operational behavior and limits, including maintenance, deduplication, explicit tags and backup scope. |
 | `browser-device-testing.md`, `real-device-test-plan.md` | Owner-reported acceptance, observed browser checks and optional per-device evidence templates must remain distinguishable. |
@@ -70,12 +70,26 @@ The owner subsequently authorized the 1.6.0 commit, exact `1.6.0` tag and deploy
 
 ## Roadmap priority — November 14, 2026
 
-The owner selected run publishing to Instagram/Facebook as the next feature: save a run, review a generated post, then explicitly publish to the selected club accounts. Local UI/server implementation is added; account setup, deployment and live acceptance remain outstanding. See [social-publishing.md](social-publishing.md). This is separate from link-preview metadata. Push automation was verified November 14: source contains no push sender/reminder scheduler, and a read-only `firebase functions:list` on the club project lists only `calendar`. Announcements currently write to the in-app feed. Social publishing remains the selected implementation priority.
+The owner selected run publishing to Instagram/Facebook as the next feature: save a run, review a generated post, then explicitly publish to the selected club accounts. The preview UI is deployed; Meta server exports remain inactive. Account access, secret configuration, server activation and live acceptance remain outstanding. See [social-publishing.md](social-publishing.md). This is separate from link-preview metadata. Push automation was verified November 14: source contains no push sender/reminder scheduler, and a read-only `firebase functions:list` on the club project lists only `calendar`. Announcements currently write to the in-app feed. Social publishing remains the selected implementation priority.
 
 ## Table and self-service implementation — November 14, 2026
 
-While Meta login setup is pending, the owner requested Run Night/Table Mode, My Runs, profile-based historical claiming and assisted check-in. All four are implemented and validated locally; hosting and the new assisted-check-in callable have not been deployed by this work. See [behavior, safeguards and activation](run-night-and-self-service.md). The existing accepted launch state and production data are unchanged.
+While Meta login setup is pending, the owner requested Run Night/Table Mode, My Runs, profile-based historical claiming and assisted check-in. All four were implemented and validated locally, then deployed in 1.6.3. The active callable is `assistedCheckIn`; Meta functions remain inactive. See [behavior, safeguards and activation](run-night-and-self-service.md). The existing accepted launch state and production data are unchanged.
 
 ## Release authorization — November 14, 2026
 
 The owner subsequently authorized committing, pushing and deploying the table/self-service update as app version 1.6.3. Earlier local-only statements record the pre-release stage. See [release scope](releases/1.6.3.md); the deployment receipt identifies the live commit. The existing 1.6.2 artwork tag is not moved, and Meta sender activation remains separate.
+
+
+## Current release and help — November 15, 2026
+
+Release **1.6.4**, commit `a561efa`, is deployed. The 54-case browser suite covers all four roles on desktop/mobile, including absence of staff controls for guests/members and separate Organizer tools rows. Its unit, integration, rules, build and browser CI jobs passed. Both hosting domains served the exact release assets; the calendar feed remained available.
+
+Start with the [documentation index](README.md), [runner guide](help/runner-guide.md), [organizer/admin guide](help/organizer-guide.md) or [troubleshooting](help/troubleshooting.md). The documentation refresh updates current guidance without reinterpreting old review-time counts as new tests. Facebook/Instagram access and service activation remain pending. Push sending/reminders remain unimplemented. Paid recurring backups stay declined; per-device evidence stays optional after owner acceptance.
+
+
+## Public project documentation — November 15, 2026
+
+A standalone GitHub Pages website introduces Run Club, current features, help, setup and the gradual generalization roadmap. It renders an explicit selection of the existing Markdown guides. The full repository, audit records, private data and Firebase app build are excluded from the published artifact. Pages deployment is independent of the live Woodland application. See [site maintenance instructions](../website/README.md).
+
+Ko-fi is an outstanding account/link setup task; no funding account, payment link or sponsorship benefits are configured. The next platform steps are small configuration changes, an eventual dedicated Woodland fork and an isolated fictional demonstration club. They are proposals, not delivered behavior.

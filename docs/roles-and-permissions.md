@@ -47,19 +47,19 @@ Signed-in access always requires a **verified email**: the rules check `email_ve
 | RSVP and un-RSVP (*own*) | ➖ | ✅ | ✅ | ✅ |
 | Check in with the code word during the window (*own*) | ➖ | ✅ | ✅ | ✅ |
 | Edit own check-in (route, loops, pet) during the window | ➖ | ✅ | ✅ | ✅ |
-| Claim old-app (legacy) names during signup (later assignment by Admin) | ➖ | ✅ | ✅ | ✅ |
+| Claim old-app (legacy) names during signup or from the profile menu | ➖ | ✅ | ✅ | ✅ |
 | Edit own profile (name, shirt size, birthday, city, zip, pace, emergency contact) | ➖ | ✅ | ✅ | ✅ |
 | Turn phone notifications on/off for own device | ➖ | ✅ | ✅ | ✅ |
 | See own check-ins, own gear alerts, own profile | ➖ | ✅ | ✅ | ✅ |
 | **Running events** | | | | |
 | Create runs; edit upcoming runs | ➖ | ➖ | ✅ | ✅ |
 | Set or change a run's code word (until check-in opens) | ➖ | ➖ | ✅ | ✅ |
-| Add, edit and delete routes (not routes referenced by runs) | ➖ | ➖ | ✅ | ✅ |
+| Add/edit routes (referenced edits create a version); delete unused routes | ➖ | ➖ | ✅ | ✅ |
 | Delete a run before its check-in opens | ➖ | ➖ | ✅ | ✅ |
 | Delete a run whose check-in has opened or that is over | ➖ | ➖ | ➖ | ✅ |
 | See who checked in to a run and open their profile (emergency contact, shirt size) | ➖ | ➖ | ✅ | ✅ |
 | See milestones reached at a run and mark gear handed out | ➖ | ➖ | ✅ | ✅ |
-| Assisted check-in during the normal window (server deployment required) | ➖ | ➖ | ✅ | ✅ |
+| Assisted check-in during the normal window | ➖ | ➖ | ✅ | ✅ |
 | **Staff data** | | | | |
 | List and search all runner profiles; read the whole check-in log | ➖ | ➖ | ✅ (rules) | ✅ |
 | See and fulfill the whole gear queue (all runs) | ➖ | ➖ | ✅ (rules) | ✅ |
@@ -69,7 +69,7 @@ Signed-in access always requires a **verified email**: the rules check `email_ve
 | Delete a runner (profile, leaderboard row, check-ins, gear alerts, RSVPs) | ➖ | ➖ | ➖ | ✅ |
 | Delete check-ins | ➖ | ➖ | ➖ | ✅ |
 | Create and edit badges, special events and milestones (gear tiers) | ➖ | ➖ | ➖ | ✅ |
-| Post and delete announcements; send phone notifications | ➖ | ➖ | ➖ | ✅ |
+| Post/delete in-app announcements; phone pushes use Firebase Console | ➖ | ➖ | ➖ | ✅ |
 | See how many devices are signed up for notifications | ➖ | ➖ | ➖ | ✅ |
 | Change club settings; manage the legacy name index and unclaim names | ➖ | ➖ | ➖ | ✅ |
 | Open the Admin dashboard | ➖ | ➖ | ➖ (screens) | ✅ |
@@ -98,11 +98,11 @@ Signed-in access always requires a **verified email**: the rules check `email_ve
 Organizers run event night. Beyond a Runner, an Organizer can:
 
 1. **Create, edit and delete runs.** Deleting is only allowed **until the run's check-in opens**; after that only an Admin can delete it, because check-ins, run totals and gear alerts depend on it (enforced by the rules). Editing stays available after check-in opens, but the run's date and check-in window are then locked. A run that is over can only have its RSVP list changed.
-2. **Create, edit and delete routes**, except a route that is **in use** by a run (a referenced route is retained and can't be edited or deleted).
+2. **Create and edit routes, and delete unused routes.** Editing a route referenced by a run creates a new version; the original remains attached to existing runs. Unused routes update in place. Referenced routes cannot be deleted.
 3. **Look up who checked in to a run and open their profile.** Each run card shows a **Check-ins** button listing the runners who checked in (with a search box). Tapping a runner shows their **emergency contact** (with a tap-to-call number), shirt size, pace, age and run count. The check-ins load for that run only, however old it is.
 4. **See the milestones reached at a run and mark off gear handouts.** The same **Check-ins** window lists the milestone gear earned at that run, with the runner's current shirt size, and a **Mark handed out** button. Runners who reached a milestone are listed first. A runner's **first run** shows as a **First Chuck Run** welcome (🦫) so organizers can recognize new runners; it has no gear, so there is no handout button and it never appears in the gear queue.
 
-Also allowed by the rules for Organizers: setting or changing a run's code word until check-in opens, deleting a run's check-in event before check-in opens, recording a check-in on a runner's behalf through the new Table Mode/server function (deployment required), and read access to the runner roster, the check-in log, reward proofs and legacy history.
+Also allowed by the rules for Organizers: setting or changing a run's code word until check-in opens, deleting a run's check-in event before check-in opens, recording a check-in on a runner's behalf through Table Mode and the deployed server function, and read access to the runner roster, the check-in log, reward proofs and legacy history.
 
 Organizers **cannot**: change roles, delete runners or check-ins, edit badges, special events, announcements or club settings, manage legacy data, or open the Admin dashboard.
 
@@ -132,4 +132,11 @@ When you change `firestore.rules`, `src/utils/roles.ts`, or who sees what in the
 
 ## Run Night and member self-service — November 14
 
-Local implementation now adds staff Table Mode, normal-window assisted check-in, private My Runs and profile-based historical claiming. The assisted callable revalidates staff roles on the server and updates attendance/counters atomically; it grants no arbitrary role/contact/profile editing. It pauses for maintenance/imports even for admins. `assisted_checkins` audits are server-only, with direct client access denied. The client rules are not expanded. See [behavior, limits and activation](run-night-and-self-service.md).
+Release 1.6.3 deployed staff Table Mode, normal-window assisted check-in, private My Runs and profile-based historical claiming. The assisted callable revalidates staff roles on the server and updates attendance/counters atomically; it grants no arbitrary role/contact/profile editing. It pauses for maintenance/imports even for admins. `assisted_checkins` audits are server-only, with direct client access denied. The client rules are not expanded. See [behavior, limits and activation](run-night-and-self-service.md).
+
+
+## Staff controls — release 1.6.4
+
+Run cards keep Share run, RSVP and Check In together, with Check-ins, Edit, applicable Delete and social-preview preparation in a separate **Organizer tools** row. Route-library cards/maps similarly separate route editing. The profile menu groups Run Night and the admin-only Admin Portal separately from personal actions. Guests and ordinary members receive none of these staff groups. These visibility checks supplement existing server authorization.
+
+For step-by-step use, see the [runner](help/runner-guide.md) and [organizer/admin](help/organizer-guide.md) guides. Social preview is available to staff, but Meta server activation and account access remain pending.

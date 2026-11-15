@@ -14,11 +14,19 @@ This repository currently builds the Woodland Woodchuckers app: the installed ap
 
 Starting another club? See [`docs/new-club-setup.md`](docs/new-club-setup.md) (fork, edit, deploy) and [`docs/club-extraction-plan.md`](docs/club-extraction-plan.md) (the plan to gather every club-specific setting into one place).
 
-**Live:** https://woodland-woodchuckers.web.app · **Stack:** React 18 · TypeScript · Vite 6 · Tailwind 3 · Firebase 13 (Auth, Firestore, Hosting, Cloud Messaging; Cloud Function for the calendar feed) · Leaflet / OpenStreetMap
+**Live:** [Woodland Woodchuckers](https://woodland-woodchuckers.web.app) · **Release:** 1.6.4 · **Stack:** React 18 · TypeScript · Vite 6 · Tailwind 3 · Firebase 13 (Auth, Firestore, Hosting, Cloud Messaging; Cloud Functions for the calendar feed and assisted check-in) · Leaflet / OpenStreetMap
 
 ![CI](https://github.com/msettles/run-club/actions/workflows/ci.yml/badge.svg)
 
 ---
+
+## Help and documentation
+
+**Project website:** [Run Club overview and help](https://msettles.github.io/run-club/). The live Woodland club application remains on Firebase Hosting.
+
+- **Using the app:** [Runner guide](docs/help/runner-guide.md), [Organizer and admin guide](docs/help/organizer-guide.md), [Troubleshooting and FAQ](docs/help/troubleshooting.md).
+- **Maintaining it:** [Setup and deployment](setup.md), [roles and permissions](docs/roles-and-permissions.md), [current status](docs/documentation-status.md).
+- **All guides:** [Documentation index](docs/README.md).
 
 ## What it does
 
@@ -28,19 +36,22 @@ Starting another club? See [`docs/new-club-setup.md`](docs/new-club-setup.md) (f
   - Check-in opens **2 hours before the start** and closes at **midnight**.
   - The table QR code (`/?checkin=true`) opens whichever run is open right now. If two runs are open, the code word decides which.
 - **Totals:** runs, miles (from the route chosen at check-in), weekly streaks, milestone gear and badges.
-- **Old-app history:** at sign-up, runners claim their old sign-in names (typo-tolerant search). Each name can only be claimed once. Shared dated runs across claimed names count once; undated credits remain additive. Only explicit run tags award special-event credit.
+- **My Runs:** private dated attendance and mileage, recorded run/route links, plus a separate undated-credit summary. Display pages retain the full history.
+- **Old-app history:** at sign-up or from **profile → Claim historical runs**, runners claim their old sign-in names (typo-tolerant search). Each name can only be claimed once. Shared dated runs across claimed names count once; undated credits remain additive. Only explicit run tags award special-event credit.
 - **Bell:** club announcements and received push notifications, with read/unread and **Mark all as read**.
 - **Phone notifications:** turned on per device, from **Enable Alerts** or the profile menu. iPhones need the Home Screen app.
 - **Install app:** from the banner or the footer link.
 
 **Organizers** (event-night tools)
 - Create and edit runs, including the code word. A run isn't live until its code word is saved, and the code word locks once check-in opens.
-- Route Studio and the check-in log.
+- **Run Night / Table Mode:** live attendance, route/activity/pet headcounts, private code word, pending gear and confirmed assisted check-in for registered runners within the normal window.
+- Route Studio and per-run **Check-ins** with runner details and gear handouts.
+- Staff actions appear in their own **Organizer tools** row, below runner actions. They are absent for guests and ordinary members.
 
 **Admins** (Admin dashboard)
 - **Runners & Claims:** promote or demote roles, delete runners, assign or unclaim old-app names, and import the old app's CSV exports.
 - **Club maintenance:** pause member/organizer mutations during repairs while retaining admin access.
-- **Check-In Log** (recent 60-day query; older records are retained), **Milestones & Gear** queue, **Badges & Special Events**.
+- **Check-In Log** (recent 60-day scope; older records are retained and accessible through per-run Check-ins), **Milestones & Gear** queue, **Badges & Special Events**.
 - **Push Alerts:** post announcements, and see how many devices have notifications on.
 - **Delete a run:** rolls back each runner's runs, miles, badges and streaks.
 
@@ -78,11 +89,14 @@ npm run dev             # http://localhost:5173
 | `npm run test:watch` | Unit tests in watch mode |
 | `npm run test:resolver` | Verify the pinned resolver fork and Workbox compatibility |
 | `npm run test:integration` | Store integration tests against Firestore emulator (run separately from rules tests; both use port 8085) |
-| `npm run build:functions` | Build the server calendar function |
+| `npm run build:functions` | Type-check and build the active server functions |
+| `npm run check:bundle` | Verify lazy bundle boundaries and size limits |
+| `npm run typecheck:browser` | Type-check browser tests and fixtures |
+| `npm run test:browser` | Chromium and mobile WebKit regression tests |
 | `npm run test:rules` | Firestore security-rules tests in the emulator (needs Java 21+) |
 | `npx firebase deploy --only firestore:rules,hosting` | Deploy rules + site (**always deploy both together**) |
 
-**CI** (`.github/workflows/ci.yml`) runs a dependency audit, type-check, lint, unit tests, Cloud Functions build, resolver compatibility tests, production build/bundle checks, store integration tests and the rules tests on every PR and every push to `main`.
+**CI** (`.github/workflows/ci.yml`) runs a dependency audit, type-check, lint, unit tests, Cloud Functions build, resolver compatibility tests, production build/bundle checks, store integration tests and the rules tests, plus a separate Chromium/mobile WebKit job, on every PR and every push to `main`.
 
 ## How it's put together
 
@@ -106,7 +120,8 @@ src/
 public/push-sw.js            push-only service worker (scope /push/)
 firestore.rules              security rules (see the summary at the top of the file)
 tests/firestore.rules.test.mjs
-docs/                        plans (route engine, push notifications Plan B)
+docs/                        user guides, operational instructions, status and plans
+functions/src/               calendar and assisted check-in; inactive Meta source
 ```
 
 **Firestore, in short** (details at the top of `firestore.rules`):
@@ -136,15 +151,15 @@ A recoverable one-time cutover backup was restored and verified. The owner decli
 
 Today (**Plan A**): devices sign up in the app, and admins send from **Firebase console → Messaging → New campaign → Notifications**, targeting the web app.
 
-Source and the deployed-functions listing were checked November 14: app-sent announcement pushes and automatic run reminders are absent; only the calendar function is deployed. The sender proposal is in [`docs/push-notifications-plan-b.md`](docs/push-notifications-plan-b.md). Review current billing/quotas before implementing it.
+The November 14 push review found no app-side sender or automatic reminder scheduler. Active server functions are now `calendar` and `assistedCheckIn`; neither sends pushes. The sender proposal is in [`docs/push-notifications-plan-b.md`](docs/push-notifications-plan-b.md). Review current billing/quotas before implementing it.
 
 ## Run Night and member self-service
 
-The implementation adds staff **Run Night / Table Mode** (live counts, gear and assisted check-in) and profile-menu **My Runs** / **Claim historical runs**. Assisted check-in uses a new authenticated server function and preserves the normal window; matching hosting/server deployment is described in the [1.6.3 release](docs/releases/1.6.3.md). See [feature behavior and activation](docs/run-night-and-self-service.md).
+Deployed in 1.6.3: staff **Run Night / Table Mode** (live counts, gear and assisted check-in) and profile-menu **My Runs** / **Claim historical runs**. Assisted check-in uses the authenticated `assistedCheckIn` server function and preserves the normal window; matching hosting/server deployment is described in the [1.6.3 release](docs/releases/1.6.3.md). See [feature behavior and activation](docs/run-night-and-self-service.md).
 
 ## Social run posts
 
-Local implementation supports creating one branded route-map photo per attached route and an editable caption after saving a run and explicitly publishing them together as one Facebook multi-photo post / Instagram carousel. Two routes produce two photos. Club account setup, service deployment and live acceptance remain required; no real posts have been sent by this change. See [social publishing setup and status](docs/social-publishing.md).
+The deployed UI previews one branded route-map photo per attached route and an editable caption after saving a run. Once activated, a separate explicit action will publish the photos together as one Facebook multi-photo post / Instagram carousel. Two routes produce two photos. The Meta server exports are inactive. Club account setup, secret configuration, selective service deployment and live acceptance remain required; no real posts have been sent by this change. See [social publishing setup and status](docs/social-publishing.md).
 
 ## More
 
@@ -167,7 +182,7 @@ Run Club was first made for the Woodland Woodchuckers community.
 
 Run `npx playwright install chromium webkit` once, then `npm run test:browser`. Use Node 24 as required above. `npm run typecheck:browser` checks the suite and its fixtures. CI installs the browsers and runs the suite separately.
 
-These tests use synthetic local data with Firebase disabled and external requests blocked. They cover check-in/onboarding interactions in Chromium and mobile WebKit; they do not replace real-device push, GPS, OAuth or installed-PWA upgrade checks. See [the browser and device checklist](docs/browser-device-testing.md).
+These tests use synthetic local data with Firebase disabled and external requests blocked. They cover check-in, onboarding, staff tools, route imports, personal history, historical claiming, role-based action groups and social previews in Chromium and mobile WebKit; they do not replace real-device push, GPS, OAuth or installed-PWA upgrade checks. See [the browser and device checklist](docs/browser-device-testing.md).
 
 ### Go-live data policy
 

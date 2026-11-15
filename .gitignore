@@ -51,3 +51,8 @@ firebase-debug.log
 /test-results/
 functions/lib
 functions/node_modules
+
+# Standalone GitHub Pages documentation build
+/website/dist/
+/website/node_modules/
+/.playwright-cli/

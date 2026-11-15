@@ -1,6 +1,6 @@
 # Run Night, My Runs and historical claiming
 
-Implemented November 14, 2026 at the owner's request. The owner subsequently authorized commit, push and deployment as app version 1.6.3; see [release scope and verification](releases/1.6.3.md). The local validation below records the pre-deployment evidence, not live attendance changes. Social publishing and Meta account setup remain separate work.
+Implemented November 14, 2026 at the owner's request. Deployed as app version 1.6.3; see [release scope and verification](releases/1.6.3.md). The local validation below records the pre-deployment evidence, not live attendance changes. Social publishing and Meta account setup remain separate work.
 
 ## Run Night / Table Mode
 
@@ -53,10 +53,12 @@ Saved interrupted claims expose **Finish interrupted claim**. If the claim is sa
 
 The history loader guards account changes, and private page/dialog state is keyed by signed-in email. Existing maintenance/import fences continue to govern claiming.
 
-## Activation and validation
+## Deployment and validation
 
-Deploy updated hosting and the new **assistedCheckIn** function together for full functionality. Existing Firestore authorization already supports the history/claim reads and existing claim operations; no rules expansion is needed. Preserve the deployed calendar and social functions when selecting deployment targets. No database reset, migration, history replacement, account cleanup or synthetic production check-in is required.
+The club deployment includes hosting and **assistedCheckIn**. For a new club or changes to that server code, deploy matching hosting and the function together for full functionality. Existing Firestore authorization already supports the history/claim reads and existing claim operations; no rules expansion is needed. Preserve the deployed calendar function; Meta functions remain inactive when selecting deployment targets. No database reset, migration, history replacement, account cleanup or synthetic production check-in is required.
 
 Validation uses synthetic local/emulator data. The server integration suite covers atomic attendance/rewards/audit writes, simultaneous requests, actual authorization/window checks, maintenance/import refusal, fulfilled-gear preservation, alias deduplication and pending/deleting profiles. Rules tests verify private audit collections remain inaccessible to browser clients. Browser checks cover My Runs privacy/pagination, profile claiming and reload, assisted table check-in, live totals, gear delivery and closed windows in Chromium/mobile WebKit. Live production device acceptance of these new paths remains separate from the completed November 13 launch acceptance.
 
 Final local checks: 250 unit tests, 54 emulator integration tests and 78 rules/seed checks passed. The full browser suite passed all 46 cases; the eight new self-service/table cases were rerun successfully after the final UI/recorded-route changes. App/browser/function type checks, production/function builds and lazy bundle checks pass. Lint has zero errors and 46 existing warnings. Unit/build checks used Node 24.22.2. Desktop and mobile screenshots of the table, claim confirmation and personal history were inspected. Local validation performed no live check-ins, claims, messages or cleanup; authorized deployment is tracked separately from these tests.
+
+For everyday instructions, see the [runner guide](help/runner-guide.md), [organizer guide](help/organizer-guide.md) and [troubleshooting](help/troubleshooting.md). Release 1.6.4 groups staff controls under Organizer tools.

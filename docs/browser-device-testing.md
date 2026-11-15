@@ -9,7 +9,7 @@ npm run typecheck:browser
 npm run test:browser
 ```
 
-Twenty-three scenarios run in both desktop Chromium and mobile WebKit (46 checks):
+Twenty-seven scenarios run in both desktop Chromium and mobile WebKit (54 checks as of release 1.6.4):
 
 1. QR entry saves check-in and automatic RSVP before route/milestone screens are completed, retaining attendance after reload.
 2. An incorrect code word does not write attendance; correction permits retry.
@@ -35,6 +35,10 @@ Twenty-three scenarios run in both desktop Chromium and mobile WebKit (46 checks
 21. A member claims an available historical name from the profile, then reloads without duplicate credit or a second claim option.
 22. Staff-assisted check-in updates the live table counts and gear queue and records the assisting identity; gear can be delivered once.
 23. A future run disables assisted check-in until the normal window opens.
+24. Guests receive runner actions without RSVP or staff tools on run cards, routes/maps and the profile menu.
+25. Ordinary members receive runner actions and RSVP, without staff tools.
+26. Organizers receive separate Organizer tools groups, with the run-card staff row below runner actions; Admin Portal remains absent.
+27. Admins receive the separate staff groups and the admin-only portal entry.
 
 Social browser scenarios use simulated account responses and send no real posts.
 

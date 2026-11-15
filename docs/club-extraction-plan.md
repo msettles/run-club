@@ -1,6 +1,6 @@
 # Plan: one build-time club setup
 
-Status: planned, not started. Written November 10, 2026; current-value corrections checked November 13. The `club/` layout below is proposed and does not exist yet.
+Status: application extraction is planned, not started. Written November 10, 2026; owner direction updated November 15. The initial file counts and phase sizes below are historical estimates and must be rechecked before implementation. The `club/` layout below is proposed and does not exist yet.
 
 ## Goal
 
@@ -9,7 +9,7 @@ Run Club is the platform; Woodland Woodchuckers is the first club. Today the clu
 Decisions already made by the owner:
 
 - **Build time, not runtime.** One fork, one build and one Firebase project per club. No shared multi-club database, no club ID on Firestore documents, no rules rewrite.
-- **Fork model.** A club's setup lives in its own fork. The platform repository keeps Woodland Woodchuckers as the working example.
+- **Fork model.** A club's setup lives in its own fork. Woodland stays in the current repository during incremental extraction; the eventual goal is a dedicated Woodland Woodchuckers fork and a generic platform demonstration.
 - **Platform branding stays.** The browser tab icon and the footer's "Built with Run Club" credit are the platform's and are not part of a club's setup. The installed app name, install icons and theme are the club's.
 
 Done means: the Woodland build looks and behaves exactly as it does now; a search for `woodland`, `woodchuck`, `Blue Note`, `America/Los_Angeles` and the owner email finds matches only inside `club/`; and every check in the README's command list passes.
@@ -89,3 +89,14 @@ Each phase is its own branch and PR, leaves the Woodland app unchanged on screen
 ## Open questions for the owner
 
 1. Should forks pull platform updates from the platform repository (keeping `club/` as the only difference makes that a clean merge), and who publishes those updates?
+
+
+## Gradual sequence approved November 15, 2026
+
+Start with the standalone GitHub Pages project website and documentation. Ko-fi account/payout setup remains a TODO, with no active support link. This is a documentation publication step, not an app migration.
+
+Then split the phases above into smaller changes. Phase 1 currently combines public branding with sensitive identity/deployment settings; do not treat it as one small change. Establish the typed configuration and move low-risk display wording first, keeping the Woodland build and existing installed app stable. Move identifiers, time-zone behavior, rules and deployment settings in separately reviewed steps with appropriate regression checks.
+
+After proving the reusable setup, create a dedicated Woodland Woodchuckers fork and document how it receives platform updates. Only then provision a separate fictional demonstration club with generic branding, synthetic data and a documented visitor trial. This plan creates no repository, login or Firebase project by itself. No Woodland production records, identifiers, accounts or push registrations are migrated by the documentation work.
+
+The public [roadmap](../website/pages/roadmap.md) describes this order.

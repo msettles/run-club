@@ -1,10 +1,10 @@
 # Run posts to Instagram and Facebook
 
-Owner priority: November 14, 2026. Local implementation added; account configuration, deployment and live platform acceptance are still required. No real social post has been sent by this change. This is separate from [link-preview metadata](social-sharing-enhancement.md).
+Owner priority: November 14, 2026. Preview UI deployed in 1.6.3; Meta server exports remain inactive. Account configuration, secret setup, selective server deployment and live platform acceptance are still required. No real social post has been sent by this change. This is separate from [link-preview metadata](social-sharing-enhancement.md).
 
 ## Workflow
 
-Organizers/admins can check **Prepare an Instagram / Facebook post after saving** when creating a run. Saving creates the run through the existing atomic scheduling path, then opens a separate preview. A **Create Instagram / Facebook post** button on a published upcoming run also opens the preview.
+Organizers/admins can check **Prepare an Instagram / Facebook post after saving** when creating a run. Saving creates the run through the existing atomic scheduling path, then opens a separate preview. A **Create Instagram / Facebook post** button under **Organizer tools** on a published upcoming run also opens the preview.
 
 The preview creates one square 1080 × 1080 JPEG map for each distinct route attached to the run, plus an editable caption with public run details and the permanent run link. Each photo shows its saved route geometry over a street map, start/finish markers, route name, measured mileage and the run's title/date/time/venue. **Two routes produce two photos in one post**: an Instagram carousel and a Facebook multi-photo post. No extra cover image is added. Saved route order is preserved and repeated references to the same route produce one photo. This version supports up to ten route photos; it refuses larger sets rather than silently omitting routes. Select Facebook, Instagram or both. The final **Publish to …** button sends the reviewed route photos together immediately to the configured club accounts. Previewing, saving a run or editing the caption does not publish. Instagram displays the URL in the caption as text; this implementation does not promise a clickable caption link.
 

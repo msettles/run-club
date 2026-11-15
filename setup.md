@@ -16,7 +16,7 @@ Without Firebase configuration, the app uses local sample data in browser storag
 
 The client uses Firebase Auth, Firestore, Hosting and FCM device registration. Mapping and GPX/directions processing run in the browser, with OpenStreetMap/Overpass services subject to their availability and usage policies.
 
-The supplied live calendar subscription endpoint (`/calendar.ics`) is a Cloud Function in `functions/src/index.ts`. Production function deployment requires Blaze. See [Firebase's function deployment requirements](https://firebase.google.com/docs/functions/get-started#deploy-functions-to-a-production-environment). No-cost quotas do not guarantee that all enabled services or all usage will cost zero. Confirm the actual project's billing plan, budgets, quotas and backup settings in the console.
+The live calendar subscription endpoint (`/calendar.ics`) and authenticated assisted check-in use the `calendar` and `assistedCheckIn` Cloud Functions exported by `functions/src/index.ts`. Production function deployment requires Blaze. See [Firebase's function deployment requirements](https://firebase.google.com/docs/functions/get-started#deploy-functions-to-a-production-environment). No-cost quotas do not guarantee that all enabled services or all usage will cost zero. Confirm the actual project's billing plan, budgets, quotas and backup settings in the console.
 
 In-app announcements and push device registration are implemented. Phone pushes use Firebase Console Messaging. In-app push sending and automatic reminders are still proposals; see [Plan B](docs/push-notifications-plan-b.md).
 
@@ -27,7 +27,7 @@ For a new club, follow [new-club-setup.md](docs/new-club-setup.md). Do not recre
 1. Use a dedicated club-owned Google account; create the project, web app and Firestore database.
 2. Enable Google and passwordless email-link authentication. Verify the production domains are authorized and the sign-in handler works.
 3. Configure Firebase Hosting and the project's `.env` values. Set owner email consistently in `src/utils/roles.ts` and `firestore.rules`.
-4. Configure the calendar function if offering subscriptions. Confirm billing requirements first.
+4. Configure the calendar function for subscriptions and `assistedCheckIn` for staff-assisted attendance. Confirm billing requirements first.
 5. Generate a web-push VAPID public key if enabling device notifications.
 6. Choose backup/restore ownership separately. CSV imports are not a full database backup.
 
@@ -47,12 +47,16 @@ npm run build
 npx firebase deploy --only firestore:rules,hosting --project YOUR_PROJECT_ID
 ```
 
-When provisioning or changing the calendar server code, deploy that function as well:
+When provisioning a new club, build and deploy the active functions as well. For later server changes, select only the affected function(s) and deploy matching hosting:
 
 ```bash
 npm run build:functions
-npx firebase deploy --only functions:calendar --project YOUR_PROJECT_ID
+npx firebase deploy --only functions:calendar,functions:assistedCheckIn --project YOUR_PROJECT_ID
 ```
+
+The Meta functions are deliberately not exported while club account access is pending. Do not enable them as part of an unrelated release; follow [social publishing activation](docs/social-publishing.md) when authorized account configuration is ready.
+
+Build from the committed release source so the version dialog identifies it. After deployment, verify both hosting domains serve the built asset, `/calendar.ics` returns a calendar and an anonymous assisted-check-in request is rejected. Never use synthetic production attendance to test a release without authorization.
 
 Run `npm test`, type checking and the checks appropriate to the changes. Store integration and rules emulator suites both use port 8085, so run `npm run test:integration` and `npm run test:rules` sequentially. Browser tests use synthetic local data; live OAuth, actual notifications and device behavior need separate acceptance.
 
@@ -69,3 +73,7 @@ GitHub Pages alone does not provide Firebase Hosting's `/calendar.ics` function 
 ## Existing Woodland launch state
 
 The November 13 history replacement and owner acceptance are complete; do not repeat cleanup or reset as part of deployment. See [go-live-policy.md](docs/go-live-policy.md), the [readiness review](docs/go-live-readiness-review.md), and [documentation status](docs/documentation-status.md). Maintenance and the import fence were explicitly released. Data retention remains indefinite.
+
+## User help
+
+See the [documentation index](docs/README.md) for runner, organizer and troubleshooting guides. Ordinary members need no Firebase setup.

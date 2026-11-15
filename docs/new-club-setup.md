@@ -1,6 +1,6 @@
 # Setting up a new club on Run Club
 
-Run Club is the platform; each club runs its own copy. The model is **fork, edit, deploy**: one fork of this repository, one Firebase project and one website per club. The core client services have no-cost quotas, but the supplied `/calendar.ics` subscription feed uses a Cloud Function whose production deployment requires Blaze. Confirm billing/quotas before provisioning; there is no blanket zero-cost guarantee.
+Run Club is the platform; each club runs its own copy. The model is **fork, edit, deploy**: one fork of this repository, one Firebase project and one website per club. The core client services have no-cost quotas, but the supplied calendar and assisted-check-in Cloud Functions require Blaze for production deployment. Confirm billing/quotas before provisioning; there is no blanket zero-cost guarantee.
 
 > **Where this stands (November 10, 2026).** The club's settings are not yet gathered in one place. Step 3 below lists the files a fork has to edit by hand today. Once [club-extraction-plan.md](club-extraction-plan.md) is done, step 3 becomes "edit the `club/` folder" and the rest of this guide stays the same.
 
@@ -23,7 +23,8 @@ Run Club is under the [PolyForm Noncommercial License](../LICENSE): free for clu
 Fork the repository on GitHub, then:
 
 ```bash
-npm install
+npm ci
+npm ci --prefix functions
 ```
 
 ```bash
@@ -36,7 +37,7 @@ With no `.env` file the app runs in **local mode** with sample data in the brows
 
 Signed in to the [Firebase console](https://console.firebase.google.com/) as the club's Google account:
 
-1. **Add project.** The project ID (for example `riverside-runners`) also becomes the free web address `riverside-runners.web.app`. Spark supports the core client-only setup; the included server calendar feed requires Blaze for function deployment.
+1. **Add project.** The project ID (for example `riverside-runners`) also becomes the free web address `riverside-runners.web.app`. Spark supports the core client-only setup; the included server calendar and assisted-check-in functions require Blaze for deployment.
 2. **Register a web app** (the `</>` icon) and copy its configuration values.
 3. **Authentication → Sign-in method:** enable **Google** and **Email/Password** with **Email link (passwordless sign-in)**.
 4. **Firestore Database → Create database** (production mode; the rules come from this repository).
@@ -112,7 +113,7 @@ npx firebase login
 npm run build && npx firebase deploy --only firestore:rules,hosting --project YOUR_PROJECT_ID
 ```
 
-For the supplied calendar subscription endpoint, also build and deploy the existing calendar function with `npm run build:functions` and `npx firebase deploy --only functions:calendar --project YOUR_PROJECT_ID`. Production function deployment requires Blaze. A static-only alternate host needs separate routing/authentication work. Preserve the service-worker exclusion for Firebase reserved `/__` pages so OAuth callbacks reach Firebase.
+For calendar subscriptions and staff-assisted check-in, also build the active functions with `npm run build:functions` and deploy them with `npx firebase deploy --only functions:calendar,functions:assistedCheckIn --project YOUR_PROJECT_ID`. Meta exports remain inactive until their separate account/secret setup. Production function deployment requires Blaze. A static-only alternate host needs separate routing/authentication work. Preserve the service-worker exclusion for Firebase reserved `/__` pages so OAuth callbacks reach Firebase.
 
 
 ## 6. First sign-in

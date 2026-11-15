@@ -1,0 +1,13 @@
+{
+  "name": "run-club-documentation",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "check": "node build.mjs --check"
+  },
+  "dependencies": {
+    "marked": "18.2.0"
+  },
+  "engines": { "node": ">=24 <25" }
+}
