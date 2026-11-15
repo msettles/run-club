@@ -14,7 +14,7 @@ This repository currently builds the Woodland Woodchuckers app: the installed ap
 
 Starting another club? See [`docs/new-club-setup.md`](docs/new-club-setup.md) (fork, edit, deploy) and [`docs/club-extraction-plan.md`](docs/club-extraction-plan.md) (the plan to gather every club-specific setting into one place).
 
-**Live:** [Woodland Woodchuckers](https://woodland-woodchuckers.web.app) · **Release:** 1.6.4 · **Stack:** React 18 · TypeScript · Vite 6 · Tailwind 3 · Firebase 13 (Auth, Firestore, Hosting, Cloud Messaging; Cloud Functions for the calendar feed and assisted check-in) · Leaflet / OpenStreetMap
+**Live:** [Woodland Woodchuckers](https://woodland-woodchuckers.web.app) · **Release:** 1.6.5 · **Stack:** React 18 · TypeScript · Vite 6 · Tailwind 3 · Firebase 13 (Auth, Firestore, Hosting, Cloud Messaging; Cloud Functions for the calendar feed and assisted check-in) · Leaflet / OpenStreetMap
 
 ![CI](https://github.com/msettles/run-club/actions/workflows/ci.yml/badge.svg)
 

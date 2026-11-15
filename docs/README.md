@@ -2,7 +2,7 @@
 
 Public project website: [Run Club](https://msettles.github.io/run-club/). The website publishes selected guides from this directory; the full technical record stays here.
 
-Current app release: **1.6.4**, deployed November 15, 2026. These guides describe the Woodland Woodchuckers app. Scheduled run cards are the source for each event's time, venue and routes.
+Current app release: **1.6.5**, deployed November 15, 2026. These guides describe the Woodland Woodchuckers app. Scheduled run cards are the source for each event's time, venue and routes.
 
 ## Using the app
 
@@ -32,6 +32,6 @@ Current app release: **1.6.4**, deployed November 15, 2026. These guides describ
 - [New club setup](new-club-setup.md): adapting a separate copy for another club.
 - [Documentation status](documentation-status.md) and [product roadmap](../todos.md): shipped features, pending activation and proposals.
 - [Browser/device testing](browser-device-testing.md): automated coverage and device acceptance.
-- Release notes: [1.6.4](releases/1.6.4.md), [1.6.3](releases/1.6.3.md), [1.6.2](releases/1.6.2.md), [1.6.1](releases/1.6.1.md), [1.6.0](releases/1.6.0.md).
+- Release notes: [1.6.5](releases/1.6.5.md), [1.6.4](releases/1.6.4.md), [1.6.3](releases/1.6.3.md), [1.6.2](releases/1.6.2.md), [1.6.1](releases/1.6.1.md), [1.6.0](releases/1.6.0.md).
 
 Dated audits and release notes preserve what was checked at that time. Use the current guides and status page for today's behavior; older test counts and pre-deployment notes are historical evidence.

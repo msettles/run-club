@@ -93,3 +93,8 @@ Start with the [documentation index](README.md), [runner guide](help/runner-guid
 A standalone GitHub Pages website introduces Run Club, current features, help, setup and the gradual generalization roadmap. It renders an explicit selection of the existing Markdown guides. The full repository, audit records, private data and Firebase app build are excluded from the published artifact. Pages deployment is independent of the live Woodland application. See [site maintenance instructions](../website/README.md).
 
 Ko-fi is an outstanding account/link setup task; no funding account, payment link or sponsorship benefits are configured. The next platform steps are small configuration changes, an eventual dedicated Woodland fork and an isolated fictional demonstration club. They are proposals, not delivered behavior.
+
+
+## In-app help release — November 15, 2026
+
+Release 1.6.5 publishes the revised in-app Setup Guide and its link to the live GitHub Pages help. The Running Club Toolkit website and documentation have already passed their publication checks. See [release scope](releases/1.6.5.md); the deployment receipt records live verification.
