@@ -4,6 +4,8 @@ Status: application extraction is planned, not started. Written November 10, 202
 
 ## Goal
 
+Scope: **The Running Club Toolkit**—a reusable foundation for running clubs. The future fictional demo is also a running club.
+
 Run Club is the platform; Woodland Woodchuckers is the first club. Today the club's name, venue, colours, icons, time zone, owner email and Firebase project are written directly into about 85 files. This plan gathers them into one **club setup** that is read when the app is built, so a new club can **fork the repository, edit the setup and theme, and follow [new-club-setup.md](new-club-setup.md)**.
 
 Decisions already made by the owner:

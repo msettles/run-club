@@ -1,6 +1,6 @@
 # One useful step at a time
 
-The goal is a reusable Run Club platform, a separate Woodland Woodchuckers fork, and an isolated fictional club where interested people can try the application. We are working toward that gradually.
+The goal is a reusable toolkit for running clubs, a separate Woodland Woodchuckers fork, and an isolated fictional running club where interested people can try the application. We are working toward that gradually.
 
 ## 1. A public home and useful documentation
 
@@ -16,7 +16,7 @@ The [configuration extraction plan](../../docs/club-extraction-plan.md) is a pro
 
 Once the reusable setup has been proven, keep the platform's shared code in the main project and Woodland's configuration in a dedicated fork. Establish how that fork receives platform updates before moving it. No production migration or new repository is implied by this roadmap alone.
 
-## 4. Add a fictional demonstration club
+## 4. Add a fictional demonstration running club
 
 Use generic branding, synthetic members and attendance, and a separate test project. Provide a documented way to try the runner experience, then consider controlled organizer demonstrations. The demo will have no access to Woodland accounts or records. Public login details and a demo link will appear only when it is ready.
 

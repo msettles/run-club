@@ -1,6 +1,6 @@
-# Your club, your own copy
+# Your running club, your own copy
 
-The intended model is one club-specific repository, one build and one Firebase project per club. Today, setting up a new club still requires editing several files. A single reusable configuration is planned.
+The intended model is one running-club repository, one build and one Firebase project per running club. Today, setting up a new club still requires editing several files. A single reusable configuration is planned.
 
 ## Explore locally first
 

@@ -39,8 +39,8 @@ Only admins can delete users or check-ins. Club records are retained indefinitel
 | --- | --- |
 | Instagram/Facebook run posts | Route-photo preview is implemented; account access and Meta server activation are pending. |
 | Phone push sending | Device registration is implemented. Actual pushes use Firebase Console. App-sent pushes and automatic reminders are not implemented. |
-| Reusable club setup | Planned. The app still includes Woodland-specific configuration and wording. |
-| Public demonstration | Planned. No generic club or public test login exists yet. |
+| Reusable running-club setup | Planned. The app still includes Woodland-specific configuration and wording. |
+| Public demonstration | Planned. No fictional running club or public test login exists yet. |
 | Project funding | Ko-fi setup is a TODO. No contribution link is active. |
 
 [Follow the gradual roadmap](roadmap.md)

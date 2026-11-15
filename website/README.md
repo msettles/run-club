@@ -1,6 +1,6 @@
 # Run Club project website
 
-Standalone static documentation for GitHub Pages at <https://msettles.github.io/run-club/>. It has no Firebase connection, analytics, sign-in or payment integration. The production club app stays on Firebase Hosting.
+Public website for **Run Club — The Running Club Toolkit**, with static documentation on GitHub Pages at <https://msettles.github.io/run-club/>. It has no Firebase connection, analytics, sign-in or payment integration. The production club app stays on Firebase Hosting.
 
 ## Build and check
 

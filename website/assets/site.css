@@ -494,3 +494,10 @@ main a,td,li {
   margin:10px 0 0;
   padding:0;
 }
+
+@media (max-width: 760px) {
+  .brand-note {
+    font-size: 7px;
+    letter-spacing: 1px;
+  }
+}

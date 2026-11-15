@@ -14,11 +14,11 @@ const base = site.pathname;
 const sourceUrl = 'https://github.com/' + repository;
 // Only these files are published. Audits, data, app builds and private files are excluded.
 const pages = [
-  ['website/pages/index.md', '', 'Run Club — More time with your club', 'Schedules, attendance, routes and milestones for running clubs. Explore the app, help guides and the path to a reusable club setup.', 'Home'],
+  ['website/pages/index.md', '', 'Run Club — The Running Club Toolkit', 'Schedules, attendance, routes and milestones for running clubs. Explore the app, help guides and the path to a reusable running-club setup.', 'Home'],
   ['website/pages/features.md', 'features/', 'Features', 'Explore runner check-in, routes, personal history, staff Table Mode, attendance and milestone tools.', 'Features'],
   ['website/pages/help.md', 'help/', 'Help and guides', 'Practical help for runners, organizers and club admins, with answers to common app questions.', 'Help'],
   ['website/pages/setup.md', 'setup/', 'Set up your club', 'Explore local development, club ownership and deployment requirements for your own Run Club copy.', 'Setup'],
-  ['website/pages/roadmap.md', 'roadmap/', 'A gradual roadmap', 'The plan for reusable club configuration, a Woodland fork, a fictional demo and optional project support.', 'Roadmap'],
+  ['website/pages/roadmap.md', 'roadmap/', 'A gradual roadmap', 'The plan for reusable running-club configuration, a Woodland fork, a fictional demo and optional project support.', 'Roadmap'],
   ['docs/help/runner-guide.md', 'help/runners/', 'Runner guide', 'Join, sign in, RSVP, check in, view My Runs, claim historical attendance and install the club app.', 'Help'],
   ['docs/help/organizer-guide.md', 'help/organizers/', 'Organizer and admin guide', 'Schedule runs, manage routes, run the table, assist check-ins and hand out milestone gear.', 'Help'],
   ['docs/help/troubleshooting.md', 'help/troubleshooting/', 'Troubleshooting and FAQ', 'Answers about sign-in, check-in, history, maps, notifications, app updates and social posting.', 'Help'],
@@ -67,12 +67,12 @@ function layout(page, content, notFound = false) {
     '<meta property="og:type" content="website"><meta property="og:title" content="' + escape(title) + '"><meta property="og:description" content="' + escape(page.description) + '"><meta property="og:url" content="' + canonical + '"><meta property="og:image" content="' + new URL('assets/runclub.png', site).href + '">',
     '<meta name="twitter:card" content="summary"><link rel="stylesheet" href="' + base + 'assets/site.css"><script type="application/ld+json">' + structured + '</script></head>',
     '<body><a class="skip-link" href="#main">Skip to content</a>',
-    '<header class="site-header"><div class="header-inner"><a class="brand" href="' + base + '" aria-label="Run Club home"><img src="' + base + 'assets/runclub-icon.png" width="36" height="36" alt=""><span>Run Club<span class="brand-note">THE CLUB TOOLKIT</span></span></a><nav aria-label="Main navigation">' + nav + '</nav><a class="source-link" href="' + sourceUrl + '">GitHub <span aria-hidden="true">↗</span></a></div></header>',
+    '<header class="site-header"><div class="header-inner"><a class="brand" href="' + base + '" aria-label="Run Club home"><img src="' + base + 'assets/runclub-icon.png" width="36" height="36" alt=""><span>Run Club<span class="brand-note">The Running Club Toolkit</span></span></a><nav aria-label="Main navigation">' + nav + '</nav><a class="source-link" href="' + sourceUrl + '">GitHub <span aria-hidden="true">↗</span></a></div></header>',
     '<main id="main" tabindex="-1" class="' + (page.route ? 'document' : 'home') + '">',
-    page.route ? '<div class="page-context"><a href="' + base + '">Run Club</a><span aria-hidden="true">/</span><span>' + escape(page.nav || page.title) + '</span></div>' : '<p class="eyebrow">BUILT FOR CLUBS. SHAPED BY RUN NIGHT.</p>',
+    page.route ? '<div class="page-context"><a href="' + base + '">Run Club</a><span aria-hidden="true">/</span><span>' + escape(page.nav || page.title) + '</span></div>' : '<p class="eyebrow">BUILT FOR RUNNING CLUBS. SHAPED BY RUN NIGHT.</p>',
     content,
     page.route ? '<aside class="page-end"><a href="' + sourceUrl + '/blob/main/' + (page.source || 'website/README.md') + '">View this page’s source ↗</a><a href="' + base + 'help/">Help and guides →</a></aside>' : '',
-    '</main><footer><div class="footer-top"><a class="brand" href="' + base + '">Run Club</a><p>Made for the people who keep clubs running.</p><a href="' + sourceUrl + '">Source on GitHub ↗</a></div>',
+    '</main><footer><div class="footer-top"><a class="brand" href="' + base + '">Run Club</a><p>Made for the people who keep running clubs going.</p><a href="' + sourceUrl + '">Source on GitHub ↗</a></div>',
     '<div class="footer-bottom"><span>© 2026 Matt Settles · <a href="' + sourceUrl + '/blob/main/LICENSE">PolyForm Noncommercial 1.0.0</a></span><a href="' + base + 'roadmap/#support-development-todo">Project support: Ko-fi planned</a><span>Static documentation · No analytics or login</span></div></footer></body></html>',
   ].join('\n');
 }

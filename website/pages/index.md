@@ -1,10 +1,10 @@
 # More time with your club.<br>Less time at the check-in table.
 
-Run Club brings schedules, attendance, routes and milestones together in an installable web app. Built for the people who show up—and the volunteers who make it happen.
+Run Club is The Running Club Toolkit. It brings schedules, attendance, routes and milestones together in an installable web app. Built for the people who show up—and the volunteers who make it happen.
 
 <div class="hero-actions"><a class="button" href="features.md">Explore the features <span aria-hidden="true">↗</span></a><a class="button secondary" href="../../docs/help/runner-guide.md">Read the runner guide</a></div>
 
-<div class="project-note"><strong>Working today. Growing gradually.</strong> Woodland Woodchuckers is the first live club. A reusable club setup and a separate fictional demo are next steps, not features available today.</div>
+<div class="project-note"><strong>Working today. Growing gradually.</strong> Woodland Woodchuckers is the first live club. A reusable running-club setup and a separate fictional demo are next steps, not features available today.</div>
 
 ## From the first RSVP to the next milestone
 
@@ -26,7 +26,7 @@ Run Club brings schedules, attendance, routes and milestones together in an inst
 
 ## A real club, a shared foundation
 
-Run Club began with Woodland Woodchuckers in Woodland, California. The current application is still configured for that club. The longer-term plan is a reusable platform, a dedicated Woodland fork and an isolated demo with fictional data.
+Run Club began with Woodland Woodchuckers in Woodland, California. The current application is still configured for that club. The longer-term plan is a reusable running-club platform, a dedicated Woodland fork and an isolated fictional running club for demonstrations.
 
 [Explore the source on GitHub](https://github.com/msettles/run-club) · [Visit the live Woodland club](https://woodland-woodchuckers.web.app)
 
